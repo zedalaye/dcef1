@@ -1,0 +1,60 @@
+﻿	<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+		<PropertyGroup>
+			<ProjectGuid>{F389CF68-AD77-4CCA-81EC-9BFD9C137A0F}</ProjectGuid>
+		</PropertyGroup>
+		<ItemGroup>
+			<Projects Include="cefclient.dproj">
+				<Dependencies/>
+			</Projects>
+			<Projects Include="guiclient.dproj">
+				<Dependencies/>
+			</Projects>
+			<Projects Include="cefcomponent.dproj">
+				<Dependencies/>
+			</Projects>
+		</ItemGroup>
+		<ProjectExtensions>
+			<Borland.Personality>Default.Personality.12</Borland.Personality>
+			<Borland.ProjectType/>
+			<BorlandProject>
+				<Default.Personality/>
+			</BorlandProject>
+		</ProjectExtensions>
+		<Target Name="cefclient">
+			<MSBuild Projects="cefclient.dproj"/>
+		</Target>
+		<Target Name="cefclient:Clean">
+			<MSBuild Targets="Clean" Projects="cefclient.dproj"/>
+		</Target>
+		<Target Name="cefclient:Make">
+			<MSBuild Targets="Make" Projects="cefclient.dproj"/>
+		</Target>
+		<Target Name="guiclient">
+			<MSBuild Projects="guiclient.dproj"/>
+		</Target>
+		<Target Name="guiclient:Clean">
+			<MSBuild Targets="Clean" Projects="guiclient.dproj"/>
+		</Target>
+		<Target Name="guiclient:Make">
+			<MSBuild Targets="Make" Projects="guiclient.dproj"/>
+		</Target>
+		<Target Name="cefcomponent">
+			<MSBuild Projects="cefcomponent.dproj"/>
+		</Target>
+		<Target Name="cefcomponent:Clean">
+			<MSBuild Targets="Clean" Projects="cefcomponent.dproj"/>
+		</Target>
+		<Target Name="cefcomponent:Make">
+			<MSBuild Targets="Make" Projects="cefcomponent.dproj"/>
+		</Target>
+		<Target Name="Build">
+			<CallTarget Targets="cefclient;guiclient;cefcomponent"/>
+		</Target>
+		<Target Name="Clean">
+			<CallTarget Targets="cefclient:Clean;guiclient:Clean;cefcomponent:Clean"/>
+		</Target>
+		<Target Name="Make">
+			<CallTarget Targets="cefclient:Make;guiclient:Make;cefcomponent:Make"/>
+		</Target>
+		<Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+	</Project>
