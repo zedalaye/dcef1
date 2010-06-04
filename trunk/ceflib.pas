@@ -13,13 +13,12 @@ type
 {$IFDEF UNICODE}
   ustring = type string;
 {$ELSE}
-  ustring = type WideString;
+  {$IFDEF FPC}
+    ustring = type unicodestring;
+  {$ELSE}
+    ustring = type WideString;
+  {$ENDIF}
 {$ENDIF}
-
-  ICefBase = interface
-    ['{1F9A7B44-DCDC-4477-9180-3ADD44BDEB7B}']
-    function Wrap: Pointer;
-  end;
 
   // CEF strings are NUL-terminated wide character strings prefixed with a size
   // value, similar to the Microsoft BSTR type.  Use the below API functions for
@@ -237,7 +236,8 @@ type
 type
   PCefv8Handler = ^TCefv8Handler;
   PCefv8Value = ^TCefv8Value;
-  PPcef_v8value_t = ^PCefv8Value;
+  PCefV8ValueArray = array[0..(High(Integer) div SizeOf(Integer)) - 1] of PCefV8Value;
+  PPCefV8Value = ^PCefV8ValueArray;
   PCefSchemeHandlerFactory = ^TCefSchemeHandlerFactory;
   PCefHandler = ^TCefHandler;
   PCefFrame = ^TCefFrame;
@@ -750,8 +750,8 @@ type
     // if the function was handled.
     execute: function(self: PCefv8Handler;
         const name: PWideChar; obj: PCefv8Value; argumentCount: Cardinal;
-        const arguments, retval: PPcef_v8value_t;
-        exception: PCefString): Integer; stdcall;
+        const arguments: PPCefV8Value; var retval: PCefV8Value;
+        var exception: TCefString): Integer; stdcall;
   end;
 
   // Structure representing a V8 value.
@@ -831,8 +831,8 @@ type
     // Execute the function.
     execute_function: function(self: PCefv8Value;
         obj: PCefv8Value; argumentCount: Cardinal;
-        const arguments: PPcef_v8value_t; retval: PPcef_v8value_t;
-        exception: PCefString): Integer; stdcall;
+        const arguments: PPCefV8Value; var retval: PCefV8Value;
+        var exception: TCefString): Integer; stdcall;
   end;
 
   // Structure that creates TCefSchemeHandler instances.
@@ -875,6 +875,12 @@ type
   ICefBrowser = interface;
   ICefFrame = interface;
   ICefRequest = interface;
+  ICefv8Value = interface;
+
+  ICefBase = interface
+    ['{1F9A7B44-DCDC-4477-9180-3ADD44BDEB7B}']
+    function Wrap: Pointer;
+  end;
 
   ICefBrowser = interface(ICefBase)
     ['{BA003C2E-CF15-458F-9D4A-FE3CEFCF3EEF}']
@@ -968,7 +974,6 @@ type
     function Eof: Boolean;
   end;
 
-
   ICefSchemeHandler = interface(ICefBase)
   ['{A965F2A8-1675-44AE-AA54-F4C64B85A263}']
     function ProcessRequest(const Request: ICefRequest; var MimeType: ustring;
@@ -981,6 +986,48 @@ type
   ICefSchemeHandlerFactory = interface(ICefBase)
     ['{4D9B7960-B73B-4EBD-9ABE-6C1C43C245EB}']
     function New: ICefSchemeHandler;
+  end;
+
+  TCefv8ValueArray = array of ICefv8Value;
+
+  ICefv8Handler = interface(ICefBase)
+    ['{F94CDC60-FDCB-422D-96D5-D2A775BD5D73}']
+    function Execute(const name: ustring; const obj: ICefv8Value;
+      const arguments: TCefv8ValueArray; var retval: ICefv8Value;
+      var exception: ustring): Boolean;
+  end;
+
+  ICefv8Value = interface(ICefBase)
+  ['{52319B8D-75A8-422C-BD4B-16FA08CC7F42}']
+    function IsUndefined: Boolean;
+    function IsNull: Boolean;
+    function IsBool: Boolean;
+    function IsInt: Boolean;
+    function IsDouble: Boolean;
+    function IsString: Boolean;
+    function IsObject: Boolean;
+    function IsArray: Boolean;
+    function IsFunction: Boolean;
+    function GetBoolValue: Boolean;
+    function GetIntValue: Integer;
+    function GetDoubleValue: Double;
+    function GetStringValue: ustring;
+    function HasValueByKey(const key: ustring): Boolean;
+    function HasValueByIndex(index: Integer): Boolean;
+    function DeleteValueByKey(const key: ustring): Boolean;
+    function DeleteValueByIndex(index: Integer): Boolean;
+    function GetValueByKey(const key: ustring): ICefv8Value;
+    function GetValueByIndex(index: Integer): ICefv8Value;
+    function SetValueByKey(const key: ustring; const value: ICefv8Value): Boolean;
+    function SetValueByIndex(index: Integer; const value: ICefv8Value): Boolean;
+    function GetKeys(const keys: TStrings): Integer; stdcall;
+    function GetUserData: ICefBase;
+    function GetArrayLength: Integer;
+    function GetFunctionName: ustring;
+    function GetFunctionHandler: ICefv8Handler;
+    function ExecuteFunction(const obj: ICefv8Value;
+      const arguments: TCefv8ValueArray; var retval: ICefv8Value;
+      var exception: ustring): Boolean;
   end;
 
   TCefBaseOwn = class(TInterfacedObject, ICefBase)
@@ -1103,6 +1150,59 @@ type
     class function UnWrap(data: Pointer): ICefStreamReader;
   end;
 
+  TCefv8ValueRef = class(TCefBaseRef, ICefv8Value)
+  protected
+    function IsUndefined: Boolean;
+    function IsNull: Boolean;
+    function IsBool: Boolean;
+    function IsInt: Boolean;
+    function IsDouble: Boolean;
+    function IsString: Boolean;
+    function IsObject: Boolean;
+    function IsArray: Boolean;
+    function IsFunction: Boolean;
+    function GetBoolValue: Boolean;
+    function GetIntValue: Integer;
+    function GetDoubleValue: Double;
+    function GetStringValue: ustring;
+    function HasValueByKey(const key: ustring): Boolean;
+    function HasValueByIndex(index: Integer): Boolean;
+    function DeleteValueByKey(const key: ustring): Boolean;
+    function DeleteValueByIndex(index: Integer): Boolean;
+    function GetValueByKey(const key: ustring): ICefv8Value;
+    function GetValueByIndex(index: Integer): ICefv8Value;
+    function SetValueByKey(const key: ustring; const value: ICefv8Value): Boolean;
+    function SetValueByIndex(index: Integer; const value: ICefv8Value): Boolean;
+    function GetKeys(const keys: TStrings): Integer; stdcall;
+    function GetUserData: ICefBase;
+    function GetArrayLength: Integer;
+    function GetFunctionName: ustring;
+    function GetFunctionHandler: ICefv8Handler;
+    function ExecuteFunction(const obj: ICefv8Value;
+      const arguments: TCefv8ValueArray; var retval: ICefv8Value;
+      var exception: ustring): Boolean;
+  public
+    class function UnWrap(data: Pointer): ICefv8Value;
+    constructor CreateUndefined;
+    constructor CreateNull;
+    constructor CreateBool(value: Boolean);
+    constructor CreateInt(value: Integer);
+    constructor CreateDouble(value: Double);
+    constructor CreateString(const str: ustring);
+    constructor CreateObject(const UserData: ICefBase);
+    constructor CreateArray;
+    constructor CreateFunction(const name: ustring; const handler: ICefv8Handler);
+  end;
+
+  TCefv8HandlerRef = class(TCefBaseRef, ICefv8Handler)
+  protected
+    function Execute(const name: ustring; const obj: ICefv8Value;
+      const arguments: TCefv8ValueArray; var retval: ICefv8Value;
+      var exception: ustring): Boolean;
+  public
+    class function UnWrap(data: Pointer): ICefv8Handler;
+  end;
+
   TCefHandlerOwn = class(TCefBaseOwn)
   protected
     function doOnBeforeCreated(const parentBrowser: ICefBrowser;
@@ -1210,6 +1310,15 @@ type
     constructor Create(const AClass: TCefSchemeHandlerClass); virtual;
   end;
 
+  TCefv8HandlerOwn = class(TCefBaseOwn, ICefv8Handler)
+  protected
+    function Execute(const name: ustring; const obj: ICefv8Value;
+      const arguments: TCefv8ValueArray; var retval: ICefv8Value;
+      var exception: ustring): Boolean; virtual;
+  public
+    constructor Create; virtual;
+  end;
+
 procedure CefLoadLib(const cache: ustring);
 function CefGetObject(ptr: Pointer): TObject;
 function CefStringAlloc(const str: ustring): TCefString;
@@ -1219,7 +1328,8 @@ function CefBrowserCreate(windowInfo: PCefWindowInfo; popup: Boolean;
   handler: PCefHandler; const url: ustring): Boolean;
 function CefRegisterScheme(const SchemeName, HostName: ustring;
   const handler: TCefSchemeHandlerClass): Boolean;
-
+function CefRegisterExtension(const name, code: ustring;
+  const Handler: ICefv8Handler): Boolean;
 
 var
   CefCache: ustring;
@@ -1462,9 +1572,7 @@ var
 begin
   with TCefHandlerOwn(CefGetObject(self)) do
   begin
-    if handler <> nil then
-      _handler := TCefBaseRef.UnWrap(handler) else
-      _handler := nil;
+    _handler := TCefBaseRef.UnWrap(handler);
     _url := url;
 
     Result := doOnBeforeCreated(
@@ -1476,10 +1584,8 @@ begin
 
     if Result = RV_HANDLED then
     begin
-      if _handler <> nil then
-        handler := _handler.Wrap;
-      if url <> nil then
-        cef_string_free(url);
+      handler :=  CefGetData(_handler);
+      CefStringFree(url);
       url := CefStringAlloc(_url);
     end;
   end;
@@ -1563,8 +1669,7 @@ begin
       err);
     if Result = RV_HANDLED then
     begin
-      if errorText <> nil then
-        cef_string_free(errorText);
+      CefStringFree(errorText);
       errorText := CefStringAlloc(err);
     end;
   end;
@@ -1600,11 +1705,8 @@ begin
       if _redirectUrl <> '' then
         redirectUrl := CefStringAlloc(_redirectUrl);
 
-      if _resourceStream <> nil then
-        resourceStream := _resourceStream.Wrap;
-
-      if _mimeType <> '' then
-        mimeType := CefStringAlloc(_mimeType);
+      resourceStream := CefGetData(_resourceStream);
+      mimeType := CefStringAlloc(_mimeType);
     end;
   end;
 end;
@@ -1634,7 +1736,7 @@ begin
       str);
     if Result = RV_HANDLED then
     begin
-      if label_ <> nil then cef_string_free(label_);
+      CefStringFree(label_);
       label_ := CefStringAlloc(str);
     end;
   end;
@@ -1872,6 +1974,28 @@ function cef_scheme_handler_read_response(self: PCefSchemeHandler; data_out: Poi
 begin
   with TCefSchemeHandlerOwn(CefGetObject(self)) do
     Result := Ord(ReadResponse(data_out, bytes_to_read, bytes_read));
+end;
+
+{ cef_v8_handler }
+
+function cef_v8_handler_execute(self: PCefv8Handler;
+  const name: PWideChar; obj: PCefv8Value; argumentCount: Cardinal;
+  const arguments: PPCefV8Value; var retval: PCefV8Value;
+  var exception: TCefString): Integer; stdcall;
+var
+  args: TCefv8ValueArray;
+  i: Integer;
+  ret: ICefv8Value;
+  exc: ustring;
+begin
+  SetLength(args, argumentCount);
+  for i := 0 to argumentCount - 1 do
+    args[i] := TCefv8ValueRef.UnWrap(arguments[i]);
+
+  Result := Ord(TCefv8HandlerOwn(CefGetObject(self)).Execute(
+    name, TCefv8ValueRef.UnWrap(obj), args, ret, exc));
+  retval := CefGetData(ret);
+  exception := CefStringAlloc(exc);
 end;
 
 { TCefBaseOwn }
@@ -2137,7 +2261,7 @@ begin
   try
     PCefBrowser(FData)^.get_frame_names(PCefBrowser(FData), list);
     for i := 0 to cef_string_list_size(list) - 1 do
-      names.Add(cef_string_list_value(list, i));
+      names.Add(CefStringFreeAndGet(cef_string_list_value(list, i)));
   finally
     cef_string_list_free(list);
   end;
@@ -2256,7 +2380,7 @@ procedure TCefFrameRef.LoadFile(const filename, url: ustring);
 var
   strm: ICefStreamReader;
 begin
-  strm := TCefStreamReaderOwn.Create(filename);
+  strm := TCefStreamReaderRef.Create(cef_stream_reader_create_for_file(PWideChar(filename)));
   PCefFrame(FData)^.load_stream(PCefFrame(FData), strm.Wrap, PWideChar(url));
 end;
 
@@ -2490,8 +2614,7 @@ begin
       if (FValue <> nil) then
         FreeMem(FValue);
     PDE_TYPE_FILE:
-      if (FValue <> nil) then
-        cef_string_free(FValue)
+      CefStringFree(FValue)
   end;
   FDataType := PDE_TYPE_EMPTY;
   FValue := nil;
@@ -2845,6 +2968,12 @@ begin
     (TCefSchemeHandlerFactoryOwn.Create(handler) as ICefBase).Wrap) <> 0;
 end;
 
+function CefRegisterExtension(const name, code: ustring;
+  const Handler: ICefv8Handler): Boolean;
+begin
+  Result := cef_register_extension(PWideChar(name), PWideChar(code), handler.Wrap) <> 0;
+end;
+
 { TCefSchemeHandlerFactoryOwn }
 
 constructor TCefSchemeHandlerFactoryOwn.Create(const AClass: TCefSchemeHandlerClass);
@@ -2888,6 +3017,276 @@ end;
 
 function TCefSchemeHandlerOwn.ReadResponse(DataOut: Pointer;
   BytesToRead: Integer; var BytesRead: Integer): Boolean;
+begin
+  Result := False;
+end;
+
+{ TCefv8ValueRef }
+
+constructor TCefv8ValueRef.CreateArray;
+begin
+  Create(cef_v8value_create_array);
+end;
+
+constructor TCefv8ValueRef.CreateBool(value: Boolean);
+begin
+  Create(cef_v8value_create_bool(Ord(value)));
+end;
+
+constructor TCefv8ValueRef.CreateDouble(value: Double);
+begin
+  Create(cef_v8value_create_double(value));
+end;
+
+constructor TCefv8ValueRef.CreateFunction(const name: ustring;
+  const handler: ICefv8Handler);
+begin
+  Create(cef_v8value_create_function(PWideChar(name), CefGetData(handler)));
+end;
+
+constructor TCefv8ValueRef.CreateInt(value: Integer);
+begin
+  Create(cef_v8value_create_int(value))
+end;
+
+constructor TCefv8ValueRef.CreateNull;
+begin
+  Create(cef_v8value_create_null);
+end;
+
+constructor TCefv8ValueRef.CreateObject(const UserData: ICefBase);
+begin
+  Create(cef_v8value_create_object(CefGetData(UserData)));
+end;
+
+constructor TCefv8ValueRef.CreateString(const str: ustring);
+begin
+  Create(cef_v8value_create_string(PWideChar(str)));
+end;
+
+constructor TCefv8ValueRef.CreateUndefined;
+begin
+  Create(cef_v8value_create_undefined);
+end;
+
+function TCefv8ValueRef.DeleteValueByIndex(index: Integer): Boolean;
+begin
+  Result := PCefV8Value(FData)^.delete_value_byindex(PCefV8Value(FData), index) <> 0;
+end;
+
+function TCefv8ValueRef.DeleteValueByKey(const key: ustring): Boolean;
+begin
+  Result := PCefV8Value(FData)^.delete_value_bykey(PCefV8Value(FData), PWideChar(key)) <> 0;
+end;
+
+function TCefv8ValueRef.ExecuteFunction(const obj: ICefv8Value;
+  const arguments: TCefv8ValueArray; var retval: ICefv8Value;
+  var exception: ustring): Boolean;
+var
+  args: array of PCefV8Value;
+  i: Integer;
+  ret: PCefV8Value;
+  exc: TCefString;
+begin
+  SetLength(args, Length(arguments));
+  for i := 0 to Length(arguments) - 1 do
+    args[i] := CefGetData(arguments[i]);
+  ret := nil;
+  exc := nil;
+  Result := PCefV8Value(FData)^.execute_function(PCefV8Value(FData),
+    CefGetData(obj), Length(arguments), @args, ret, exc) <> 0;
+  retval := TCefv8ValueRef.UnWrap(ret);
+  exception := CefStringFreeAndGet(exc);
+end;
+
+function TCefv8ValueRef.GetArrayLength: Integer;
+begin
+  Result := PCefV8Value(FData)^.get_array_length(PCefV8Value(FData));
+end;
+
+function TCefv8ValueRef.GetBoolValue: Boolean;
+begin
+  Result := PCefV8Value(FData)^.get_bool_value(PCefV8Value(FData)) <> 0;
+end;
+
+function TCefv8ValueRef.GetDoubleValue: Double;
+begin
+  Result := PCefV8Value(FData)^.get_double_value(PCefV8Value(FData));
+end;
+
+function TCefv8ValueRef.GetFunctionHandler: ICefv8Handler;
+begin
+  Result := TCefv8HandlerRef.UnWrap(PCefV8Value(FData)^.get_function_handler(PCefV8Value(FData)));
+end;
+
+function TCefv8ValueRef.GetFunctionName: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefV8Value(FData)^.get_function_name(PCefV8Value(FData)))
+end;
+
+function TCefv8ValueRef.GetIntValue: Integer;
+begin
+  Result := PCefV8Value(FData)^.get_int_value(PCefV8Value(FData))
+end;
+
+function TCefv8ValueRef.GetKeys(const keys: TStrings): Integer;
+var
+  list: TCefStringList;
+  i: Integer;
+begin
+  list := cef_string_list_alloc;
+  try
+    Result := PCefV8Value(FData)^.get_keys(PCefV8Value(FData), list);
+    for i := 0 to cef_string_list_size(list) - 1 do
+      keys.Add(CefStringFreeAndGet(cef_string_list_value(list, i)));
+  finally
+    cef_string_list_free(list);
+  end;
+end;
+
+function TCefv8ValueRef.GetStringValue: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefV8Value(FData)^.get_string_value(PCefV8Value(FData)));
+end;
+
+function TCefv8ValueRef.GetUserData: ICefBase;
+begin
+  Result := TCefBaseRef.UnWrap(PCefV8Value(FData)^.get_user_data(PCefV8Value(FData)));
+end;
+
+function TCefv8ValueRef.GetValueByIndex(index: Integer): ICefv8Value;
+begin
+  Result := TCefv8ValueRef.UnWrap(PCefV8Value(FData)^.get_value_byindex(PCefV8Value(FData), index))
+end;
+
+function TCefv8ValueRef.GetValueByKey(const key: ustring): ICefv8Value;
+begin
+  Result := TCefv8ValueRef.UnWrap(PCefV8Value(FData)^.get_value_bykey(PCefV8Value(FData), PWideChar(key)))
+end;
+
+function TCefv8ValueRef.HasValueByIndex(index: Integer): Boolean;
+begin
+  Result := PCefV8Value(FData)^.has_value_byindex(PCefV8Value(FData), index) <> 0;
+end;
+
+function TCefv8ValueRef.HasValueByKey(const key: ustring): Boolean;
+begin
+  Result := PCefV8Value(FData)^.has_value_bykey(PCefV8Value(FData), PWideChar(key)) <> 0;
+end;
+
+function TCefv8ValueRef.IsArray: Boolean;
+begin
+  Result := PCefV8Value(FData)^.is_array(PCefV8Value(FData)) <> 0;
+end;
+
+function TCefv8ValueRef.IsBool: Boolean;
+begin
+  Result := PCefV8Value(FData)^.is_bool(PCefV8Value(FData)) <> 0;
+end;
+
+function TCefv8ValueRef.IsDouble: Boolean;
+begin
+  Result := PCefV8Value(FData)^.is_double(PCefV8Value(FData)) <> 0;
+end;
+
+function TCefv8ValueRef.IsFunction: Boolean;
+begin
+  Result := PCefV8Value(FData)^.is_function(PCefV8Value(FData)) <> 0;
+end;
+
+function TCefv8ValueRef.IsInt: Boolean;
+begin
+  Result := PCefV8Value(FData)^.is_int(PCefV8Value(FData)) <> 0;
+end;
+
+function TCefv8ValueRef.IsNull: Boolean;
+begin
+  Result := PCefV8Value(FData)^.is_null(PCefV8Value(FData)) <> 0;
+end;
+
+function TCefv8ValueRef.IsObject: Boolean;
+begin
+  Result := PCefV8Value(FData)^.is_object(PCefV8Value(FData)) <> 0;
+end;
+
+function TCefv8ValueRef.IsString: Boolean;
+begin
+  Result := PCefV8Value(FData)^.is_string(PCefV8Value(FData)) <> 0;
+end;
+
+function TCefv8ValueRef.IsUndefined: Boolean;
+begin
+  Result := PCefV8Value(FData)^.is_undefined(PCefV8Value(FData)) <> 0;
+end;
+
+function TCefv8ValueRef.SetValueByIndex(index: Integer;
+  const value: ICefv8Value): Boolean;
+begin
+  Result:= PCefV8Value(FData)^.set_value_byindex(PCefV8Value(FData), index, CefGetData(value)) <> 0;
+end;
+
+function TCefv8ValueRef.SetValueByKey(const key: ustring;
+  const value: ICefv8Value): Boolean;
+begin
+  Result:= PCefV8Value(FData)^.set_value_bykey(PCefV8Value(FData), PWideChar(key), CefGetData(value)) <> 0;
+end;
+
+class function TCefv8ValueRef.UnWrap(data: Pointer): ICefv8Value;
+begin
+  if data <> nil then
+  begin
+    Result := Create(data);
+    if Assigned(PCefBase(Data)^.release) then
+      PCefBase(Data)^.release(PCefBase(Data));
+  end else
+    Result := nil;
+end;
+
+{ TCefv8HandlerRef }
+
+function TCefv8HandlerRef.Execute(const name: ustring; const obj: ICefv8Value;
+  const arguments: TCefv8ValueArray; var retval: ICefv8Value;
+  var exception: ustring): Boolean;
+var
+  args: array of PCefV8Value;
+  i: Integer;
+  ret: PCefV8Value;
+  exc: TCefString;
+begin
+  SetLength(args, Length(arguments));
+  for i := 0 to Length(arguments) - 1 do
+    args[i] := CefGetData(arguments[i]);
+  ret := nil;
+  exc := nil;
+  Result := PCefv8Handler(FData)^.execute(PCefv8Handler(FData), PWideChar(name),
+    CefGetData(obj), Length(arguments), @args, ret, exc) <> 0;
+  retval := TCefv8ValueRef.UnWrap(ret);
+  exception := CefStringFreeAndGet(exc);
+end;
+
+class function TCefv8HandlerRef.UnWrap(data: Pointer): ICefv8Handler;
+begin
+  if data <> nil then
+  begin
+    Result := Create(data);
+    if Assigned(PCefBase(Data)^.release) then
+      PCefBase(Data)^.release(PCefBase(Data));
+  end else
+    Result := nil;
+end;
+
+{ TCefv8HandlerOwn }
+
+constructor TCefv8HandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefv8Handler));
+  with PCefv8Handler(FData)^ do
+    execute := @cef_v8_handler_execute;
+end;
+
+function TCefv8HandlerOwn.Execute(const name: ustring; const obj: ICefv8Value;
+  const arguments: TCefv8ValueArray; var retval: ICefv8Value;
+  var exception: ustring): Boolean;
 begin
   Result := False;
 end;

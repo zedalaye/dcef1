@@ -11,7 +11,6 @@ uses
   SysUtils,
   ceflib;
 
-
 type
   THandler = class(TCefHandlerOwn)
   protected
@@ -38,6 +37,15 @@ type
   public
     constructor Create; override;
     destructor Destroy; override;
+  end;
+
+  TExtension = class(TCefv8HandlerOwn)
+  private
+    FTestParam: ustring;
+  protected
+    function Execute(const name: ustring; const obj: ICefv8Value;
+      const arguments: TCefv8ValueArray; var retval: ICefv8Value;
+      var exception: ustring): Boolean; override;
   end;
 
 type
@@ -323,9 +331,19 @@ function TScheme.ProcessRequest(const Request: ICefRequest;
 begin
   Lock;
   try
-    Output('<html><head><meta http-equiv="Content-type" content="text/html; charset=utf-8"/></head><body>');
-    Output('<b>hello€</b');
-    Output('</body></html>');
+    OutPut('<html>');
+    OutPut('  <body>ClientV8ExtensionHandler says:<br><pre>');
+    OutPut('<script language="javascript">');
+    OutPut('  cef.test.test_param =''Assign and retrieve a value succeeded the first time.'';');
+    OutPut('  document.writeln(cef.test.test_param);');
+    OutPut('  cef.test.test_param = ''Assign and retrieve a value succeeded the second time.'';');
+    OutPut('  document.writeln(cef.test.test_param);');
+    OutPut('  var obj = cef.test.test_object();');
+    OutPut('  document.writeln(obj.param);');
+    OutPut('  document.writeln(obj.GetMessage());');
+    OutPut('</script>');
+    OutPut('</pre></body>');
+    OutPut('</html>');
     FResponse.Seek(0, soFromBeginning);
     MimeType := 'text/html';
     ResponseLength := FResponse.Size;
@@ -334,7 +352,6 @@ begin
     Unlock;
   end;
 end;
-
 
 function TScheme.ReadResponse(DataOut: Pointer; BytesToRead: Integer;
   var BytesRead: Integer): Boolean;
@@ -355,14 +372,86 @@ begin
   FResponse.Write(PAnsiChar(u)^, Length(u));
 end;
 
+function TExtension.Execute(const name: ustring; const obj: ICefv8Value;
+  const arguments: TCefv8ValueArray; var retval: ICefv8Value;
+  var exception: ustring): Boolean;
+begin
+  if(name = 'SetTestParam') then
+  begin
+    // Handle the SetTestParam native function by saving the string argument
+    // into the local member.
+    if (Length(arguments) <> 1) or (not arguments[0].IsString) then
+    begin
+      Result := false;
+      Exit;
+    end;
+
+    FTestParam := arguments[0].GetStringValue;
+    Result := true;
+  end
+  else if(name = 'GetTestParam') then
+  begin
+    // Handle the GetTestParam native function by returning the local member
+    // value.
+    retval := TCefv8ValueRef.CreateString(Ftestparam);
+    Result := true;
+  end
+  else if (name = 'GetTestObject') then
+  begin
+    // Handle the GetTestObject native function by creating and returning a
+    // new V8 object.
+    retval := TCefv8ValueRef.CreateObject(nil);
+    // Add a string parameter to the new V8 object.
+    retval.SetValueByKey('param', TCefv8ValueRef.CreateString(
+        'Retrieving a parameter on a native object succeeded.'));
+    // Add a function to the new V8 object.
+    retval.SetValueByKey('GetMessage',
+        TCefv8ValueRef.CreateFunction('GetMessage', Self));
+    Result := true;
+  end
+  else if(name = 'GetMessage') then
+  begin
+    // Handle the GetMessage object function by returning a string.
+    retval := TCefv8ValueRef.CreateString(
+        'Calling a function on a native object succeeded.');
+    Result := true;
+  end else
+    Result := false;
+end;
+
+const
+  code =
+   'var cef;'+
+   'if (!cef)'+
+   '  cef = {};'+
+   'if (!cef.test)'+
+   '  cef.test = {};'+
+   '(function() {'+
+   '  cef.test.__defineGetter__(''test_param'', function() {'+
+   '    native function GetTestParam();'+
+   '    return GetTestParam();'+
+   '  });'+
+   '  cef.test.__defineSetter__(''test_param'', function(b) {'+
+   '    native function SetTestParam();'+
+   '    if(b) SetTestParam(b);'+
+   '  });'+
+   '  cef.test.test_object = function() {'+
+   '    native function GetTestObject();'+
+   '    return GetTestObject();'+
+   '  };'+
+   '})();';
+
 var
   Msg      : TMsg;
   wndClass : TWndClass;
 
+{ TExtension }
+
 begin
   CefLoadLib('');
-  Assert(CefRegisterScheme('client', '', TScheme));
-  //navigateto := 'client://static/pouet.html';
+  CefRegisterScheme('client', 'test', TScheme);
+  CefRegisterExtension('v8/test', code, TExtension.Create as ICefV8Handler);
+  //navigateto := 'client://test/';
   try
     wndClass.style          := CS_HREDRAW or CS_VREDRAW;
     wndClass.lpfnWndProc    := @CefWndProc;
