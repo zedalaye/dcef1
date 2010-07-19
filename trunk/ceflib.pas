@@ -566,6 +566,12 @@ type
         self: PCefHandler; browser: PCefBrowser;
         event: TCefHandlerKeyEventType; code, modifiers,
         isSystemKey: Integer): TCefRetval; stdcall;
+
+    // Called to display a console message. Return RV_HANDLED to stop the message
+    // from being output to the console.
+    handle_console_message: function(
+        self: PCefHandler; browser: PCefBrowser;
+        const message, source: PWideChar; line: Integer): TCefRetval; stdcall;
   end;
 
   // Structure used to represent a web request.
@@ -1248,6 +1254,8 @@ type
     function doOnSetFocus(const browser: ICefBrowser; isWidget: Boolean): TCefRetval; virtual;
     function doOnKeyEvent(const browser: ICefBrowser; event: TCefHandlerKeyEventType;
       code, modifiers: Integer; isSystemKey: Boolean): TCefRetval; virtual;
+    function doOnConsoleMessage(const browser: ICefBrowser; const message,
+      source: ustring; line: Integer): TCefRetval; virtual;
   public
     constructor Create; virtual;
   end;
@@ -1870,6 +1878,13 @@ begin
       event, code, modifiers, isSystemKey <> 0);
 end;
 
+function cef_handle_console_message(self: PCefHandler; browser: PCefBrowser;
+  const message, source: PWideChar; line: Integer): TCefRetval; stdcall;
+begin
+  with TCefHandlerOwn(CefGetObject(self)) do
+    Result := doOnConsoleMessage(TCefBrowserRef.UnWrap(browser), message, source, line);
+end;
+
 {  cef_stream_reader }
 
 function cef_stream_reader_read(self: PCefStreamReader; ptr: Pointer; size, n: Cardinal): Cardinal; stdcall;
@@ -2065,6 +2080,7 @@ begin
     handle_take_focus := @cef_handler_handle_take_focus;
     handle_set_focus := @cef_handler_handle_set_focus;
     handle_key_event := @cef_handler_handle_key_event;
+    handle_console_message := @cef_handle_console_message;
   end;
 end;
 
@@ -2108,6 +2124,12 @@ end;
 
 function TCefHandlerOwn.doOnBeforeWindowClose(
   const browser: ICefBrowser): TCefRetval;
+begin
+  Result := RV_CONTINUE;
+end;
+
+function TCefHandlerOwn.doOnConsoleMessage(const browser: ICefBrowser;
+  const message, source: ustring; line: Integer): TCefRetval;
 begin
   Result := RV_CONTINUE;
 end;

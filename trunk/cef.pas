@@ -49,6 +49,8 @@ type
   TOnSetFocus = procedure(Sender: TChromium; const browser: ICefBrowser; isWidget: Boolean; out Result: TCefRetval) of object;
   TOnKeyEvent = procedure(Sender: TChromium; const browser: ICefBrowser; event: TCefHandlerKeyEventType;
     code, modifiers: Integer; isSystemKey: Boolean; out Result: TCefRetval) of object;
+  TOnConsoleMessage = procedure(Sender: TChromium; const browser: ICefBrowser; message, source: ustring;
+    line: Integer; out Result: TCefRetval) of object;
 
   TChromium = class(TWinControl)
   private
@@ -79,7 +81,7 @@ type
     FOnTakeFocus: TOnTakeFocus;
     FOnSetFocus: TOnSetFocus;
     FOnKeyEvent: TOnKeyEvent;
-
+    FOnConsoleMessage: TOnConsoleMessage;
   protected
     procedure WndProc(var Message: TMessage); override;
 
@@ -126,6 +128,8 @@ type
     function doOnSetFocus(const browser: ICefBrowser; isWidget: Boolean): TCefRetval; virtual;
     function doOnKeyEvent(const browser: ICefBrowser; event: TCefHandlerKeyEventType;
       code, modifiers: Integer; isSystemKey: Boolean): TCefRetval; virtual;
+    function doOnConsoleMessage(const browser: ICefBrowser; const message,
+      source: ustring; line: Integer): TCefRetval; stdcall;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -487,6 +491,13 @@ begin
       event, code, modifiers, isSystemKey <> 0);
 end;
 
+function cef_handler_console_message(self: PCefHandler; browser: PCefBrowser;
+  const message, source: PWideChar; line: Integer): TCefRetval; stdcall;
+begin
+ with TChromium(CefGetObject(self)) do
+    Result := doOnConsoleMessage(TCefBrowserRef.UnWrap(browser), message, source, line);
+end;
+
 { TChromium }
 
 constructor TChromium.Create(AOwner: TComponent);
@@ -516,6 +527,7 @@ begin
   FHandler.handle_take_focus := @cef_handler_handle_take_focus;
   FHandler.handle_set_focus := @cef_handler_handle_set_focus;
   FHandler.handle_key_event := @cef_handler_handle_key_event;
+  FHandler.handle_console_message := @cef_handler_console_message;
 
   FBrowserHandle := INVALID_HANDLE_VALUE;
   FBrowser := nil;
@@ -591,6 +603,14 @@ begin
   Result := RV_CONTINUE;
   if Assigned(FOnBeforeWindowClose) then
     FOnBeforeWindowClose(Self, browser, Result);
+end;
+
+function TChromium.doOnConsoleMessage(const browser: ICefBrowser; const message,
+  source: ustring; line: Integer): TCefRetval;
+begin
+  Result := RV_CONTINUE;
+  if Assigned(FOnConsoleMessage) then
+    FOnConsoleMessage(Self, browser, message, source, line, Result);
 end;
 
 function TChromium.doOnGetMenuLabel(const browser: ICefBrowser;
