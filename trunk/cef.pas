@@ -130,11 +130,7 @@ type
       code, modifiers: Integer; isSystemKey: Boolean): TCefRetval; virtual;
     function doOnConsoleMessage(const browser: ICefBrowser; const message,
       source: ustring; line: Integer): TCefRetval; stdcall;
-  public
-    constructor Create(AOwner: TComponent); override;
-    destructor Destroy; override;
-    procedure Lock;
-    procedure UnLock;
+
     property BrowserHandle: HWND read FBrowserHandle;
     property DefaultUrl: ustring read FDefaultUrl write FDefaultUrl;
     property OnBeforeCreated: TOnBeforeCreated read FOnBeforeCreated write FOnBeforeCreated;
@@ -157,9 +153,17 @@ type
     property OnTakeFocus: TOnTakeFocus read FOnTakeFocus write FOnTakeFocus;
     property OnSetFocus: TOnSetFocus read FOnSetFocus write FOnSetFocus;
     property OnKeyEvent: TOnKeyEvent read FOnKeyEvent write FOnKeyEvent;
+
+  public
+    constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
+    procedure Lock;
+    procedure UnLock;
   end;
 
   TChromium = class(TCustomChromium)
+  public
+    property BrowserHandle;
   published
     property Align;
     property Anchors;
