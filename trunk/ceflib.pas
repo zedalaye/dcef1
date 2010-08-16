@@ -2850,7 +2850,8 @@ begin
   if LibHandle = INVALID_HANDLE_VALUE then
   begin
     LibHandle := LoadLibrary(LIBCEF);
-    Assert(LibHandle <> INVALID_HANDLE_VALUE);
+    if LibHandle = 0 then
+      RaiseLastOSError;
     cef_string_length := GetProcAddress(LibHandle, 'cef_string_length');
     cef_string_alloc := GetProcAddress(LibHandle, 'cef_string_alloc');
     cef_string_alloc_length := GetProcAddress(LibHandle, 'cef_string_alloc_length');
@@ -3317,7 +3318,7 @@ initialization
   IsMultiThread := True;
 
 finalization
-  if LibHandle <> INVALID_HANDLE_VALUE then
+  if LibHandle <> 0 then
   begin
     cef_shutdown;
     FreeLibrary(LibHandle);
