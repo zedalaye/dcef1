@@ -2843,11 +2843,11 @@ begin
 end;
 
 var
-  LibHandle: THandle = INVALID_HANDLE_VALUE;
+  LibHandle: THandle = 0;
 
 procedure CefLoadLib(const cache: ustring);
 begin
-  if LibHandle = INVALID_HANDLE_VALUE then
+  if LibHandle = 0 then
   begin
     LibHandle := LoadLibrary(LIBCEF);
     if LibHandle = 0 then
