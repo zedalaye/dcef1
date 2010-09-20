@@ -51,6 +51,12 @@ type
     code, modifiers: Integer; isSystemKey: Boolean; out Result: TCefRetval) of object;
   TOnConsoleMessage = procedure(Sender: TCustomChromium; const browser: ICefBrowser; message, source: ustring;
     line: Integer; out Result: TCefRetval) of object;
+  TOnPrintOptions = procedure(Sender: TCustomChromium; const browser: ICefBrowser; printOptions: PCefPrintOptions; out Result: TCefRetval) of object;
+  TOnJsBinding = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const frame: ICefFrame; const obj: ICefv8Value; out Result: TCefRetval) of object;
+  TOnTooltip = procedure(Sender: TCustomChromium; const browser: ICefBrowser; var text: ustring; out Result: TCefRetval) of object;
+  TOnFindResult = procedure(Sender: TCustomChromium; const browser: ICefBrowser; count: Integer;
+      selectionRect: PCefRect; identifier, activeMatchOrdinal,
+      finalUpdate: Boolean; out Result: TCefRetval) of object;
 
   TCustomChromium = class(TWinControl)
   private
@@ -82,9 +88,12 @@ type
     FOnSetFocus: TOnSetFocus;
     FOnKeyEvent: TOnKeyEvent;
     FOnConsoleMessage: TOnConsoleMessage;
+    FOnPrintOptions: TOnPrintOptions;
+    FOnJsBinding: TOnJsBinding;
+    FOnTooltip: TOnTooltip;
+    FOnFindResult: TOnFindResult;
   protected
     procedure WndProc(var Message: TMessage); override;
-
     function doOnBeforeCreated(const parentBrowser: ICefBrowser;
       var windowInfo: TCefWindowInfo; popup: Boolean;
       var handler: ICefBase; var url: ustring): TCefRetval; virtual;
@@ -130,6 +139,14 @@ type
       code, modifiers: Integer; isSystemKey: Boolean): TCefRetval; virtual;
     function doOnConsoleMessage(const browser: ICefBrowser; const message,
       source: ustring; line: Integer): TCefRetval; stdcall;
+    function doOnPrintOptions(const browser: ICefBrowser;
+        printOptions: PCefPrintOptions): TCefRetval; virtual;
+    function doOnJsBinding(const browser: ICefBrowser;
+      const frame: ICefFrame; const obj: ICefv8Value): TCefRetval; virtual;
+    function doOnTooltip(const browser: ICefBrowser; var text: ustring): TCefRetval; virtual;
+    function doOnFindResult(const browser: ICefBrowser; count: Integer;
+      selectionRect: PCefRect; identifier, activeMatchOrdinal,
+      finalUpdate: Boolean): TCefRetval; virtual;
 
     property BrowserHandle: HWND read FBrowserHandle;
     property DefaultUrl: ustring read FDefaultUrl write FDefaultUrl;
@@ -153,7 +170,10 @@ type
     property OnTakeFocus: TOnTakeFocus read FOnTakeFocus write FOnTakeFocus;
     property OnSetFocus: TOnSetFocus read FOnSetFocus write FOnSetFocus;
     property OnKeyEvent: TOnKeyEvent read FOnKeyEvent write FOnKeyEvent;
-
+    property OnPrintOptions: TOnPrintOptions read FOnPrintOptions write FOnPrintOptions;
+    property OnJsBinding: TOnJsBinding read FOnJsBinding write FOnJsBinding;
+    property OnTooltip: TOnTooltip read FOnTooltip write FOnTooltip;
+    property OnFindResult: TOnFindResult read FOnFindResult write FOnFindResult;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -555,6 +575,7 @@ begin
   FHandler.handle_set_focus := @cef_handler_handle_set_focus;
   FHandler.handle_key_event := @cef_handler_handle_key_event;
   FHandler.handle_console_message := @cef_handler_console_message;
+  FHandler.handle_find_result := nil; // todo
 
   FBrowserHandle := INVALID_HANDLE_VALUE;
   FBrowser := nil;
@@ -640,6 +661,16 @@ begin
     FOnConsoleMessage(Self, browser, message, source, line, Result);
 end;
 
+function TCustomChromium.doOnFindResult(const browser: ICefBrowser;
+  count: Integer; selectionRect: PCefRect; identifier, activeMatchOrdinal,
+  finalUpdate: Boolean): TCefRetval;
+begin
+  Result := RV_CONTINUE;
+  if Assigned(FOnFindResult) then
+    FOnFindResult(Self, browser, count, selectionRect, identifier,
+      activeMatchOrdinal, finalUpdate, Result);
+end;
+
 function TCustomChromium.doOnGetMenuLabel(const browser: ICefBrowser;
   menuId: TCefHandlerMenuId; var caption: ustring): TCefRetval;
 begin
@@ -654,6 +685,14 @@ begin
   Result := RV_CONTINUE;
   if Assigned(FOnJsAlert) then
     FOnJsAlert(Self, browser, frame, message, Result);
+end;
+
+function TCustomChromium.doOnJsBinding(const browser: ICefBrowser;
+  const frame: ICefFrame; const obj: ICefv8Value): TCefRetval;
+begin
+  Result := RV_CONTINUE;
+  if Assigned(FOnJsBinding) then
+    FOnJsBinding(Self, browser, frame, obj, Result);
 end;
 
 function TCustomChromium.doOnJsConfirm(const browser: ICefBrowser;
@@ -728,6 +767,14 @@ begin
       bottomCenter, bottomRight, Result);
 end;
 
+function TCustomChromium.doOnPrintOptions(const browser: ICefBrowser;
+  printOptions: PCefPrintOptions): TCefRetval;
+begin
+  Result := RV_CONTINUE;
+  if Assigned(FOnPrintOptions) then
+    FOnPrintOptions(Self, browser, printOptions, Result);
+end;
+
 function TCustomChromium.doOnSetFocus(const browser: ICefBrowser;
   isWidget: Boolean): TCefRetval;
 begin
@@ -750,6 +797,14 @@ begin
   Result := RV_CONTINUE;
   if Assigned(FOnTitleChange) then
     FOnTitleChange(Self, browser, title, Result);
+end;
+
+function TCustomChromium.doOnTooltip(const browser: ICefBrowser;
+  var text: ustring): TCefRetval;
+begin
+  Result := RV_CONTINUE;
+  if Assigned(FOnTooltip) then
+    FOnTooltip(Self, browser, text, Result);
 end;
 
 procedure TCustomChromium.Lock;
