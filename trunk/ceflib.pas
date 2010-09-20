@@ -1055,16 +1055,32 @@ type
     procedure RemoveElements;
   end;
 
+  ICefStringMap = interface
+  ['{A33EBC01-B23A-4918-86A4-E24A243B342F}']
+    function GetHandle: TCefStringMap;
+    function GetSize: Integer;
+    function Find(const key: ustring): ustring;
+    function GetKey(index: Integer): ustring;
+    function GetValue(index: Integer): ustring;
+    procedure Append(const key, value: ustring);
+    procedure Clear;
+
+    property Handle: TCefStringMap read GetHandle;
+    property Size: Integer read GetSize;
+    property Key[index: Integer]: ustring read GetKey;
+    property Value[index: Integer]: ustring read GetValue;
+  end;
+
   ICefRequest = interface(ICefBase)
     ['{FB4718D3-7D13-4979-9F4C-D7F6C0EC592A}']
     function GetUrl: ustring;
     function GetMethod: ustring;
     function GetPostData: ICefPostData;
-    procedure GetHeaderMap(HeaderMap: TCefStringMap);
+    procedure GetHeaderMap(const HeaderMap: ICefStringMap);
     procedure SetUrl(const value: ustring);
     procedure SetMethod(const value: ustring);
     procedure SetPostData(const value: ICefPostData);
-    procedure SetHeaderMap(HeaderMap: TCefStringMap);
+    procedure SetHeaderMap(const HeaderMap: ICefStringMap);
     property Url: ustring read GetUrl write SetUrl;
     property Method: ustring read GetMethod write SetMethod;
     property PostData: ICefPostData read GetPostData write SetPostData;
@@ -1272,11 +1288,11 @@ type
     function GetUrl: ustring;
     function GetMethod: ustring;
     function GetPostData: ICefPostData;
-    procedure GetHeaderMap(HeaderMap: TCefStringMap);
+    procedure GetHeaderMap(const HeaderMap: ICefStringMap);
     procedure SetUrl(const value: ustring);
     procedure SetMethod(const value: ustring);
     procedure SetPostData(const value: ICefPostData);
-    procedure SetHeaderMap(HeaderMap: TCefStringMap);
+    procedure SetHeaderMap(const HeaderMap: ICefStringMap);
   public
     class function UnWrap(data: Pointer): ICefRequest;
   end;
@@ -1474,6 +1490,22 @@ type
     procedure Execute(threadId: TCefThreadId); virtual;
   public
     constructor Create; virtual;
+  end;
+
+  TCefStringMapOwn = class(TInterfacedObject, ICefStringMap)
+  private
+    FStringMap: TCefStringMap;
+  protected
+    function GetHandle: TCefStringMap; virtual;
+    function GetSize: Integer; virtual;
+    function Find(const key: ustring): ustring; virtual;
+    function GetKey(index: Integer): ustring; virtual;
+    function GetValue(index: Integer): ustring; virtual;
+    procedure Append(const key, value: ustring); virtual;
+    procedure Clear; virtual;
+  public
+    constructor Create; virtual;
+    destructor Destroy;
   end;
 
 procedure CefLoadLib(const cache: ustring);
@@ -3006,9 +3038,9 @@ end;
 
 { TCefRequestRef }
 
-procedure TCefRequestRef.GetHeaderMap(HeaderMap: TCefStringMap);
+procedure TCefRequestRef.GetHeaderMap(const HeaderMap: ICefStringMap);
 begin
-  PCefRequest(FData)^.get_header_map(PCefRequest(FData), HeaderMap);
+  PCefRequest(FData)^.get_header_map(PCefRequest(FData), HeaderMap.Handle);
 end;
 
 function TCefRequestRef.GetMethod: ustring;
@@ -3026,9 +3058,9 @@ begin
   Result := CefStringFreeAndGet(PCefRequest(FData)^.get_url(PCefRequest(FData)))
 end;
 
-procedure TCefRequestRef.SetHeaderMap(HeaderMap: TCefStringMap);
+procedure TCefRequestRef.SetHeaderMap(const HeaderMap: ICefStringMap);
 begin
-  PCefRequest(FData)^.set_header_map(PCefRequest(FData), HeaderMap);
+  PCefRequest(FData)^.set_header_map(PCefRequest(FData), HeaderMap.Handle);
 end;
 
 procedure TCefRequestRef.SetMethod(const value: ustring);
@@ -3604,6 +3636,53 @@ end;
 procedure TCefTaskOwn.Execute(threadId: TCefThreadId);
 begin
   Beep;
+end;
+
+{ TCefStringMapOwn }
+
+procedure TCefStringMapOwn.Append(const key, value: ustring);
+begin
+  cef_string_map_append(FStringMap, PWideChar(key), PWideChar(value));
+end;
+
+procedure TCefStringMapOwn.Clear;
+begin
+  cef_string_map_clear(FStringMap);
+end;
+
+constructor TCefStringMapOwn.Create;
+begin
+  FStringMap := cef_string_map_alloc;
+end;
+
+destructor TCefStringMapOwn.Destroy;
+begin
+  cef_string_map_free(FStringMap);
+end;
+
+function TCefStringMapOwn.Find(const key: ustring): ustring;
+begin
+  Result := cef_string_map_find(FStringMap, PWideChar(key));
+end;
+
+function TCefStringMapOwn.GetHandle: TCefStringMap;
+begin
+  Result := FStringMap;
+end;
+
+function TCefStringMapOwn.GetKey(index: Integer): ustring;
+begin
+  Result := cef_string_map_key(FStringMap, index);
+end;
+
+function TCefStringMapOwn.GetSize: Integer;
+begin
+  Result := cef_string_map_size(FStringMap);
+end;
+
+function TCefStringMapOwn.GetValue(index: Integer): ustring;
+begin
+  Result := cef_string_map_value(FStringMap, index);
 end;
 
 initialization
