@@ -55,8 +55,10 @@ type
   TOnJsBinding = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const frame: ICefFrame; const obj: ICefv8Value; out Result: TCefRetval) of object;
   TOnTooltip = procedure(Sender: TCustomChromium; const browser: ICefBrowser; var text: ustring; out Result: TCefRetval) of object;
   TOnFindResult = procedure(Sender: TCustomChromium; const browser: ICefBrowser; count: Integer;
-      selectionRect: PCefRect; identifier, activeMatchOrdinal,
-      finalUpdate: Boolean; out Result: TCefRetval) of object;
+    selectionRect: PCefRect; identifier, activeMatchOrdinal,
+    finalUpdate: Boolean; out Result: TCefRetval) of object;
+  TOnDownloadResponse = procedure(const browser: ICefBrowser; const mimeType, fileName: ustring;
+    contentLength: int64; var handler: ICefDownloadHandler; out Result: TCefRetval) of object;
 
   TCustomChromium = class(TWinControl)
   private
@@ -92,6 +94,7 @@ type
     FOnJsBinding: TOnJsBinding;
     FOnTooltip: TOnTooltip;
     FOnFindResult: TOnFindResult;
+    FOnDownloadResponse: TOnDownloadResponse;
   protected
     procedure WndProc(var Message: TMessage); override;
     function doOnBeforeCreated(const parentBrowser: ICefBrowser;
@@ -147,6 +150,8 @@ type
     function doOnFindResult(const browser: ICefBrowser; count: Integer;
       selectionRect: PCefRect; identifier, activeMatchOrdinal,
       finalUpdate: Boolean): TCefRetval; virtual;
+    function doOnDownloadResponse(const browser: ICefBrowser; const mimeType, fileName: ustring;
+      contentLength: int64; var handler: ICefDownloadHandler): TCefRetval; virtual;
 
     property BrowserHandle: HWND read FBrowserHandle;
     property DefaultUrl: ustring read FDefaultUrl write FDefaultUrl;
@@ -174,6 +179,7 @@ type
     property OnJsBinding: TOnJsBinding read FOnJsBinding write FOnJsBinding;
     property OnTooltip: TOnTooltip read FOnTooltip write FOnTooltip;
     property OnFindResult: TOnFindResult read FOnFindResult write FOnFindResult;
+    property OnDownloadResponse: TOnDownloadResponse read FOnDownloadResponse write FOnDownloadResponse;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -209,6 +215,7 @@ type
     property OnTakeFocus;
     property OnSetFocus;
     property OnKeyEvent;
+    property OnDownloadResponse;
   end;
 
 procedure Register;
@@ -545,6 +552,21 @@ begin
     Result := doOnConsoleMessage(TCefBrowserRef.UnWrap(browser), message, source, line);
 end;
 
+function cef_handler_handle_download_response(self: PCefHandler;
+  browser: PCefBrowser; const mimeType, fileName: PWideChar; contentLength: int64;
+  var handler: PCefDownloadHandler): TCefRetval; stdcall;
+var
+  _handler: ICefDownloadHandler;
+begin
+  with TCustomChromium(CefGetObject(self)) do
+    Result := doOnDownloadResponse(
+      TCefBrowserRef.UnWrap(browser),
+      mimeType, fileName, contentLength, _handler);
+  if _handler <> nil then
+    handler := _handler.Wrap else
+    handler := nil;
+end;
+
 { TCustomChromium }
 
 constructor TCustomChromium.Create(AOwner: TComponent);
@@ -563,6 +585,7 @@ begin
   FHandler.handle_load_end := @cef_handler_handle_load_end;
   FHandler.handle_load_error := @cef_handler_handle_load_error;
   FHandler.handle_before_resource_load := @cef_handler_handle_before_resource_load;
+  FHandler.handle_download_response := @cef_handler_handle_download_response;
   FHandler.handle_before_menu := @cef_handler_handle_before_menu;
   FHandler.handle_get_menu_label := @cef_handler_handle_get_menu_label;
   FHandler.handle_menu_action := @cef_handler_handle_menu_action;
@@ -659,6 +682,15 @@ begin
   Result := RV_CONTINUE;
   if Assigned(FOnConsoleMessage) then
     FOnConsoleMessage(Self, browser, message, source, line, Result);
+end;
+
+function TCustomChromium.doOnDownloadResponse(const browser: ICefBrowser;
+  const mimeType, fileName: ustring; contentLength: int64;
+  var handler: ICefDownloadHandler): TCefRetval;
+begin
+  Result := RV_CONTINUE;
+  if Assigned(FOnDownloadResponse) then
+    FOnDownloadResponse(browser, mimeType, fileName, contentLength, handler, Result);
 end;
 
 function TCustomChromium.doOnFindResult(const browser: ICefBrowser;

@@ -198,7 +198,8 @@ type
     MENU_ID_NAV_BACK = 10,
     MENU_ID_NAV_FORWARD = 11,
     MENU_ID_NAV_RELOAD = 12,
-    MENU_ID_NAV_STOP = 13,
+    MENU_ID_NAV_RELOAD_NOCACHE = 13,
+    MENU_ID_NAV_STOP = 14,
     MENU_ID_UNDO = 20,
     MENU_ID_REDO = 21,
     MENU_ID_CUT = 22,
@@ -295,6 +296,32 @@ type
     paper_margins: TCefPrintMargins;
   end;
 
+  // Supported XML encoding types. The parser supports ASCII, ISO-8859-1, and
+  // UTF16 (LE and BE) by default. All other types must be translated to UTF8
+  // before being passed to the parser. If a BOM is detected and the correct
+  // decoder is available then that decoder will be used automatically.
+  TCefXmlEncodingType = (
+    XML_ENCODING_NONE = 0,
+    XML_ENCODING_UTF8,
+    XML_ENCODING_UTF16LE,
+    XML_ENCODING_UTF16BE,
+    XML_ENCODING_ASCII
+  );
+
+  // XML node types.
+  TCefXmlNodeType = (
+    XML_NODE_UNSUPPORTED = 0,
+    XML_NODE_PROCESSING_INSTRUCTION,
+    XML_NODE_DOCUMENT_TYPE,
+    XML_NODE_ELEMENT_START,
+    XML_NODE_ELEMENT_END,
+    XML_NODE_ATTRIBUTE,
+    XML_NODE_TEXT,
+    XML_NODE_CDATA,
+    XML_NODE_ENTITY_REFERENCE,
+    XML_NODE_WHITESPACE,
+    XML_NODE_COMMENT
+  );
 
 
 (*******************************************************************************
@@ -321,6 +348,10 @@ type
   PCefBase = ^TCefBase;
   PCefBrowser = ^TCefBrowser;
   PCefTask = ^TCefTask;
+  PCefDownloadHandler = ^TCefDownloadHandler;
+  PCefXmlReader = ^TCefXmlReader;
+  PCefZipReader = ^TCefZipReader;
+
 
   TCefBase = record
     // Size of the data structure.
@@ -363,6 +394,9 @@ type
 
     // Reload the current page.
     reload: procedure(self: PCefBrowser); stdcall;
+
+    // Reload the current page ignoring any cached data.
+    reload_ignore_cache: procedure(self: PCefBrowser); stdcall;
 
     // Stop loading the page.
     stop_load: procedure(self: PCefBrowser); stdcall;
@@ -563,6 +597,18 @@ type
         request: PCefRequest; var redirectUrl: TCefString;
         var resourceStream: PCefStreamReader; var mimeType: TCefString;
         loadFlags: Integer): TCefRetval; stdcall;
+
+    // Called when a server indicates via the 'Content-Disposition' header that a
+    // response represents a file to download. |mimeType| is the mime type for the
+    // download, |fileName| is the suggested target file name and |contentLength|
+    // is either the value of the 'Content-Size' header or -1 if no size was
+    // provided. Set |handler| to the cef_download_handler_t instance that will
+    // recieve the file contents.  Return RV_CONTINUE to download the file or
+    // RV_HANDLED to cancel the file download.
+    handle_download_response: function (
+        self: PCefHandler; browser: PCefBrowser;
+        const mimeType, fileName: PWideChar; contentLength: int64;
+        var handler: PCefDownloadHandler): TCefRetval; stdcall;
 
     // Event called before a context menu is displayed.  To cancel display of the
     // default context menu return RV_HANDLED.
@@ -974,6 +1020,19 @@ type
     create: function(self: PCefSchemeHandlerFactory): PCefSchemeHandler; stdcall;
   end;
 
+  TCefDownloadHandler = record
+    // Base structure.
+    base: TCefBase;
+
+    // A portion of the file contents have been received. This function will be
+    // called multiple times until the download is complete. Return |true (1)| to
+    // continue receiving data and |false (0)| to cancel.
+    received_data: function(self: PCefDownloadHandler; data: Pointer; data_size: Integer): Integer; stdcall;
+
+    // The download is complete.
+    complete: procedure(self: PCefDownloadHandler); stdcall;
+  end;
+
   // Structure used to represent a custom scheme handler structure.
   TCefSchemeHandler = record
     // Base structure.
@@ -1002,6 +1061,195 @@ type
         data_out: Pointer; bytes_to_read: Integer; var bytes_read: Integer): Integer; stdcall;
   end;
 
+
+  // Structure that supports the reading of XML data via the libxml streaming API.
+  TCefXmlReader = record
+    // Base structure.
+    base: TcefBase;
+
+    // Moves the cursor to the next node in the document. This function must be
+    // called at least once to set the current cursor position. Returns true (1)
+    // if the cursor position was set successfully.
+    move_to_next_node: function(self: PCefXmlReader): Integer; stdcall;
+
+    // Close the document. This should be called directly to ensure that cleanup
+    // occurs on the correct thread.
+    close: function(self: PCefXmlReader): Integer; stdcall;
+
+    // Returns true (1) if an error has been reported by the XML parser.
+    has_error: function(self: PCefXmlReader): Integer; stdcall;
+
+    // Returns the error string.
+    // The resulting string must be freed by calling cef_string_free().
+    get_error: function(self: PCefXmlReader): TCefString; stdcall;
+
+
+    // The below functions retrieve data for the node at the current cursor
+    // position.
+
+    // Returns the node type.
+    get_type: function(self: PCefXmlReader): TCefXmlNodeType; stdcall;
+
+    // Returns the node depth. Depth starts at 0 for the root node.
+    get_depth: function(self: PCefXmlReader): Integer; stdcall;
+
+    // Returns the local name. See http://www.w3.org/TR/REC-xml-names/#NT-
+    // LocalPart for additional details.
+    // The resulting string must be freed by calling cef_string_free().
+    get_local_name: function(self: PCefXmlReader): TCefString; stdcall;
+
+    // Returns the namespace prefix. See http://www.w3.org/TR/REC-xml-names/ for
+    // additional details.
+    // The resulting string must be freed by calling cef_string_free().
+    get_prefix: function(self: PCefXmlReader): TCefString; stdcall;
+
+    // Returns the qualified name, equal to (Prefix:)LocalName. See
+    // http://www.w3.org/TR/REC-xml-names/#ns-qualnames for additional details.
+    // The resulting string must be freed by calling cef_string_free().
+    get_qualified_name: function(self: PCefXmlReader): TCefString; stdcall;
+
+    // Returns the URI defining the namespace associated with the node. See
+    // http://www.w3.org/TR/REC-xml-names/ for additional details.
+    // The resulting string must be freed by calling cef_string_free().
+    get_namespace_uri: function(self: PCefXmlReader): TCefString; stdcall;
+
+    // Returns the base URI of the node. See http://www.w3.org/TR/xmlbase/ for
+    // additional details.
+    // The resulting string must be freed by calling cef_string_free().
+    get_base_uri: function(self: PCefXmlReader): TCefString; stdcall;
+
+    // Returns the xml:lang scope within which the node resides. See
+    // http://www.w3.org/TR/REC-xml/#sec-lang-tag for additional details.
+    // The resulting string must be freed by calling cef_string_free().
+    get_xml_lang: function(self: PCefXmlReader): TCefString; stdcall;
+
+    // Returns true (1) if the node represents an NULL element. <a/> is considered
+    // NULL but <a></a> is not.
+    is_empty_element: function(self: PCefXmlReader): Integer; stdcall;
+
+    // Returns true (1) if the node has a text value.
+    has_value: function(self: PCefXmlReader): Integer; stdcall;
+
+    // Returns the text value.
+    // The resulting string must be freed by calling cef_string_free().
+    get_value: function(self: PCefXmlReader): TCefString; stdcall;
+
+    // Returns true (1) if the node has attributes.
+    has_attributes: function(self: PCefXmlReader): Integer; stdcall;
+
+    // Returns the number of attributes.
+    get_attribute_count: function(self: PCefXmlReader): Cardinal; stdcall;
+
+    // Returns the value of the attribute at the specified 0-based index.
+    // The resulting string must be freed by calling cef_string_free().
+    get_attribute_byindex: function(self: PCefXmlReader; index: Integer): TCefString; stdcall;
+
+    // Returns the value of the attribute with the specified qualified name.
+    // The resulting string must be freed by calling cef_string_free().
+    get_attribute_byqname: function(self: PCefXmlReader; const qualifiedName: PWideChar): TCefString; stdcall;
+
+    // Returns the value of the attribute with the specified local name and
+    // namespace URI.
+    // The resulting string must be freed by calling cef_string_free().
+    get_attribute_bylname: function(self: PCefXmlReader; const localName, namespaceURI: PWideChar): TCefString; stdcall;
+
+    // Returns an XML representation of the current node's children.
+    // The resulting string must be freed by calling cef_string_free().
+    get_inner_xml: function(self: PCefXmlReader): TCefString; stdcall;
+
+    // Returns an XML representation of the current node including its children.
+    // The resulting string must be freed by calling cef_string_free().
+    get_outer_xml: function(self: PCefXmlReader): TCefString; stdcall;
+
+    // Returns the line number for the current node.
+    get_line_number: function(self: PCefXmlReader): Integer; stdcall;
+
+
+    // Attribute nodes are not traversed by default. The below functions can be
+    // used to move the cursor to an attribute node. move_to_carrying_element()
+    // can be called afterwards to return the cursor to the carrying element. The
+    // depth of an attribute node will be 1 + the depth of the carrying element.
+
+    // Moves the cursor to the attribute at the specified 0-based index. Returns
+    // true (1) if the cursor position was set successfully.
+    move_to_attribute_byindex: function(self: PCefXmlReader; index: Integer): Integer; stdcall;
+
+    // Moves the cursor to the attribute with the specified qualified name.
+    // Returns true (1) if the cursor position was set successfully.
+    move_to_attribute_byqname: function(self: PCefXmlReader; const qualifiedName: PWideChar): Integer; stdcall;
+
+    // Moves the cursor to the attribute with the specified local name and
+    // namespace URI. Returns true (1) if the cursor position was set
+    // successfully.
+    move_to_attribute_bylname: function(self: PCefXmlReader; const localName, namespaceURI: PWideChar): Integer; stdcall;
+
+    // Moves the cursor to the first attribute in the current element. Returns
+    // true (1) if the cursor position was set successfully.
+    move_to_first_attribute: function(self: PCefXmlReader): Integer; stdcall;
+
+    // Moves the cursor to the next attribute in the current element. Returns true
+    // (1) if the cursor position was set successfully.
+    move_to_next_attribute: function(self: PCefXmlReader): Integer; stdcall;
+
+    // Moves the cursor back to the carrying element. Returns true (1) if the
+    // cursor position was set successfully.
+    move_to_carrying_element: function(self: PCefXmlReader): Integer; stdcall;
+  end;
+
+  // Structure that supports the reading of zip archives via the zlib unzip API.
+  TCefZipReader = record
+    // Base structure.
+    base: TCefBase;
+
+    // Moves the cursor to the first file in the archive. Returns true (1) if the
+    // cursor position was set successfully.
+    move_to_first_file: function(self: PCefZipReader): Integer; stdcall;
+
+    // Moves the cursor to the next file in the archive. Returns true (1) if the
+    // cursor position was set successfully.
+    move_to_next_file: function(self: PCefZipReader): Integer; stdcall;
+
+    // Moves the cursor to the specified file in the archive. If |caseSensitive|
+    // is true (1) then the search will be case sensitive. Returns true (1) if the
+    // cursor position was set successfully.
+    move_to_file: function(self: PCefZipReader; const fileName: PWideChar; caseSensitive: Integer): Integer; stdcall;
+
+    // Closes the archive. This should be called directly to ensure that cleanup
+    // occurs on the correct thread.
+    close: function(Self: PCefZipReader): Integer; stdcall;
+
+
+    // The below functions act on the file at the current cursor position.
+
+    // Returns the name of the file.
+    // The resulting string must be freed by calling cef_string_free().
+    get_file_name: function(Self: PCefZipReader): TCefString; stdcall;
+
+    // Returns the uncompressed size of the file.
+    get_file_size: function(Self: PCefZipReader): LongInt; stdcall;
+
+    // Returns the last modified timestamp for the file.
+    get_file_last_modified: function(Self: PCefZipReader): LongInt; stdcall;
+
+    // Opens the file for reading of uncompressed data. A read password may
+    // optionally be specified.
+    open_file: function(Self: PCefZipReader; password: PWideChar): Integer; stdcall;
+
+    // Closes the file.
+    close_file: function(Self: PCefZipReader): Integer; stdcall;
+
+    // Read uncompressed file contents into the specified buffer. Returns < 0 if
+    // an error occurred, 0 if at the end of file, or the number of bytes read.
+    read_file: function(Self: PCefZipReader; buffer: Pointer; bufferSize: Cardinal): Integer; stdcall;
+
+    // Returns the current offset in the uncompressed file contents.
+    tell: function(Self: PCefZipReader): LongInt; stdcall;
+
+    // Returns true (1) if at end of the file contents.
+    eof: function(Self: PCefZipReader): Integer; stdcall;
+  end;
+
+
   ICefBrowser = interface;
   ICefFrame = interface;
   ICefRequest = interface;
@@ -1019,6 +1267,7 @@ type
     function CanGoForward: Boolean;
     procedure GoForward;
     procedure Reload;
+    procedure ReloadIgnoreCache;
     procedure StopLoad;
     procedure SetFocus(enable: Boolean);
     function GetWindowHandle: CefWindowHandle;
@@ -1137,6 +1386,12 @@ type
     function New: ICefSchemeHandler;
   end;
 
+  ICefDownloadHandler = interface(ICefBase)
+  ['{3137F90A-5DC5-43C1-858D-A269F28EF4F1}']
+    function ReceivedData(data: Pointer; DataSize: Integer): Integer;
+    procedure Complete;
+  end;
+
   TCefv8ValueArray = array of ICefv8Value;
 
   ICefv8Handler = interface(ICefBase)
@@ -1184,6 +1439,55 @@ type
       var exception: ustring): Boolean;
   end;
 
+  ICefXmlReader = interface(ICefBase)
+  ['{0DE686C3-A8D7-45D2-82FD-92F7F4E62A90}']
+    function MoveToNextNode: Boolean;
+    function Close: Boolean;
+    function HasError: Boolean;
+    function GetError: ustring;
+    function GetType: TCefXmlNodeType;
+    function GetDepth: Integer;
+    function GetLocalName: ustring;
+    function GetPrefix: ustring;
+    function GetQualifiedName: ustring;
+    function GetNamespaceUri: ustring;
+    function GetBaseUri: ustring;
+    function GetXmlLang: ustring;
+    function IsEmptyElement: Boolean;
+    function HasValue: Boolean;
+    function GetValue: ustring;
+    function HasAttributes: Boolean;
+    function GetAttributeCount: Cardinal;
+    function GetAttributeByIndex(index: Integer): ustring;
+    function GetAttributeByQName(const qualifiedName: ustring): ustring;
+    function GetAttributeByLName(const localName, namespaceURI: ustring): ustring;
+    function GetInnerXml: ustring;
+    function GetOuterXml: ustring;
+    function GetLineNumber: Integer;
+    function MoveToAttributeByIndex(index: Integer): Boolean;
+    function MoveToAttributeByQName(const qualifiedName: ustring): Boolean;
+    function MoveToAttributeByLName(const localName, namespaceURI: ustring): Boolean;
+    function MoveToFirstAttribute: Boolean;
+    function MoveToNextAttribute: Boolean;
+    function MoveToCarryingElement: Boolean;
+  end;
+
+  ICefZipReader = interface(ICefBase)
+  ['{3B6C591F-9877-42B3-8892-AA7B27DA34A8}']
+    function MoveToFirstFile: Boolean;
+    function MoveToNextFile: Boolean;
+    function MoveToFile(const fileName: ustring; caseSensitive: Boolean): Boolean;
+    function Close: Boolean;
+    function GetFileName: ustring;
+    function GetFileSize: LongInt;
+    function GetFileLastModified: LongInt;
+    function OpenFile(const password: ustring): Boolean;
+    function CloseFile: Boolean;
+    function ReadFile(buffer: Pointer; bufferSize: Cardinal): Integer;
+    function Tell: LongInt;
+    function Eof: Boolean;
+  end;
+
   TCefBaseOwn = class(TInterfacedObject, ICefBase)
   private
     FData: Pointer;
@@ -1216,6 +1520,7 @@ type
     function CanGoForward: Boolean;
     procedure GoForward;
     procedure Reload;
+    procedure ReloadIgnoreCache;
     procedure StopLoad;
     procedure SetFocus(enable: Boolean);
     function GetWindowHandle: CefWindowHandle;
@@ -1415,6 +1720,8 @@ type
     function doOnFindResult(const browser: ICefBrowser; count: Integer;
       selectionRect: PCefRect; identifier, activeMatchOrdinal,
       finalUpdate: Boolean): TCefRetval; virtual;
+    function doOnDownloadResponse(const browser: ICefBrowser; const mimeType, fileName: ustring;
+      contentLength: int64; var handler: ICefDownloadHandler): TCefRetval; virtual;
   public
     constructor Create; virtual;
   end;
@@ -1476,6 +1783,14 @@ type
     constructor Create(const AClass: TCefSchemeHandlerClass); virtual;
   end;
 
+  TCefDownloadHandlerOwn = class(TCefBaseOwn, ICefDownloadHandler)
+  protected
+    function ReceivedData(data: Pointer; DataSize: Integer): Integer; virtual; abstract;
+    procedure Complete; virtual; abstract;
+  public
+    constructor Create; virtual;
+  end;
+
   TCefv8HandlerOwn = class(TCefBaseOwn, ICefv8Handler)
   protected
     function Execute(const name: ustring; const obj: ICefv8Value;
@@ -1505,7 +1820,61 @@ type
     procedure Clear; virtual;
   public
     constructor Create; virtual;
-    destructor Destroy;
+    destructor Destroy; override;
+  end;
+
+  TCefXmlReaderRef = class(TCefBaseRef, ICefXmlReader)
+  protected
+    function MoveToNextNode: Boolean;
+    function Close: Boolean;
+    function HasError: Boolean;
+    function GetError: ustring;
+    function GetType: TCefXmlNodeType;
+    function GetDepth: Integer;
+    function GetLocalName: ustring;
+    function GetPrefix: ustring;
+    function GetQualifiedName: ustring;
+    function GetNamespaceUri: ustring;
+    function GetBaseUri: ustring;
+    function GetXmlLang: ustring;
+    function IsEmptyElement: Boolean;
+    function HasValue: Boolean;
+    function GetValue: ustring;
+    function HasAttributes: Boolean;
+    function GetAttributeCount: Cardinal;
+    function GetAttributeByIndex(index: Integer): ustring;
+    function GetAttributeByQName(const qualifiedName: ustring): ustring;
+    function GetAttributeByLName(const localName, namespaceURI: ustring): ustring;
+    function GetInnerXml: ustring;
+    function GetOuterXml: ustring;
+    function GetLineNumber: Integer;
+    function MoveToAttributeByIndex(index: Integer): Boolean;
+    function MoveToAttributeByQName(const qualifiedName: ustring): Boolean;
+    function MoveToAttributeByLName(const localName, namespaceURI: ustring): Boolean;
+    function MoveToFirstAttribute: Boolean;
+    function MoveToNextAttribute: Boolean;
+    function MoveToCarryingElement: Boolean;
+  public
+    constructor Create(const stream: ICefStreamReader;
+      encodingType: TCefXmlEncodingType; const URI: ustring); virtual;
+  end;
+
+  TCefZipReaderRef = class(TCefBaseRef, ICefZipReader)
+  protected
+    function MoveToFirstFile: Boolean;
+    function MoveToNextFile: Boolean;
+    function MoveToFile(const fileName: ustring; caseSensitive: Boolean): Boolean;
+    function Close: Boolean;
+    function GetFileName: ustring;
+    function GetFileSize: LongInt;
+    function GetFileLastModified: LongInt;
+    function OpenFile(const password: ustring): Boolean;
+    function CloseFile: Boolean;
+    function ReadFile(buffer: Pointer; bufferSize: Cardinal): Integer;
+    function Tell: LongInt;
+    function Eof: Boolean;
+  public
+    constructor Create(const stream: ICefStreamReader); virtual;
   end;
 
 procedure CefLoadLib(const cache: ustring);
@@ -1740,6 +2109,15 @@ var
   cef_v8value_create_array: function(): PCefv8Value; cdecl;
   cef_v8value_create_function: function(const name: PWideChar; handler: PCefv8Handler): PCefv8Value; cdecl;
 
+  // Create a new cef_xml_reader_t object. The returned object's functions can
+  // only be called from the thread that created the object.
+  cef_xml_reader_create: function(stream: PCefStreamReader;
+    encodingType: TCefXmlEncodingType; const URI: PWideChar): PCefXmlReader; cdecl;
+
+  // Create a new cef_zip_reader_t object. The returned object's functions can
+  // only be called from the thread that created the object.
+  cef_zip_reader_create: function(stream: PCefStreamReader): PCefZipReader; cdecl;
+
 function CefGetData(const i: ICefBase): Pointer;
 begin
   if i <> nil then
@@ -1919,6 +2297,19 @@ begin
       mimeType := CefStringAlloc(_mimeType);
     end;
   end;
+end;
+
+function cef_handler_handle_download_response(self: PCefHandler;
+  browser: PCefBrowser; const mimeType, fileName: PWideChar; contentLength: int64;
+  var handler: PCefDownloadHandler): TCefRetval; stdcall;
+var
+  _handler: ICefDownloadHandler;
+begin
+  with TCefHandlerOwn(CefGetObject(self)) do
+    Result := doOnDownloadResponse(
+      TCefBrowserRef.UnWrap(browser),
+      mimeType, fileName, contentLength, _handler);
+  handler := CefGetData(_handler);
 end;
 
 function cef_handler_handle_before_menu(
@@ -2262,6 +2653,18 @@ begin
   TCefTaskOwn(CefGetObject(self)).Execute(threadId);
 end;
 
+{ cef_download_handler }
+
+function cef_download_handler_received_data(self: PCefDownloadHandler; data: Pointer; data_size: Integer): Integer; stdcall;
+begin
+  Result := TCefDownloadHandlerOwn(CefGetObject(self)).ReceivedData(data, data_size);
+end;
+
+procedure cef_download_handler_complete(self: PCefDownloadHandler); stdcall;
+begin
+  TCefDownloadHandlerOwn(CefGetObject(self)).Complete;
+end;
+
 { TCefBaseOwn }
 
 constructor TCefBaseOwn.CreateData(size: Cardinal);
@@ -2318,6 +2721,7 @@ begin
     handle_load_end := @cef_handler_handle_load_end;
     handle_load_error := @cef_handler_handle_load_error;
     handle_before_resource_load := @cef_handler_handle_before_resource_load;
+    handle_download_response := @cef_handler_handle_download_response;
     handle_before_menu := @cef_handler_handle_before_menu;
     handle_get_menu_label := @cef_handler_handle_get_menu_label;
     handle_menu_action := @cef_handler_handle_menu_action;
@@ -2383,6 +2787,13 @@ end;
 
 function TCefHandlerOwn.doOnConsoleMessage(const browser: ICefBrowser;
   const message, source: ustring; line: Integer): TCefRetval;
+begin
+  Result := RV_CONTINUE;
+end;
+
+function TCefHandlerOwn.doOnDownloadResponse(const browser: ICefBrowser;
+  const mimeType, fileName: ustring; contentLength: int64;
+  var handler: ICefDownloadHandler): TCefRetval;
 begin
   Result := RV_CONTINUE;
 end;
@@ -2606,6 +3017,11 @@ end;
 procedure TCefBrowserRef.Reload;
 begin
   PCefBrowser(FData)^.reload(PCefBrowser(FData));
+end;
+
+procedure TCefBrowserRef.ReloadIgnoreCache;
+begin
+  PCefBrowser(FData)^.reload_ignore_cache(PCefBrowser(FData));
 end;
 
 procedure TCefBrowserRef.SetFocus(enable: Boolean);
@@ -3188,6 +3604,8 @@ begin
     cef_v8value_create_object := GetProcAddress(LibHandle, 'cef_v8value_create_object');
     cef_v8value_create_array := GetProcAddress(LibHandle, 'cef_v8value_create_array');
     cef_v8value_create_function := GetProcAddress(LibHandle, 'cef_v8value_create_function');
+    cef_xml_reader_create := GetProcAddress(LibHandle, 'cef_xml_reader_create');
+    cef_zip_reader_create := GetProcAddress(LibHandle, 'cef_zip_reader_create');
 
     Assert(
       Assigned(cef_string_length) and
@@ -3236,8 +3654,10 @@ begin
       Assigned(cef_v8value_create_string) and
       Assigned(cef_v8value_create_object) and
       Assigned(cef_v8value_create_array) and
-      Assigned(cef_v8value_create_function));
-
+      Assigned(cef_v8value_create_function) and
+      Assigned(cef_xml_reader_create) and
+      Assigned(cef_zip_reader_create)
+    );
     CefInitialize(True, cache);
   end;
 end;
@@ -3683,6 +4103,244 @@ end;
 function TCefStringMapOwn.GetValue(index: Integer): ustring;
 begin
   Result := cef_string_map_value(FStringMap, index);
+end;
+
+{ TCefDownloadHandlerOwn }
+
+constructor TCefDownloadHandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefDownloadHandler));
+  with PCefDownloadHandler(FData)^ do
+  begin
+    received_data := @cef_download_handler_received_data;
+    complete := @cef_download_handler_complete;
+  end;
+end;
+
+{ TCefXmlReaderRef }
+
+function TCefXmlReaderRef.Close: Boolean;
+begin
+  Result := PCefXmlReader(FData).close(FData) <> 0;
+end;
+
+constructor TCefXmlReaderRef.Create(const stream: ICefStreamReader;
+  encodingType: TCefXmlEncodingType; const URI: ustring);
+begin
+  inherited Create(cef_xml_reader_create(stream.Wrap, encodingType, PWideChar(URI)));
+end;
+
+function TCefXmlReaderRef.GetAttributeByIndex(index: Integer): ustring;
+begin
+  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_attribute_byindex(FData, index));
+end;
+
+function TCefXmlReaderRef.GetAttributeByLName(const localName,
+  namespaceURI: ustring): ustring;
+begin
+  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_attribute_bylname(FData, PWideChar(localName), PWideChar(namespaceURI)));
+end;
+
+function TCefXmlReaderRef.GetAttributeByQName(
+  const qualifiedName: ustring): ustring;
+begin
+  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_attribute_byqname(FData, PWideChar(qualifiedName)));
+end;
+
+function TCefXmlReaderRef.GetAttributeCount: Cardinal;
+begin
+  Result := PCefXmlReader(FData).get_attribute_count(FData);
+end;
+
+function TCefXmlReaderRef.GetBaseUri: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_base_uri(FData));
+end;
+
+function TCefXmlReaderRef.GetDepth: Integer;
+begin
+  Result := PCefXmlReader(FData).get_depth(FData);
+end;
+
+function TCefXmlReaderRef.GetError: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_error(FData));
+end;
+
+function TCefXmlReaderRef.GetInnerXml: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_inner_xml(FData));
+end;
+
+function TCefXmlReaderRef.GetLineNumber: Integer;
+begin
+  Result := PCefXmlReader(FData).get_line_number(FData);
+end;
+
+function TCefXmlReaderRef.GetLocalName: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_local_name(FData));
+end;
+
+function TCefXmlReaderRef.GetNamespaceUri: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_namespace_uri(FData));
+end;
+
+function TCefXmlReaderRef.GetOuterXml: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_outer_xml(FData));
+end;
+
+function TCefXmlReaderRef.GetPrefix: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_prefix(FData));
+end;
+
+function TCefXmlReaderRef.GetQualifiedName: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_qualified_name(FData));
+end;
+
+function TCefXmlReaderRef.GetType: TCefXmlNodeType;
+begin
+  Result := PCefXmlReader(FData).get_type(FData);
+end;
+
+function TCefXmlReaderRef.GetValue: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_value(FData));
+end;
+
+function TCefXmlReaderRef.GetXmlLang: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_xml_lang(FData));
+end;
+
+function TCefXmlReaderRef.HasAttributes: Boolean;
+begin
+  Result := PCefXmlReader(FData).has_attributes(FData) <> 0;
+end;
+
+function TCefXmlReaderRef.HasError: Boolean;
+begin
+  Result := PCefXmlReader(FData).has_error(FData) <> 0;
+end;
+
+function TCefXmlReaderRef.HasValue: Boolean;
+begin
+  Result := PCefXmlReader(FData).has_value(FData) <> 0;
+end;
+
+function TCefXmlReaderRef.IsEmptyElement: Boolean;
+begin
+  Result := PCefXmlReader(FData).is_empty_element(FData) <> 0;
+end;
+
+function TCefXmlReaderRef.MoveToAttributeByIndex(index: Integer): Boolean;
+begin
+  Result := PCefXmlReader(FData).move_to_attribute_byindex(FData, index) <> 0;
+end;
+
+function TCefXmlReaderRef.MoveToAttributeByLName(const localName,
+  namespaceURI: ustring): Boolean;
+begin
+  Result := PCefXmlReader(FData).move_to_attribute_bylname(FData, PWideChar(localName), PWideChar(namespaceURI)) <> 0;
+end;
+
+function TCefXmlReaderRef.MoveToAttributeByQName(
+  const qualifiedName: ustring): Boolean;
+begin
+  Result := PCefXmlReader(FData).move_to_attribute_byqname(FData, PWideChar(qualifiedName)) <> 0;
+end;
+
+function TCefXmlReaderRef.MoveToCarryingElement: Boolean;
+begin
+  Result := PCefXmlReader(FData).move_to_carrying_element(FData) <> 0;
+end;
+
+function TCefXmlReaderRef.MoveToFirstAttribute: Boolean;
+begin
+  Result := PCefXmlReader(FData).move_to_first_attribute(FData) <> 0;
+end;
+
+function TCefXmlReaderRef.MoveToNextAttribute: Boolean;
+begin
+  Result := PCefXmlReader(FData).move_to_next_attribute(FData) <> 0;
+end;
+
+function TCefXmlReaderRef.MoveToNextNode: Boolean;
+begin
+  Result := PCefXmlReader(FData).move_to_next_node(FData) <> 0;
+end;
+
+{ TCefZipReaderRef }
+
+function TCefZipReaderRef.Close: Boolean;
+begin
+  Result := PCefZipReader(FData).close(FData) <> 0;
+end;
+
+function TCefZipReaderRef.CloseFile: Boolean;
+begin
+  Result := PCefZipReader(FData).close_file(FData) <> 0;
+end;
+
+constructor TCefZipReaderRef.Create(const stream: ICefStreamReader);
+begin
+  inherited Create(cef_zip_reader_create(stream.Wrap));
+end;
+
+function TCefZipReaderRef.Eof: Boolean;
+begin
+  Result := PCefZipReader(FData).eof(FData) <> 0;
+end;
+
+function TCefZipReaderRef.GetFileLastModified: LongInt;
+begin
+  Result := PCefZipReader(FData).get_file_last_modified(FData);
+end;
+
+function TCefZipReaderRef.GetFileName: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefZipReader(FData).get_file_name(FData));
+end;
+
+function TCefZipReaderRef.GetFileSize: LongInt;
+begin
+  Result := PCefZipReader(FData).get_file_size(FData);
+end;
+
+function TCefZipReaderRef.MoveToFile(const fileName: ustring;
+  caseSensitive: Boolean): Boolean;
+begin
+  Result := PCefZipReader(FData).move_to_file(FData, PWideChar(fileName), Ord(caseSensitive)) <> 0;
+end;
+
+function TCefZipReaderRef.MoveToFirstFile: Boolean;
+begin
+  Result := PCefZipReader(FData).move_to_first_file(FData) <> 0;
+end;
+
+function TCefZipReaderRef.MoveToNextFile: Boolean;
+begin
+  Result := PCefZipReader(FData).move_to_next_file(FData) <> 0;
+end;
+
+function TCefZipReaderRef.OpenFile(const password: ustring): Boolean;
+begin
+  Result := PCefZipReader(FData).open_file(FData, PWideChar(password)) <> 0;
+end;
+
+function TCefZipReaderRef.ReadFile(buffer: Pointer;
+  bufferSize: Cardinal): Integer;
+begin
+    Result := PCefZipReader(FData).read_file(FData, buffer, buffersize);
+end;
+
+function TCefZipReaderRef.Tell: LongInt;
+begin
+  Result := PCefZipReader(FData).tell(FData);
 end;
 
 initialization
