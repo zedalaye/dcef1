@@ -180,6 +180,7 @@ type
     property OnTooltip: TOnTooltip read FOnTooltip write FOnTooltip;
     property OnFindResult: TOnFindResult read FOnFindResult write FOnFindResult;
     property OnDownloadResponse: TOnDownloadResponse read FOnDownloadResponse write FOnDownloadResponse;
+    property OnConsoleMessage: TOnConsoleMessage read FOnConsoleMessage write FOnConsoleMessage;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -216,6 +217,7 @@ type
     property OnSetFocus;
     property OnKeyEvent;
     property OnDownloadResponse;
+    property OnConsoleMessage;
   end;
 
 procedure Register;
