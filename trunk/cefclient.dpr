@@ -5,6 +5,11 @@
 program cefclient;
 
 uses
+  madExcept,
+  madLinkDisAsm,
+  madListHardware,
+  madListProcesses,
+  madListModules,
   Classes,
   Windows,
   Messages,
@@ -385,7 +390,6 @@ begin
       Result := false;
       Exit;
     end;
-
     FTestParam := arguments[0].GetStringValue;
     Result := true;
   end

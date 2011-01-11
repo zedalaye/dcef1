@@ -5,6 +5,11 @@ unit ceflib;
 {$ALIGN ON}
 {$MINENUMSIZE 4}
 
+
+{.$define CEF_STRING_TYPE_UTF8}
+{$define CEF_STRING_TYPE_UTF16}
+{.$define CEF_STRING_TYPE_WIDE}
+
 interface
 uses
   Classes, Windows;
@@ -20,11 +25,92 @@ type
   {$ENDIF}
 {$ENDIF}
 
+  // CEF provides functions for converting between UTF-8, -16 and -32 strings.
+  // CEF string types are safe for reading from multiple threads but not for
+  // modification. It is the user's responsibility to provide synchronization if
+  // modifying CEF strings from multiple threads.
+
+  // CEF character type definitions. wchat_t is 2 bytes on Windows and 4 bytes on
+  // most other platforms.
+
+  Char16 = WideChar;
+  PChar16 = ^Char16;
+
+  // CEF string type definitions. Whomever allocates |str| is responsible for
+  // providing an appropriate |dtor| implementation that will free the string in
+  // the same memory space. When reusing an existing string structure make sure
+  // to call |dtor| for the old value before assigning new |str| and |dtor|
+  // values. Static strings will have a NULL |dtor| value. Using the below
+  // functions if you want this managed for you.
+
+  PCefStringWide = ^TCefStringWide;
+  TCefStringWide = record
+    str: PWideChar;
+    length: Cardinal;
+    dtor: procedure(str: PWideChar); stdcall;
+  end;
+
+  PCefStringUtf8 = ^TCefStringUtf8;
+  TCefStringUtf8 = record
+    str: PAnsiChar;
+    length: Cardinal;
+    dtor: procedure(str: PAnsiChar); stdcall;
+  end;
+
+  PCefStringUtf16 = ^TCefStringUtf16;
+  TCefStringUtf16 = record
+    str: PChar16;
+    length: Cardinal;
+    dtor: procedure(str: PChar16); stdcall;
+  end;
+
+
+  // It is sometimes necessary for the system to allocate string structures with
+  // the expectation that the user will free them. The userfree types act as a
+  // hint that the user is responsible for freeing the structure.
+
+  PCefStringUserFreeWide = ^TCefStringUserFreeWide;
+  TCefStringUserFreeWide = type TCefStringWide;
+
+  PCefStringUserFreeUtf8 = ^TCefStringUserFreeUtf8;
+  TCefStringUserFreeUtf8 = type TCefStringUtf8;
+
+  PCefStringUserFreeUtf16 = ^TCefStringUserFreeUtf16;
+  TCefStringUserFreeUtf16 = type TCefStringUtf16;
+
+{$IFDEF CEF_STRING_TYPE_UTF8}
+  TCefChar = AnsiChar;
+  PCefChar = PAnsiChar;
+  TCefStringUserFree = TCefStringUserFreeUtf8;
+  PCefStringUserFree = PCefStringUserFreeUtf8;
+  TCefString = TCefStringUtf8;
+  PCefString = PCefStringUtf8;
+{$ENDIF}
+
+{$IFDEF CEF_STRING_TYPE_UTF16}
+  TCefChar = Char16;
+  PCefChar = PChar16;
+  TCefStringUserFree = TCefStringUserFreeUtf16;
+  PCefStringUserFree = PCefStringUserFreeUtf16;
+  TCefString = TCefStringUtf16;
+  PCefString = PCefStringUtf16;
+{$ENDIF}
+
+{$IFDEF CEF_STRING_TYPE_WIDE}
+  TCefChar = WideChar;
+  PCefChar = PWideChar;
+  TCefStringUserFree = TCefStringUserFreeWide;
+  PCefStringUserFree = PCefStringUserFreeWide;
+  TCefString = TCefStringWide;
+  PCefString = PCefStringWide;
+{$ENDIF}
+
+  //PCefStringUserFree = ^TCefStringUserFree;
+
   // CEF strings are NUL-terminated wide character strings prefixed with a size
   // value, similar to the Microsoft BSTR type.  Use the below API functions for
   // allocating, managing and freeing CEF strings.
-  PCefString = ^TCefString;
-  TCefString = PWideChar;
+
 
   // CEF string maps are a set of key/value string pairs.
   TCefStringMap = Pointer;
@@ -58,6 +144,162 @@ type
 
   // Window handle.
   CefWindowHandle = HWND;
+
+  // Initialization settings. Specify NULL or 0 to get the recommended default
+  // values.
+  PCefSettings = ^TCefSettings;
+  TCefSettings = record
+    // Size of this structure.
+    size: Cardinal;
+
+    // Set to true (1) to have the message loop run in a separate thread. If
+    // false (0) than the CefDoMessageLoopWork() function must be called from
+    // your application message loop.
+    multi_threaded_message_loop: Boolean;
+
+    // The location where cache data will be stored on disk. If empty an
+    // in-memory cache will be used. HTML5 databases such as localStorage will
+    // only persist across sessions if a cache path is specified.
+    cache_path: TCefString;
+
+    // Value that will be returned as the User-Agent HTTP header. If empty the
+    // default User-Agent string will be used.
+    user_agent: TCefString;
+
+    // Value that will be inserted as the product portion of the default
+    // User-Agent string. If empty the Chromium product version will be used. If
+    // |userAgent| is specified this value will be ignored.
+    product_version: TCefString;
+
+    // The locale string that will be passed to WebKit. If empty the default
+    // locale of "en-US" will be used.
+    locale: TCefString;
+
+    // List of file system paths that will be searched by the browser to locate
+    // plugins. This is in addition to the default search paths.
+    extra_plugin_paths: TCefStringList;
+  end;
+
+  // Browser initialization settings. Specify NULL or 0 to get the recommended
+  // default values. The consequences of using custom values may not be well
+  // tested.
+  PCefBrowserSettings = ^TCefBrowserSettings;
+  TCefBrowserSettings = record
+    // Size of this structure.
+    size: Cardinal;
+
+    // Disable drag & drop of URLs from other windows.
+    drag_drop_disabled: Boolean;
+
+    // The below values map to WebPreferences settings.
+
+    // Font settings.
+    standard_font_family: TCefString;
+    fixed_font_family: TCefString;
+    serif_font_family: TCefString;
+    sans_serif_font_family: TCefString;
+    cursive_font_family: TCefString;
+    fantasy_font_family: TCefString;
+    default_font_size: Integer;
+    default_fixed_font_size: Integer;
+    minimum_font_size: Integer;
+    minimum_logical_font_size: Integer;
+
+    // Set to true (1) to disable loading of fonts from remote sources.
+    remote_fonts_disabled: Boolean;
+
+    // Default encoding for Web content. If empty "ISO-8859-1" will be used.
+    default_encoding: TCefString;
+
+    // Set to true (1) to attempt automatic detection of content encoding.
+    encoding_detector_enabled: Boolean;
+
+    // Set to true (1) to disable JavaScript.
+    javascript_disabled: Boolean;
+
+    // Set to true (1) to disallow JavaScript from opening windows.
+    javascript_open_windows_disallowed: Boolean;
+
+    // Set to true (1) to disallow JavaScript from closing windows.
+    javascript_close_windows_disallowed: Boolean;
+
+    // Set to true (1) to disallow JavaScript from accessing the clipboard.
+    javascript_access_clipboard_disallowed: Boolean;
+
+    // Set to true (1) to disable DOM pasting in the editor. DOM pasting also
+    // depends on |javascript_cannot_access_clipboard| being false (0).
+    dom_paste_disabled: Boolean;
+
+    // Set to true (1) to enable drawing of the caret position.
+    caret_browsing_enabled: Boolean;
+
+    // Set to true (1) to disable Java.
+    java_disabled: Boolean;
+
+    // Set to true (1) to disable plugins.
+    plugins_disabled: Boolean;
+
+    // Set to true (1) to allow access to all URLs from file URLs.
+    universal_access_from_file_urls_allowed: Boolean;
+
+    // Set to true (1) to allow access to file URLs from other file URLs.
+    file_access_from_file_urls_allowed: Boolean;
+
+    // Set to true (1) to allow risky security behavior such as cross-site
+    // scripting (XSS). Use with extreme care.
+    web_security_disabled: Boolean;
+
+    // Set to true (1) to enable console warnings about XSS attempts.
+    xss_auditor_enabled: Boolean;
+
+    // Set to true (1) to suppress the network load of image URLs.  A cached
+    // image will still be rendered if requested.
+    image_load_disabled: Boolean;
+
+    // Set to true (1) to shrink standalone images to fit the page.
+    shrink_standalone_images_to_fit: Boolean;
+
+    // Set to true (1) to disable browser backwards compatibility features.
+    site_specific_quirks_disabled: Boolean;
+
+    // Set to true (1) to disable resize of text areas.
+    text_area_resize_disabled: Boolean;
+
+    // Set to true (1) to disable use of the page cache.
+    page_cache_disabled: Boolean;
+
+    // Set to true (1) to not have the tab key advance focus to links.
+    tab_to_links_disabled: Boolean;
+
+    // Set to true (1) to disable hyperlink pings (<a ping> and window.sendPing).
+    hyperlink_auditing_disabled: Boolean;
+
+    // Set to true (1) to enable the user style sheet for all pages.
+    // |user_style_sheet_location| must be set to the style sheet URL.
+    user_style_sheet_enabled: Boolean;
+    user_style_sheet_location: TCefString;
+
+    // Set to true (1) to disable style sheets.
+    author_and_user_styles_disabled: Boolean;
+
+    // Set to true (1) to disable local storage.
+    local_storage_disabled: Boolean;
+
+    // Set to true (1) to disable databases.
+    databases_disabled: Boolean;
+
+    // Set to true (1) to disable application cache.
+    application_cache_disabled: Boolean;
+
+    // Set to true (1) to enable experimental WebGL features.
+    experimental_webgl_enabled: Boolean;
+
+    // Set to true (1) to disable accelerated compositing.
+    accelerated_compositing_disabled: Boolean;
+
+    // Set to true (1) to disable accelerated 2d canvas.
+    accelerated_2d_canvas_disabled: Boolean;
+  end;
 
   // Define handler return value types. Returning RV_HANDLED indicates
   // that the implementation completely handled the method and that no further
@@ -140,14 +382,14 @@ type
     typeFlags: Integer;
     x: Integer;
     y: Integer;
-    linkUrl: PWideChar;
-    imageUrl: PWideChar;
-    pageUrl: PWideChar;
-    frameUrl: PWideChar;
-    selectionText: PWideChar;
-    misspelledWord: PWideChar;
+    linkUrl: TCefString;
+    imageUrl: TCefString;
+    pageUrl: TCefString;
+    frameUrl: TCefString;
+    selectionText: TCefString;
+    misspelledWord: TCefString;
     editFlags: Integer;
-    securityInfo: PWideChar;
+    securityInfo: TCefString;
   end;
 
   // The TCefHandlerMenuInfo typeFlags value will be a combination of the
@@ -323,6 +565,29 @@ type
     XML_NODE_COMMENT
   );
 
+  // Popup window features.
+  PCefPopupFeatures = ^TCefPopupFeatures;
+  TCefPopupFeatures = record
+    x: Integer;
+    xSet: Boolean;
+    y: Integer;
+    ySet: Boolean;
+    width: Integer;
+    widthSet: Boolean;
+    height: Integer;
+    heightSet: Boolean;
+
+    menuBarVisible: Boolean;
+    statusBarVisible: Boolean;
+    toolBarVisible: Boolean;
+    locationBarVisible: Boolean;
+    scrollbarsVisible: Boolean;
+    resizable: Boolean;
+
+    fullscreen: Boolean;
+    dialog: Boolean;
+    additionalFeatures: TCefStringList;
+  end;
 
 (*******************************************************************************
    capi
@@ -421,7 +686,7 @@ type
     get_focused_frame: function (self: PCefBrowser): PCefFrame; stdcall;
 
     // Returns the frame with the specified name, or NULL if not found.
-    get_frame: function(self: PCefBrowser; const name: PWideChar): PCefFrame; stdcall;
+    get_frame: function(self: PCefBrowser; const name: TCefString): PCefFrame; stdcall;
 
     // Returns the names of all existing frames.
     get_frame_names: procedure(self: PCefBrowser; names: TCefStringList); stdcall;
@@ -431,7 +696,7 @@ type
     // backward within the page. |matchCase| indicates whether the search should
     // be case-sensitive. |findNext| indicates whether this is the first request
     // or a follow-up.
-    find: procedure(self: PCefBrowser; identifier: Integer; searchText: PWideChar;
+    find: procedure(self: PCefBrowser; identifier: Integer; const searchText: TCefString;
       forward, matchCase, findNext: Integer); stdcall;
 
     // Cancel all searches that are currently going on.
@@ -474,31 +739,31 @@ type
     view_source: procedure(self: PCefFrame); stdcall;
 
     // Returns this frame's HTML source as a string.
-    // The resulting string must be freed by calling cef_string_free().
-    get_source: function(self: PCefFrame): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_source: function(self: PCefFrame): PCefStringUserFree; stdcall;
 
     // Returns this frame's display text as a string.
-    // The resulting string must be freed by calling cef_string_free().
-    get_text: function(self: PCefFrame): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_text: function(self: PCefFrame): PCefStringUserFree; stdcall;
 
     // Load the request represented by the |request| object.
     load_request: procedure(self: PCefFrame; request: PCefRequest); stdcall;
 
     // Load the specified |url|.
-    load_url: procedure(self: PCefFrame; const url: PWideChar); stdcall;
+    load_url: procedure(self: PCefFrame; const url: TCefString); stdcall;
 
     // Load the contents of |string| with the optional dummy target |url|.
-    load_string: procedure(self: PCefFrame; const string_, url: PWideChar); stdcall;
+    load_string: procedure(self: PCefFrame; const string_, url: TCefString); stdcall;
 
     // Load the contents of |stream| with the optional dummy target |url|.
-    load_stream: procedure(self: PCefFrame; stream: PCefStreamReader; const url: PWideChar); stdcall;
+    load_stream: procedure(self: PCefFrame; stream: PCefStreamReader; const url: TCefString); stdcall;
 
     // Execute a string of JavaScript code in this frame. The |script_url|
     // parameter is the URL where the script in question can be found, if any. The
     // renderer may request this URL to show the developer the source of the
     // error.  The |start_line| parameter is the base line number to use for error
     // reporting.
-    execute_java_script: procedure(self: PCefFrame; const jsCode, scriptUrl: PWideChar; startLine: Integer); stdcall;
+    execute_java_script: procedure(self: PCefFrame; const jsCode, scriptUrl: TCefString; startLine: Integer); stdcall;
 
     // Returns true (1) if this is the main frame.
     is_main: function(self: PCefFrame): Integer; stdcall;
@@ -507,12 +772,12 @@ type
     is_focused: function(self: PCefFrame): Integer; stdcall;
 
     // Returns this frame's name.
-    // The resulting string must be freed by calling cef_string_free().
-    get_name: function(self: PCefFrame): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_name: function(self: PCefFrame): PCefStringUserFree; stdcall;
 
     // Return the URL currently loaded in this frame.
-    // The resulting string must be freed by calling cef_string_free().
-    get_url: function(self: PCefFrame): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_url: function(self: PCefFrame): PCefStringUserFree; stdcall;
   end;
 
   // Structure that should be implemented to handle events generated by the
@@ -524,16 +789,20 @@ type
 
     // Event called before a new window is created. The |parentBrowser| parameter
     // will point to the parent browser window, if any. The |popup| parameter will
-    // be true (1) if the new window is a popup window. If you create the window
-    // yourself you should populate the window handle member of |createInfo| and
-    // return RV_HANDLED.  Otherwise, return RV_CONTINUE and the framework will
-    // create the window.  By default, a newly created window will recieve the
-    // same handler as the parent window.  To change the handler for the new
-    // window modify the object that |handler| points to.
+    // be true (1) if the new window is a popup window, in which case
+    // |popupFeatures| will contain information about the style of popup window
+    // requested. If you create the window yourself you should populate the window
+    // handle member of |createInfo| and return RV_HANDLED.  Otherwise, return
+    // RV_CONTINUE and the framework will create the window.  By default, a newly
+    // created window will recieve the same handler as the parent window.  To
+    // change the handler for the new window modify the object that |handler|
+    // points to.
     handle_before_created: function(
-        self: PCefHandler; parentBrowser: PCefBrowser;
-        var windowInfo: TCefWindowInfo; popup: Integer;
-        var handler: PCefHandler; var url: TCefString): TCefRetval; stdcall;
+      self: PCefHandler; parentBrowser: PCefBrowser;
+      var windowInfo: TCefWindowInfo; popup: Integer;
+      const popupFeatures: PCefPopupFeatures;
+      var handler: PCefHandler; url: PCefString;
+      settings: PCefBrowserSettings): TCefRetval; stdcall;
 
     // Event called after a new window is created. The return value is currently
     // ignored.
@@ -544,13 +813,13 @@ type
     // currently ignored.
     handle_address_change: function(
         self: PCefHandler; browser: PCefBrowser;
-        frame: PCefFrame; const url: PWideChar): TCefRetval; stdcall;
+        frame: PCefFrame; const url: PCefString): TCefRetval; stdcall;
 
     // Event called when the page title changes. The return value is currently
     // ignored.
     handle_title_change: function(
         self: PCefHandler; browser: PCefBrowser;
-        const title: PWideChar): TCefRetval; stdcall;
+        const title: PCefString): TCefRetval; stdcall;
 
     // Event called before browser navigation. The client has an opportunity to
     // modify the |request| object if desired.  Return RV_HANDLED to cancel
@@ -582,7 +851,7 @@ type
     handle_load_error: function(
         self: PCefHandler; browser: PCefBrowser;
         frame: PCefFrame; errorCode: TCefHandlerErrorcode;
-        const failedUrl: PWideChar; var errorText: TCefString): TCefRetval; stdcall;
+        const failedUrl: PCefString; var errorText: TCefString): TCefRetval; stdcall;
 
     // Event called before a resource is loaded.  To allow the resource to load
     // normally return RV_CONTINUE. To redirect the resource to a new url populate
@@ -607,7 +876,7 @@ type
     // RV_HANDLED to cancel the file download.
     handle_download_response: function (
         self: PCefHandler; browser: PCefBrowser;
-        const mimeType, fileName: PWideChar; contentLength: int64;
+        const mimeType, fileName: PCefString; contentLength: int64;
         var handler: PCefDownloadHandler): TCefRetval; stdcall;
 
     // Event called before a context menu is displayed.  To cancel display of the
@@ -652,7 +921,7 @@ type
     handle_print_header_footer: function(
         self: PCefHandler; browser: PCefBrowser;
         frame: PCefFrame; printInfo: PCefPrintInfo;
-        url, title: PWideChar; currentPage, maxPages: Integer;
+        url, title: PCefString; currentPage, maxPages: Integer;
         var topLeft, topCenter, topRight, bottomLeft, bottomCenter,
         bottomRight: TCefString): TCefRetval; stdcall;
 
@@ -660,14 +929,14 @@ type
     // RV_HANDLED if you displayed a custom alert.
     handle_jsalert: function(self: PCefHandler;
         browser: PCefBrowser; frame: PCefFrame;
-        const message: PWideChar): TCefRetval; stdcall;
+        const message: PCefString): TCefRetval; stdcall;
 
     // Run a JS confirm request.  Return RV_CONTINUE to display the default alert
     // or RV_HANDLED if you displayed a custom alert.  If you handled the alert
     // set |retval| to true (1) if the user accepted the confirmation.
     handle_jsconfirm: function(
         self: PCefHandler; browser: PCefBrowser;
-        frame: PCefFrame; const message: PWideChar;
+        frame: PCefFrame; const message: PCefString;
         var retval: Integer): TCefRetval; stdcall;
 
     // Run a JS prompt request.  Return RV_CONTINUE to display the default prompt
@@ -676,7 +945,7 @@ type
     // |result| to the resulting value.
     handle_jsprompt: function(self: PCefHandler;
         browser: PCefBrowser; frame: PCefFrame;
-        const message, defaultValue: PWideChar; var retval: Integer;
+        const message, defaultValue: PCefString; var retval: Integer;
         var result: TCefString): TCefRetval; stdcall;
 
     // Event called for adding values to a frame's JavaScript 'window' object. The
@@ -729,7 +998,7 @@ type
     // from being output to the console.
     handle_console_message: function(
         self: PCefHandler; browser: PCefBrowser;
-        const message, source: PWideChar; line: Integer): TCefRetval; stdcall;
+        const message, source: PCefString; line: Integer): TCefRetval; stdcall;
 
     // Called to report find results returned by cef_browser_t::find().
     // |identifer| is the identifier passed to cef_browser_t::find(), |count| is
@@ -750,15 +1019,15 @@ type
     base: TCefBase;
 
     // Fully qualified URL to load.
-    // The resulting string must be freed by calling cef_string_free().
-    get_url: function(self: PCefRequest): TCefString; stdcall;
-    set_url: procedure(self: PCefRequest; const url: PWideChar); stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_url: function(self: PCefRequest): PCefStringUserFree; stdcall;
+    set_url: procedure(self: PCefRequest; const url: TCefString); stdcall;
 
     // Optional request function type, defaulting to POST if post data is provided
     // and GET otherwise.
-    // The resulting string must be freed by calling cef_string_free().
-    get_method: function(self: PCefRequest): TCefString; stdcall;
-    set_method: procedure(self: PCefRequest; const method: PWideChar); stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_method: function(self: PCefRequest): PCefStringUserFree; stdcall;
+    set_method: procedure(self: PCefRequest; const method: TCefString); stdcall;
 
     // Optional post data.
     get_post_data: function(self: PCefRequest): PCefPostData; stdcall;
@@ -769,7 +1038,7 @@ type
     set_header_map: procedure(self: PCefRequest; headerMap: TCefStringMap); stdcall;
 
     // Set all values at one time.
-    set_: procedure(self: PCefRequest; const url, method: PWideChar;
+    set_: procedure(self: PCefRequest; const url, method: PCefString;
       postData: PCefPostData;  headerMap: TCefStringMap); stdcall;
 
   end;
@@ -810,7 +1079,7 @@ type
 
     // The post data element will represent a file.
     set_to_file: procedure(self: PCefPostDataElement;
-        const fileName: PWideChar); stdcall;
+        const fileName: TCefString); stdcall;
 
     // The post data element will represent bytes.  The bytes passed in will be
     // copied.
@@ -821,8 +1090,8 @@ type
     get_type: function(self: PCefPostDataElement): TCefPostDataElementType; stdcall;
 
     // Return the file name.
-    // The resulting string must be freed by calling cef_string_free().
-    get_file: function(self: PCefPostDataElement): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_file: function(self: PCefPostDataElement): PCefStringUserFree; stdcall;
 
     // Return the number of bytes.
     get_bytes_count: function(self: PCefPostDataElement): Cardinal; stdcall;
@@ -925,7 +1194,7 @@ type
     // Execute with the specified argument list and return value.  Return true (1)
     // if the function was handled.
     execute: function(self: PCefv8Handler;
-        const name: PWideChar; obj: PCefv8Value; argumentCount: Cardinal;
+        const name: TCefString; obj: PCefv8Value; argumentCount: Cardinal;
         const arguments: PPCefV8Value; var retval: PCefV8Value;
         var exception: TCefString): Integer; stdcall;
   end;
@@ -951,8 +1220,8 @@ type
     get_bool_value: function(self: PCefv8Value): Integer; stdcall;
     get_int_value: function(self: PCefv8Value): Integer; stdcall;
     get_double_value: function(self: PCefv8Value): double; stdcall;
-    // The resulting string must be freed by calling cef_string_free().
-    get_string_value: function(self: PCefv8Value): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_string_value: function(self: PCefv8Value): PCefStringUserFree; stdcall;
 
 
     // OBJECT METHODS - These functions are only available on objects. Arrays and
@@ -961,20 +1230,20 @@ type
     // Keys beginning with "Cef::" and "v8::" are reserved by the system.
 
     // Returns true (1) if the object has a value with the specified identifier.
-    has_value_bykey: function(self: PCefv8Value; const key: PWideChar): Integer; stdcall;
+    has_value_bykey: function(self: PCefv8Value; const key: TCefString): Integer; stdcall;
     has_value_byindex: function(self: PCefv8Value; index: Integer): Integer; stdcall;
 
     // Delete the value with the specified identifier.
-    delete_value_bykey: function(self: PCefv8Value; const key: PWideChar): Integer; stdcall;
+    delete_value_bykey: function(self: PCefv8Value; const key: TCefString): Integer; stdcall;
     delete_value_byindex: function(self: PCefv8Value; index: Integer): Integer; stdcall;
 
     // Returns the value with the specified identifier.
-    get_value_bykey: function(self: PCefv8Value; const key: PWideChar): PCefv8Value; stdcall;
+    get_value_bykey: function(self: PCefv8Value; const key: TCefString): PCefv8Value; stdcall;
     get_value_byindex: function(self: PCefv8Value; index: Integer): PCefv8Value; stdcall;
 
     // Associate value with the specified identifier.
     set_value_bykey: function(self: PCefv8Value;
-       const key: PWideChar; value: PCefv8Value): Integer; stdcall;
+       const key: TCefString; value: PCefv8Value): Integer; stdcall;
     set_value_byindex: function(self: PCefv8Value; index: Integer;
        value: PCefv8Value): Integer; stdcall;
 
@@ -997,8 +1266,8 @@ type
     // FUNCTION METHODS - These functions are only available on functions.
 
     // Returns the function name.
-    // The resulting string must be freed by calling cef_string_free().
-    get_function_name: function(self: PCefv8Value): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_function_name: function(self: PCefv8Value): PCefStringUserFree; stdcall;
 
     // Returns the function handler or NULL if not a CEF-created function.
     get_function_handler: function(
@@ -1080,8 +1349,8 @@ type
     has_error: function(self: PCefXmlReader): Integer; stdcall;
 
     // Returns the error string.
-    // The resulting string must be freed by calling cef_string_free().
-    get_error: function(self: PCefXmlReader): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_error: function(self: PCefXmlReader): PCefStringUserFree; stdcall;
 
 
     // The below functions retrieve data for the node at the current cursor
@@ -1095,33 +1364,33 @@ type
 
     // Returns the local name. See http://www.w3.org/TR/REC-xml-names/#NT-
     // LocalPart for additional details.
-    // The resulting string must be freed by calling cef_string_free().
-    get_local_name: function(self: PCefXmlReader): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_local_name: function(self: PCefXmlReader): PCefStringUserFree; stdcall;
 
     // Returns the namespace prefix. See http://www.w3.org/TR/REC-xml-names/ for
     // additional details.
-    // The resulting string must be freed by calling cef_string_free().
-    get_prefix: function(self: PCefXmlReader): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_prefix: function(self: PCefXmlReader): PCefStringUserFree; stdcall;
 
     // Returns the qualified name, equal to (Prefix:)LocalName. See
     // http://www.w3.org/TR/REC-xml-names/#ns-qualnames for additional details.
-    // The resulting string must be freed by calling cef_string_free().
-    get_qualified_name: function(self: PCefXmlReader): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_qualified_name: function(self: PCefXmlReader): PCefStringUserFree; stdcall;
 
     // Returns the URI defining the namespace associated with the node. See
     // http://www.w3.org/TR/REC-xml-names/ for additional details.
-    // The resulting string must be freed by calling cef_string_free().
-    get_namespace_uri: function(self: PCefXmlReader): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_namespace_uri: function(self: PCefXmlReader): PCefStringUserFree; stdcall;
 
     // Returns the base URI of the node. See http://www.w3.org/TR/xmlbase/ for
     // additional details.
-    // The resulting string must be freed by calling cef_string_free().
-    get_base_uri: function(self: PCefXmlReader): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_base_uri: function(self: PCefXmlReader): PCefStringUserFree; stdcall;
 
     // Returns the xml:lang scope within which the node resides. See
     // http://www.w3.org/TR/REC-xml/#sec-lang-tag for additional details.
-    // The resulting string must be freed by calling cef_string_free().
-    get_xml_lang: function(self: PCefXmlReader): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_xml_lang: function(self: PCefXmlReader): PCefStringUserFree; stdcall;
 
     // Returns true (1) if the node represents an NULL element. <a/> is considered
     // NULL but <a></a> is not.
@@ -1131,8 +1400,8 @@ type
     has_value: function(self: PCefXmlReader): Integer; stdcall;
 
     // Returns the text value.
-    // The resulting string must be freed by calling cef_string_free().
-    get_value: function(self: PCefXmlReader): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_value: function(self: PCefXmlReader): PCefStringUserFree; stdcall;
 
     // Returns true (1) if the node has attributes.
     has_attributes: function(self: PCefXmlReader): Integer; stdcall;
@@ -1141,25 +1410,25 @@ type
     get_attribute_count: function(self: PCefXmlReader): Cardinal; stdcall;
 
     // Returns the value of the attribute at the specified 0-based index.
-    // The resulting string must be freed by calling cef_string_free().
-    get_attribute_byindex: function(self: PCefXmlReader; index: Integer): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_attribute_byindex: function(self: PCefXmlReader; index: Integer): PCefStringUserFree; stdcall;
 
     // Returns the value of the attribute with the specified qualified name.
-    // The resulting string must be freed by calling cef_string_free().
-    get_attribute_byqname: function(self: PCefXmlReader; const qualifiedName: PWideChar): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_attribute_byqname: function(self: PCefXmlReader; const qualifiedName: TCefString): PCefStringUserFree; stdcall;
 
     // Returns the value of the attribute with the specified local name and
     // namespace URI.
-    // The resulting string must be freed by calling cef_string_free().
-    get_attribute_bylname: function(self: PCefXmlReader; const localName, namespaceURI: PWideChar): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_attribute_bylname: function(self: PCefXmlReader; const localName, namespaceURI: TCefString): PCefStringUserFree; stdcall;
 
     // Returns an XML representation of the current node's children.
-    // The resulting string must be freed by calling cef_string_free().
-    get_inner_xml: function(self: PCefXmlReader): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_inner_xml: function(self: PCefXmlReader): PCefStringUserFree; stdcall;
 
     // Returns an XML representation of the current node including its children.
-    // The resulting string must be freed by calling cef_string_free().
-    get_outer_xml: function(self: PCefXmlReader): TCefString; stdcall;
+    // The resulting string must be freed by calling cef_string_userfree_free().
+    get_outer_xml: function(self: PCefXmlReader): PCefStringUserFree; stdcall;
 
     // Returns the line number for the current node.
     get_line_number: function(self: PCefXmlReader): Integer; stdcall;
@@ -1176,12 +1445,12 @@ type
 
     // Moves the cursor to the attribute with the specified qualified name.
     // Returns true (1) if the cursor position was set successfully.
-    move_to_attribute_byqname: function(self: PCefXmlReader; const qualifiedName: PWideChar): Integer; stdcall;
+    move_to_attribute_byqname: function(self: PCefXmlReader; const qualifiedName: TCefString): Integer; stdcall;
 
     // Moves the cursor to the attribute with the specified local name and
     // namespace URI. Returns true (1) if the cursor position was set
     // successfully.
-    move_to_attribute_bylname: function(self: PCefXmlReader; const localName, namespaceURI: PWideChar): Integer; stdcall;
+    move_to_attribute_bylname: function(self: PCefXmlReader; const localName, namespaceURI: TCefString): Integer; stdcall;
 
     // Moves the cursor to the first attribute in the current element. Returns
     // true (1) if the cursor position was set successfully.
@@ -1212,7 +1481,7 @@ type
     // Moves the cursor to the specified file in the archive. If |caseSensitive|
     // is true (1) then the search will be case sensitive. Returns true (1) if the
     // cursor position was set successfully.
-    move_to_file: function(self: PCefZipReader; const fileName: PWideChar; caseSensitive: Integer): Integer; stdcall;
+    move_to_file: function(self: PCefZipReader; const fileName: TCefString; caseSensitive: Integer): Integer; stdcall;
 
     // Closes the archive. This should be called directly to ensure that cleanup
     // occurs on the correct thread.
@@ -1222,8 +1491,8 @@ type
     // The below functions act on the file at the current cursor position.
 
     // Returns the name of the file.
-    // The resulting string must be freed by calling cef_string_free().
-    get_file_name: function(Self: PCefZipReader): TCefString; stdcall;
+  // The resulting string must be freed by calling cef_string_userfree_free().
+    get_file_name: function(Self: PCefZipReader): PCefStringUserFree; stdcall;
 
     // Returns the uncompressed size of the file.
     get_file_size: function(Self: PCefZipReader): LongInt; stdcall;
@@ -1233,7 +1502,7 @@ type
 
     // Opens the file for reading of uncompressed data. A read password may
     // optionally be specified.
-    open_file: function(Self: PCefZipReader; password: PWideChar): Integer; stdcall;
+    open_file: function(Self: PCefZipReader; const password: TCefString): Integer; stdcall;
 
     // Closes the file.
     close_file: function(Self: PCefZipReader): Integer; stdcall;
@@ -1744,7 +2013,8 @@ type
   TCefPostDataElementOwn = class(TCefBaseOwn, ICefPostDataElement)
   private
     FDataType: TCefPostDataElementType;
-    FValue: Pointer;
+    FValueByte: Pointer;
+    FValueStr: TCefString;
     FSize: Cardinal;
     procedure Clear;
   protected
@@ -1856,7 +2126,7 @@ type
     function MoveToCarryingElement: Boolean;
   public
     constructor Create(const stream: ICefStreamReader;
-      encodingType: TCefXmlEncodingType; const URI: ustring); virtual;
+      encodingType: TCefXmlEncodingType; const URI: ustring); reintroduce; virtual;
   end;
 
   TCefZipReaderRef = class(TCefBaseRef, ICefZipReader)
@@ -1874,14 +2144,21 @@ type
     function Tell: LongInt;
     function Eof: Boolean;
   public
-    constructor Create(const stream: ICefStreamReader); virtual;
+    constructor Create(const stream: ICefStreamReader); reintroduce; virtual;
   end;
 
 procedure CefLoadLib(const cache: ustring);
 function CefGetObject(ptr: Pointer): TObject;
 function CefStringAlloc(const str: ustring): TCefString;
-procedure CefStringFree(const str: TCefString);
-function CefStringFreeAndGet(const str: TCefString): ustring;
+
+function CefString(const str: ustring): TCefString; overload;
+function CefString(const str: PCefString): ustring; overload;
+function CefStringClearAndGet(var str: TCefString): ustring;
+
+
+procedure CefStringFree(const str: PCefString);
+function CefStringFreeAndGet(const str: PCefStringUserFree): ustring;
+
 function CefBrowserCreate(windowInfo: PCefWindowInfo; popup: Boolean;
   handler: PCefHandler; const url: ustring): Boolean;
 function CefRegisterScheme(const SchemeName, HostName: ustring;
@@ -1902,82 +2179,131 @@ const
   LIBCEF = 'libcef.dll';
 
 var
+// These functions set string values. If |copy| is true (1) the value will be
+// copied instead of referenced. It is up to the user to properly manage
+// the lifespan of references.
+
+  cef_string_wide_set: function(const src: PWideChar; src_len: Cardinal;  output: PCefStringWide; copy: Integer): Integer; cdecl;
+  cef_string_utf8_set: function(const src: PAnsiChar; src_len: Cardinal; output: PCefStringUtf8; copy: Integer): Integer; cdecl;
+  cef_string_utf16_set: function(const src: PChar16; src_len: Cardinal; output: PCefStringUtf16; copy: Integer): Integer; cdecl;
+  cef_string_set: function(const src: PCefChar; src_len: Cardinal; output: PCefString; copy: Integer): Integer; cdecl;
+
+  // These functions clear string values. The structure itself is not freed.
+
+  cef_string_wide_clear: procedure(str: PCefStringWide); cdecl;
+  cef_string_utf8_clear: procedure(str: PCefStringUtf8); cdecl;
+  cef_string_utf16_clear: procedure(str: PCefStringUtf16); cdecl;
+  cef_string_clear: procedure(str: PCefString); cdecl;
+
+  // These functions compare two string values with the same results as strcmp().
+
+  cef_string_wide_cmp: function(const str1, str2: PCefStringWide): Integer; cdecl;
+  cef_string_utf8_cmp: function(const str1, str2: PCefStringUtf8): Integer; cdecl;
+  cef_string_utf16_cmp: function(const str1, str2: PCefStringUtf16): Integer; cdecl;
+
+  // These functions convert between UTF-8, -16, and -32 strings. They are
+  // potentially slow so unnecessary conversions should be avoided. The best
+  // possible result will always be written to |output| with the boolean return
+  // value indicating whether the conversion is 100% valid.
+
+  cef_string_wide_to_utf8: function(const src: PWideChar; src_len: Cardinal; output: PCefStringUtf8): Integer; cdecl;
+  cef_string_utf8_to_wide: function(const src: PAnsiChar; src_len: Cardinal; output: PCefStringWide): Integer; cdecl;
+
+  cef_string_wide_to_utf16: function (const src: PWideChar; src_len: Cardinal; output: PCefStringUtf16): Integer; cdecl;
+  cef_string_utf16_to_wide: function(const src: PChar16; src_len: Cardinal; output: PCefStringWide): Integer; cdecl;
+
+  cef_string_utf8_to_utf16: function(const src: PAnsiChar; src_len: Cardinal; output: PCefStringUtf16): Integer; cdecl;
+  cef_string_utf16_to_utf8: function(const src: PChar16; src_len: Cardinal; output: PCefStringUtf8): Integer; cdecl;
+
+  cef_string_to_utf8: function(const src: PCefChar; src_len: Cardinal; output: PCefStringUtf8): Integer; cdecl;
+  cef_string_from_utf8: function(const src: PAnsiChar; src_len: Cardinal; output: PCefString): Integer; cdecl;
+  cef_string_to_utf16: function(const src: PCefChar; src_len: Cardinal; output: PCefStringUtf16): Integer; cdecl;
+  cef_string_from_utf16: function(const src: PChar16; src_len: Cardinal; output: PCefString): Integer; cdecl;
+  cef_string_to_wide: function(const src: PCefChar; src_len: Cardinal; output: PCefStringWide): Integer; cdecl;
+  cef_string_from_wide: function(const src: PWideChar; src_len: Cardinal; output: PCefString): Integer; cdecl;
+
+  // These functions convert an ASCII string, typically a hardcoded constant, to a
+  // Wide/UTF16 string. Use instead of the UTF8 conversion routines if you know
+  // the string is ASCII.
+
+  cef_string_ascii_to_wide: function(const src: PAnsiChar; src_len: Cardinal; output: PCefStringWide): Integer; cdecl;
+  cef_string_ascii_to_utf16: function(const src: PAnsiChar; src_len: Cardinal; output: PCefStringUtf16): Integer; cdecl;
+  cef_string_from_ascii: function(const src: PAnsiChar; src_len: Cardinal; output: PCefString): Integer; cdecl;
+
+  // These functions allocate a new string structure. They must be freed by
+  // calling the associated free function.
+
+  cef_string_userfree_wide_alloc: function(): PCefStringUserFreeWide; cdecl;
+  cef_string_userfree_utf8_alloc: function(): PCefStringUserFreeUtf8; cdecl;
+  cef_string_userfree_utf16_alloc: function(): PCefStringUserFreeUtf16; cdecl;
+  cef_string_userfree_alloc: function(): PCefStringUserFree; cdecl;
+
+  // These functions free the string structure allocated by the associated
+  // alloc function. Any string contents will first be cleared.
+
+  cef_string_userfree_wide_free: procedure(str: PCefStringUserFreeWide); cdecl;
+  cef_string_userfree_utf8_free: procedure(str: PCefStringUserFreeUtf8); cdecl;
+  cef_string_userfree_utf16_free: procedure(str: PCefStringUserFreeUtf16); cdecl;
+  cef_string_userfree_free: procedure(str: PCefStringUserFree); cdecl;
+
+// Convenience macros for copying values.
+function cef_string_wide_copy(const src: PWideChar; src_len: Cardinal;  output: PCefStringWide): Integer; inline;
+begin
+  Result := cef_string_wide_set(src, src_len, output, ord(True))
+end;
+
+function cef_string_utf8_copy(const src: PAnsiChar; src_len: Cardinal; output: PCefStringUtf8): Integer; inline;
+begin
+  Result := cef_string_utf8_set(src, src_len, output, ord(True))
+end;
+
+function cef_string_utf16_copy(const src: PChar16; src_len: Cardinal; output: PCefStringUtf16): Integer; cdecl;
+begin
+  Result := cef_string_utf16_set(src, src_len, output, ord(True))
+end;
+
+function cef_string_copy(const src: PCefChar; src_len: Cardinal; output: PCefString): Integer; cdecl;
+begin
+  Result := cef_string_set(src, src_len, output, ord(True));
+end;
+
+var
   // Create a new browser window using the window parameters specified by
   // |windowInfo|. All values will be copied internally and the actual window will
   // be created on the UI thread.  The |popup| parameter should be true (1) if the
   // new window is a popup window. This function call will not block.
-  cef_browser_create: function(windowInfo: PCefWindowInfo; popup: Integer; handler: PCefHandler; const url: PWideChar): Integer; cdecl;
+  cef_browser_create: function(windowInfo: PCefWindowInfo; popup: Integer; handler: PCefHandler; const url: TCefString): Integer; cdecl;
 
   // Create a new browser window using the window parameters specified by
   // |windowInfo|. The |popup| parameter should be true (1) if the new window is a
   // popup window. This function call will block and can only be used if the
   // |multi_threaded_message_loop| parameter to cef_initialize() is false (0).
-  cef_browser_create_sync: function(windowInfo: PCefWindowInfo; popup: Integer; handler: PCefHandler; const url: PWideChar): PCefBrowser; cdecl;
+  cef_browser_create_sync: function(windowInfo: PCefWindowInfo; popup: Integer; handler: PCefHandler; const url: PCefString): PCefBrowser; cdecl;
 
   // Perform message loop processing.  Has no affect if the browser UI loop is
   // running in a separate thread.
   cef_do_message_loop_work: procedure(); cdecl;
 
-  // This function should only be called once when the application is started.
-  // Create the thread to host the UI message loop.  A return value of true (1)
-  // indicates that it succeeded and false (0) indicates that it failed. Set
-  // |multi_threaded_message_loop| to true (1) to have the message loop run in a
-  // separate thread.  If |multi_threaded_message_loop| is false (0) than the
-  // cef_do_message_loop_work() function must be called from your message loop.
-  // Set |cache_path| to the location where cache data will be stored on disk. If
-  // |cache_path| is NULL an in-memory cache will be used for cache data.
-  cef_initialize: function(multi_threaded_message_loop: Integer; cache_path: PWideChar): Integer; cdecl;
+  // This function should be called once when the application is started to
+  // initialize CEF.  A return value of true (1) indicates that it succeeded and
+  // false (0) indicates that it failed.
+  cef_initialize: function(const settings: PCefSettings;  const browser_defaults: PCefBrowserSettings): Integer; cdecl;
 
-  // This function should only be called once before the application exits. Shut
-  // down the thread hosting the UI message loop and destroy any created windows.
+  // This function should be called once before the application exits to shut down CEF
   cef_shutdown: procedure(); cdecl;
-
-  // Return the wide character length of the CEF string as allocated by
-  // cef_string_alloc_len(). The returned value does not include the NUL
-  // terminating character. This length may differ from the string length
-  // as returned by wcslen().
-  cef_string_length: function(str: TCefString): Cardinal; cdecl;
-
-  // Allocate and return a new CEF string that is a copy of |str|.  If |str| is
-  // NULL or if allocation fails NULL will be returned.  If |str| is of length
-  // 0 a valid empty CEF string will be returned.
-  cef_string_alloc: function(const str: PWideChar): TCefString; cdecl;
-
-  // Allocate and return a new CEF string that is a copy of |str|. |len| is the
-  // wide character length of the new CEF string not including the NUL
-  // terminating character. |str| will be copied without checking for a NUL
-  // terminating character. If |str| is NULL or if allocation fails NULL will
-  // be returned.  If |str| is of length 0 a valid empty CEF string will be
-  // returned.
-  cef_string_alloc_length: function(const str: PWideChar; len: Cardinal): TCefString; cdecl;
-
-  // Reallocate an existing CEF string.  The contents of |oldstr| will be
-  // replaced with the contents of |newstr|; |newstr| may not be NULL. Returns 1
-  // on success and 0 on failure.
-  cef_string_realloc: function(oldstr: PCefString; const newstr: PWideChar): Integer; cdecl;
-
-  // Reallocate an existing CEF string.  If |newstr| is NULL the contents of
-  // |oldstr| will remain unchanged; otherwise, they will be replaced with the
-  // contents of |newstr|. |len| is the new wide character length of the string
-  // not including the NUL terminating character.  Returns 1 on success and 0
-  // on failure.
-  cef_string_realloc_length: function(oldstr: PCefString; const newstr: PWideChar; len: Cardinal): Integer; cdecl;
-
-  // Free a CEF string.  If |str| is NULL this function does nothing.
-  cef_string_free: procedure(str: TCefString); cdecl;
 
   // Allocate a new string map.
   cef_string_map_alloc: function(): TCefStringMap; cdecl;
   //function cef_string_map_size(map: TCefStringMap): Integer; cdecl;
   cef_string_map_size: function(map: TCefStringMap): Integer; cdecl;
   // Return the value assigned to the specified key.
-  cef_string_map_find: function(map: TCefStringMap; const key: PWideChar): TCefString; cdecl;
+  cef_string_map_find: function(map: TCefStringMap; const key: TCefString; var value: TCefString): Integer; cdecl;
   // Return the key at the specified zero-based string map index.
-  cef_string_map_key: function(map: TCefStringMap; index: Integer): TCefString; cdecl;
+  cef_string_map_key: function(map: TCefStringMap; index: Integer; var key: TCefString): Integer; cdecl;
   // Return the value at the specified zero-based string map index.
-  cef_string_map_value: function(map: TCefStringMap; index: Integer): TCefString; cdecl;
+  cef_string_map_value: function(map: TCefStringMap; index: Integer; var value: TCefString): Integer; cdecl;
   // Append a new key/value pair at the end of the string map.
-  cef_string_map_append: procedure(map: TCefStringMap; const key, value: PWideChar); cdecl;
+  cef_string_map_append: function(map: TCefStringMap; const key, value: TCefString): Integer; cdecl;
   // Clear the string map.
   cef_string_map_clear: procedure(map: TCefStringMap); cdecl;
   // Free the string map.
@@ -1987,14 +2313,18 @@ var
   cef_string_list_alloc: function(): TCefStringList; cdecl;
   // Return the number of elements in the string list.
   cef_string_list_size: function(list: TCefStringList): Integer; cdecl;
-  // Return the value at the specified zero-based string list index.
-  cef_string_list_value: function(list: TCefStringList; index: Integer): TCefString; cdecl;
-  // Append a new key/value pair at the end of the string list.
-  cef_string_list_append: procedure(list: TCefStringList; const value: PWideChar); cdecl;
+  // Retrieve the value at the specified zero-based string list index. Returns
+  // true (1) if the value was successfully retrieved.
+  cef_string_list_value: function(list: TCefStringList; index: Integer; value: PCefString): Integer; cdecl;
+  // Append a new value at the end of the string list.
+  cef_string_list_append: procedure(list: TCefStringList; const value: PCefString); cdecl;
   // Clear the string list.
   cef_string_list_clear: procedure(list: TCefStringList); cdecl;
   // Free the string list.
   cef_string_list_free: procedure(list: TCefStringList); cdecl;
+  // Creates a copy of an existing string list.
+  cef_string_list_copy: function(list: TCefStringList): TCefStringList;
+
 
   // Register a new V8 extension with the specified JavaScript extension code and
   // handler. Functions implemented by the handler are prototyped using the
@@ -2052,13 +2382,13 @@ var
   //   // Call another function.
   //   example.test.increment();
   //
-  cef_register_extension: function(const extension_name, javascript_code: PWideChar; handler: PCefv8Handler): Integer; cdecl;
+  cef_register_extension: function(const extension_name, javascript_code: TCefString; handler: PCefv8Handler): Integer; cdecl;
 
   // Register a custom scheme handler factory for the specified |scheme_name| and
   // |host_name|. All URLs beginning with scheme_name://host_name/ can be handled
   // by TCefSchemeHandler instances returned by the factory. Specify an NULL
   // |host_name| value to match all host names.
-  cef_register_scheme: function(const scheme_name, host_name: PWideChar; factory: PCefSchemeHandlerFactory): Integer; cdecl;
+  cef_register_scheme: function(const scheme_name, host_name: TCefString; factory: PCefSchemeHandlerFactory): Integer; cdecl;
 
 
   // CEF maintains multiple internal threads that are used for handling different
@@ -2088,12 +2418,12 @@ var
   cef_post_data_element_create: function(): PCefPostDataElement; cdecl;
 
   // Create a new TCefStreamReader object.
-  cef_stream_reader_create_for_file: function(const fileName: PWideChar): PCefStreamReader; cdecl;
+  cef_stream_reader_create_for_file: function(const fileName: TCefString): PCefStreamReader; cdecl;
   cef_stream_reader_create_for_data: function(data: Pointer; size: Cardinal): PCefStreamReader; cdecl;
   cef_stream_reader_create_for_handler: function(handler: PCefReadHandler): PCefStreamReader; cdecl;
 
   // Create a new TCefStreamWriter object.
-  cef_stream_writer_create_for_file: function(const fileName: PWideChar): PCefStreamWriter; cdecl;
+  cef_stream_writer_create_for_file: function(const fileName: PCefString): PCefStreamWriter; cdecl;
   cef_stream_writer_create_for_handler: function(handler: PCefWriteHandler): PCefStreamWriter; cdecl;
 
   // Create a new TCefv8Value object of the specified type.  These functions
@@ -2104,15 +2434,15 @@ var
   cef_v8value_create_bool: function(value: Integer): PCefv8Value; cdecl;
   cef_v8value_create_int: function(value: Integer): PCefv8Value; cdecl;
   cef_v8value_create_double: function(value: Double): PCefv8Value; cdecl;
-  cef_v8value_create_string: function(const value: PWideChar): PCefv8Value; cdecl;
+  cef_v8value_create_string: function(const value: TCefString): PCefv8Value; cdecl;
   cef_v8value_create_object: function(user_data: PCefBase): PCefv8Value; cdecl;
   cef_v8value_create_array: function(): PCefv8Value; cdecl;
-  cef_v8value_create_function: function(const name: PWideChar; handler: PCefv8Handler): PCefv8Value; cdecl;
+  cef_v8value_create_function: function(const name: TCefString; handler: PCefv8Handler): PCefv8Value; cdecl;
 
   // Create a new cef_xml_reader_t object. The returned object's functions can
   // only be called from the thread that created the object.
   cef_xml_reader_create: function(stream: PCefStreamReader;
-    encodingType: TCefXmlEncodingType; const URI: PWideChar): PCefXmlReader; cdecl;
+    encodingType: TCefXmlEncodingType; const URI: TCefString): PCefXmlReader; cdecl;
 
   // Create a new cef_zip_reader_t object. The returned object's functions can
   // only be called from the thread that created the object.
@@ -2151,9 +2481,11 @@ end;
 { cef_handler }
 
 function cef_handler_handle_before_created(
-    self: PCefHandler; parentBrowser: PCefBrowser;
-    var windowInfo: TCefWindowInfo; popup: Integer;
-    var handler: PCefHandler; var url: TCefString): TCefRetval; stdcall;
+      self: PCefHandler; parentBrowser: PCefBrowser;
+      var windowInfo: TCefWindowInfo; popup: Integer;
+      const popupFeatures: PCefPopupFeatures;
+      var handler: PCefHandler; var url: TCefString;
+      settings: PCefBrowserSettings): TCefRetval; stdcall;
 var
   _handler: ICefBase;
   _url: ustring;
@@ -2161,7 +2493,7 @@ begin
   with TCefHandlerOwn(CefGetObject(self)) do
   begin
     _handler := TCefBaseRef.UnWrap(handler);
-    _url := url;
+    _url := CefString(@url);
 
     Result := doOnBeforeCreated(
       TCefBrowserRef.UnWrap(parentBrowser),
@@ -2173,11 +2505,10 @@ begin
     if Result = RV_HANDLED then
     begin
       handler :=  CefGetData(_handler);
-      CefStringFree(url);
+      CefStringFree(@url);
       url := CefStringAlloc(_url);
     end;
   end;
-
 end;
 
 function cef_handler_handle_after_created(self: PCefHandler;
@@ -2189,21 +2520,21 @@ end;
 
 function cef_handler_handle_address_change(
     self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame; const url: PWideChar): TCefRetval; stdcall;
+    frame: PCefFrame; const url: TCefString): TCefRetval; stdcall;
 begin
    with TCefHandlerOwn(CefGetObject(self)) do
     Result := doOnAddressChange(
       TCefBrowserRef.UnWrap(browser),
       TCefFrameRef.UnWrap(frame),
-      url)
+      cefstring(@url))
 end;
 
 function cef_handler_handle_title_change(
     self: PCefHandler; browser: PCefBrowser;
-    const title: PWideChar): TCefRetval; stdcall;
+    const title: PCefString): TCefRetval; stdcall;
 begin
   with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnTitleChange(TCefBrowserRef.UnWrap(browser), title);
+    Result := doOnTitleChange(TCefBrowserRef.UnWrap(browser), CefString(title));
 end;
 
 function cef_handler_handle_before_browse(
@@ -2242,22 +2573,22 @@ end;
 function cef_handler_handle_load_error(
     self: PCefHandler; browser: PCefBrowser;
     frame: PCefFrame; errorCode: TCefHandlerErrorcode;
-    const failedUrl: PWideChar; var errorText: TCefString): TCefRetval; stdcall;
+    const failedUrl: PCefString; var errorText: TCefString): TCefRetval; stdcall;
 var
   err: ustring;
 begin
-  err := errorText;
+  err := CefString(@errorText);
   with TCefHandlerOwn(CefGetObject(self)) do
   begin
     Result := doOnLoadError(
       TCefBrowserRef.UnWrap(browser),
       TCefFrameRef.UnWrap(frame),
       errorCode,
-      failedUrl,
+      CefString(failedUrl),
       err);
     if Result = RV_HANDLED then
     begin
-      CefStringFree(errorText);
+      CefStringFree(@errorText);
       errorText := CefStringAlloc(err);
     end;
   end;
@@ -2275,9 +2606,9 @@ var
 begin
   with TCefHandlerOwn(CefGetObject(self)) do
   begin
-    _redirectUrl := redirectUrl;
+    _redirectUrl := CefString(@redirectUrl);
     _resourceStream := TCefStreamReaderRef.UnWrap(resourceStream);
-    _mimeType := mimeType;
+    _mimeType := CefString(@mimeType);
 
     Result := doOnBeforeResourceLoad(
       TCefBrowserRef.UnWrap(browser),
@@ -2300,7 +2631,7 @@ begin
 end;
 
 function cef_handler_handle_download_response(self: PCefHandler;
-  browser: PCefBrowser; const mimeType, fileName: PWideChar; contentLength: int64;
+  browser: PCefBrowser; const mimeType, fileName: PCefString; contentLength: int64;
   var handler: PCefDownloadHandler): TCefRetval; stdcall;
 var
   _handler: ICefDownloadHandler;
@@ -2308,7 +2639,7 @@ begin
   with TCefHandlerOwn(CefGetObject(self)) do
     Result := doOnDownloadResponse(
       TCefBrowserRef.UnWrap(browser),
-      mimeType, fileName, contentLength, _handler);
+      CefString(mimeType), CefString(fileName), contentLength, _handler);
   handler := CefGetData(_handler);
 end;
 
@@ -2328,7 +2659,7 @@ function cef_handler_handle_get_menu_label(
 var
   str: ustring;
 begin
-  str := label_;
+  str := CefString(@label_);
   with TCefHandlerOwn(CefGetObject(self)) do
   begin
     Result := doOnGetMenuLabel(
@@ -2337,7 +2668,7 @@ begin
       str);
     if Result = RV_HANDLED then
     begin
-      CefStringFree(label_);
+      CefStringFree(@label_);
       label_ := CefStringAlloc(str);
     end;
   end;
@@ -2364,7 +2695,7 @@ end;
 function cef_handler_handle_print_header_footer(
     self: PCefHandler; browser: PCefBrowser;
     frame: PCefFrame; printInfo: PCefPrintInfo;
-    url, title: PWideChar; currentPage, maxPages: Integer;
+    url, title: PCefString; currentPage, maxPages: Integer;
     var topLeft, topCenter, topRight, bottomLeft, bottomCenter,
     bottomRight: TCefString): TCefRetval; stdcall;
 var
@@ -2375,7 +2706,7 @@ begin
     Result := doOnPrintHeaderFooter(
       TCefBrowserRef.UnWrap(browser),
       TCefFrameRef.UnWrap(frame),
-      printInfo, url, title, currentPage, maxPages,
+      printInfo, CefString(url), CefString(title), currentPage, maxPages,
       _topLeft, _topCenter, _topRight, _bottomLeft, _bottomCenter, _bottomRight
     );
     if Result = RV_HANDLED then
@@ -2392,18 +2723,18 @@ end;
 
 function cef_handler_handle_jsalert(self: PCefHandler;
     browser: PCefBrowser; frame: PCefFrame;
-    const message: PWideChar): TCefRetval; stdcall;
+    const message: PCefString): TCefRetval; stdcall;
 begin
   with TCefHandlerOwn(CefGetObject(self)) do
     Result := doOnJsAlert(
       TCefBrowserRef.UnWrap(browser),
       TCefFrameRef.UnWrap(frame),
-      message);
+      CefString(message));
 end;
 
 function cef_handler_handle_jsconfirm(
     self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame; const message: PWideChar;
+    frame: PCefFrame; const message: PCefString;
     var retval: Integer): TCefRetval; stdcall;
 var
   ret: Boolean;
@@ -2413,7 +2744,7 @@ begin
     Result := doOnJsConfirm(
       TCefBrowserRef.UnWrap(browser),
       TCefFrameRef.UnWrap(frame),
-      message, ret);
+      CefString(message), ret);
   if Result = RV_HANDLED then
     retval := Ord(ret);
 
@@ -2421,7 +2752,7 @@ end;
 
 function cef_handler_handle_jsprompt(self: PCefHandler;
     browser: PCefBrowser; frame: PCefFrame;
-    const message, defaultValue: PWideChar; var retval: Integer;
+    const message, defaultValue: PCefString; var retval: Integer;
     var return: TCefString): TCefRetval; stdcall;
 var
   ret: Boolean;
@@ -2433,7 +2764,7 @@ begin
     Result := doOnJsPrompt(
       TCefBrowserRef.UnWrap(browser),
       TCefFrameRef.UnWrap(frame),
-      message, defaultValue, ret, str);
+      CefString(message), CefString(defaultValue), ret, str);
     if Result = RV_HANDLED then
     begin
       retval := Ord(ret);
@@ -2494,7 +2825,7 @@ function cef_handler_handle_tooltip(self: PCefHandler;
 var
   t: ustring;
 begin
-  t := CefStringFreeAndGet(text);
+  t := CefStringClearAndGet(text);
   with TCefHandlerOwn(CefGetObject(self)) do
     Result := doOnTooltip(
       TCefBrowserRef.UnWrap(browser), t);
@@ -2502,10 +2833,10 @@ begin
 end;
 
 function cef_handler_handle_console_message(self: PCefHandler; browser: PCefBrowser;
-  const message, source: PWideChar; line: Integer): TCefRetval; stdcall;
+  const message, source: PCefString; line: Integer): TCefRetval; stdcall;
 begin
   with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnConsoleMessage(TCefBrowserRef.UnWrap(browser), message, source, line);
+    Result := doOnConsoleMessage(TCefBrowserRef.UnWrap(browser), CefString(message), CefString(source), line);
 end;
 
 function cef_handler_handle_find_result(self: PCefHandler; browser: PCefBrowser;
@@ -2552,10 +2883,10 @@ begin
     SetToEmpty;
 end;
 
-procedure cef_post_data_element_set_to_file(self: PCefPostDataElement; const fileName: PWideChar); stdcall;
+procedure cef_post_data_element_set_to_file(self: PCefPostDataElement; const fileName: PCefString); stdcall;
 begin
   with TCefPostDataElementOwn(CefGetObject(self)) do
-    SetToFile(fileName);
+    SetToFile(CefString(fileName));
 end;
 
 procedure cef_post_data_element_set_to_bytes(self: PCefPostDataElement; size: Cardinal; const bytes: Pointer); stdcall;
@@ -2603,7 +2934,6 @@ function cef_scheme_handler_process_request(self: PCefSchemeHandler;
   var response_length: Integer): Integer; stdcall;
 var
   _mime_type: ustring;
-
 begin
   with TCefSchemeHandlerOwn(CefGetObject(self)) do
     Result := Ord(ProcessRequest(TCefRequestRef.UnWrap(request),
@@ -2627,7 +2957,7 @@ end;
 { cef_v8_handler }
 
 function cef_v8_handler_execute(self: PCefv8Handler;
-  const name: PWideChar; obj: PCefv8Value; argumentCount: Cardinal;
+  const name: PCefString; obj: PCefv8Value; argumentCount: Cardinal;
   const arguments: PPCefV8Value; var retval: PCefV8Value;
   var exception: TCefString): Integer; stdcall;
 var
@@ -2641,7 +2971,7 @@ begin
     args[i] := TCefv8ValueRef.UnWrap(arguments[i]);
 
   Result := Ord(TCefv8HandlerOwn(CefGetObject(self)).Execute(
-    name, TCefv8ValueRef.UnWrap(obj), args, ret, exc));
+    CefString(name), TCefv8ValueRef.UnWrap(obj), args, ret, exc));
   retval := CefGetData(ret);
   exception := CefStringAlloc(exc);
 end;
@@ -2955,7 +3285,7 @@ end;
 procedure TCefBrowserRef.Find(const searchText: ustring; identifier,
   forward, matchCase, findNext: Boolean);
 begin
-  PCefBrowser(FData)^.find(PCefBrowser(FData), Ord(identifier), PWideChar(searchText),
+  PCefBrowser(FData)^.find(PCefBrowser(FData), Ord(identifier), CefString(searchText),
     Ord(forward), Ord(matchCase), Ord(findNext));
 end;
 
@@ -2966,19 +3296,24 @@ end;
 
 function TCefBrowserRef.GetFrame(const name: ustring): ICefFrame;
 begin
-  Result := TCefFrameRef.UnWrap(PCefBrowser(FData)^.get_frame(PCefBrowser(FData), PWideChar(name)));
+  Result := TCefFrameRef.UnWrap(PCefBrowser(FData)^.get_frame(PCefBrowser(FData), CefString(name)));
 end;
 
 procedure TCefBrowserRef.GetFrameNames(const names: TStrings);
 var
   list: TCefStringList;
   i: Integer;
+  str: TCefString;
 begin
   list := cef_string_list_alloc;
   try
     PCefBrowser(FData)^.get_frame_names(PCefBrowser(FData), list);
+    FillChar(str, SizeOf(str), 0);
     for i := 0 to cef_string_list_size(list) - 1 do
-      names.Add(CefStringFreeAndGet(cef_string_list_value(list, i)));
+    begin
+      cef_string_list_value(list, i, @str);
+      names.Add(CefStringClearAndGet(str));
+    end;
   finally
     cef_string_list_free(list);
   end;
@@ -3070,7 +3405,7 @@ end;
 procedure TCefFrameRef.ExecuteJavaScript(const jsCode, scriptUrl: ustring;
   startLine: Integer);
 begin
-  PCefFrame(FData)^.execute_java_script(PCefFrame(FData), PWideChar(jsCode), PWideChar(scriptUrl), startline);
+  PCefFrame(FData)^.execute_java_script(PCefFrame(FData), CefString(jsCode), CefString(scriptUrl), startline);
 end;
 
 function TCefFrameRef.GetName: ustring;
@@ -3107,8 +3442,8 @@ procedure TCefFrameRef.LoadFile(const filename, url: ustring);
 var
   strm: ICefStreamReader;
 begin
-  strm := TCefStreamReaderRef.Create(cef_stream_reader_create_for_file(PWideChar(filename)));
-  PCefFrame(FData)^.load_stream(PCefFrame(FData), strm.Wrap, PWideChar(url));
+  strm := TCefStreamReaderRef.Create(cef_stream_reader_create_for_file(CefString(filename)));
+  PCefFrame(FData)^.load_stream(PCefFrame(FData), strm.Wrap, CefString(url));
 end;
 
 procedure TCefFrameRef.LoadRequest(const request: ICefRequest);
@@ -3121,17 +3456,17 @@ var
   strm: ICefStreamReader;
 begin
   strm := TCefStreamReaderOwn.Create(stream, False);
-  PCefFrame(FData)^.load_stream(PCefFrame(FData), strm.Wrap, PWideChar(url));
+  PCefFrame(FData)^.load_stream(PCefFrame(FData), strm.Wrap, CefString(url));
 end;
 
 procedure TCefFrameRef.LoadString(const str, url: ustring);
 begin
-  PCefFrame(FData)^.load_string(PCefFrame(FData), PWideChar(str), PWideChar(url));
+  PCefFrame(FData)^.load_string(PCefFrame(FData), CefString(str), CefString(url));
 end;
 
 procedure TCefFrameRef.LoadUrl(const url: ustring);
 begin
-  PCefFrame(FData)^.load_url(PCefFrame(FData), PWideChar(url));
+  PCefFrame(FData)^.load_url(PCefFrame(FData), CefString(url));
 end;
 
 procedure TCefFrameRef.Paste;
@@ -3318,7 +3653,7 @@ end;
 
 procedure TCefPostDataElementRef.SetToFile(const fileName: ustring);
 begin
-  PCefPostDataElement(FData)^.set_to_file(PCefPostDataElement(FData), PWideChar(fileName));
+  PCefPostDataElement(FData)^.set_to_file(PCefPostDataElement(FData), CefString(fileName));
 end;
 
 class function TCefPostDataElementRef.UnWrap(data: Pointer): ICefPostDataElement;
@@ -3338,13 +3673,15 @@ procedure TCefPostDataElementOwn.Clear;
 begin
   case FDataType of
     PDE_TYPE_BYTES:
-      if (FValue <> nil) then
-        FreeMem(FValue);
+      if (FValueByte <> nil) then
+      begin
+        FreeMem(FValueByte);
+        FValueByte := nil;
+      end;
     PDE_TYPE_FILE:
-      CefStringFree(FValue)
+      CefStringFree(@FValueStr)
   end;
   FDataType := PDE_TYPE_EMPTY;
-  FValue := nil;
   FSize := 0;
 end;
 
@@ -3352,7 +3689,8 @@ constructor TCefPostDataElementOwn.Create;
 begin
   inherited CreateData(SizeOf(TCefPostDataElement));
   FDataType := PDE_TYPE_EMPTY;
-  FValue := nil;
+  FValueByte := nil;
+  FillChar(FValueStr, SizeOf(FValueStr), 0);
   FSize := 0;
   with PCefPostDataElement(FData)^ do
   begin
@@ -3371,12 +3709,12 @@ function TCefPostDataElementOwn.GetBytes(size: Cardinal;
 begin
   Lock;
   try
-    if (FDataType = PDE_TYPE_BYTES) and (FValue <> nil) then
+    if (FDataType = PDE_TYPE_BYTES) and (FValueByte <> nil) then
     begin
       if size > FSize then
         Result := FSize else
         Result := size;
-      Move(FValue^, bytes^, Result);
+      Move(FValueByte^, bytes^, Result);
     end else
       Result := 0;
   finally
@@ -3396,7 +3734,7 @@ begin
   Lock;
   try
     if (FDataType = PDE_TYPE_FILE) then
-      Result := PWideChar(FValue) else
+      Result := CefString(@FValueStr) else
       Result := '';
   finally
     Unlock;
@@ -3415,12 +3753,12 @@ begin
     Clear;
     if (size > 0) and (bytes <> nil) then
     begin
-      GetMem(FValue, size);
-      Move(bytes^, FValue, size);
+      GetMem(FValueByte, size);
+      Move(bytes^, FValueByte, size);
       FSize := size;
     end else
     begin
-      FValue := nil;
+      FValueByte := nil;
       FSize := 0;
     end;
     FDataType := PDE_TYPE_BYTES;
@@ -3445,7 +3783,7 @@ begin
   try
     Clear;
     FSize := 0;
-    FValue := cef_string_alloc(PWideChar(fileName));
+    FValueStr := CefStringAlloc(fileName);
     FDataType := PDE_TYPE_FILE;
   finally
     Unlock;
@@ -3481,7 +3819,7 @@ end;
 
 procedure TCefRequestRef.SetMethod(const value: ustring);
 begin
-  PCefRequest(FData)^.set_method(PCefRequest(FData), PWideChar(value));
+  PCefRequest(FData)^.set_method(PCefRequest(FData), CefString(value));
 end;
 
 procedure TCefRequestRef.SetPostData(const value: ICefPostData);
@@ -3492,7 +3830,7 @@ end;
 
 procedure TCefRequestRef.SetUrl(const value: ustring);
 begin
-  PCefRequest(FData)^.set_url(PCefRequest(FData), PWideChar(value));
+  PCefRequest(FData)^.set_url(PCefRequest(FData), CefString(value));
 end;
 
 class function TCefRequestRef.UnWrap(data: Pointer): ICefRequest;
@@ -3543,8 +3881,14 @@ end;
 
 function CefInitialize(multi_threaded_message_loop: Boolean;
   const cache_path: ustring): Boolean;
+var
+  settings: TCefSettings;
 begin
-  Result := cef_initialize(Ord(multi_threaded_message_loop), PWideChar(cache_path)) <> 0;
+  FillChar(settings, SizeOf(settings), 0);
+  settings.size := SizeOf(settings);
+  settings.multi_threaded_message_loop := multi_threaded_message_loop;
+  settings.cache_path := cefstring(cache_path);
+  Result := cef_initialize(@settings, nil) <> 0;
 end;
 
 var
@@ -3557,12 +3901,76 @@ begin
     LibHandle := LoadLibrary(LIBCEF);
     if LibHandle = 0 then
       RaiseLastOSError;
-    cef_string_length := GetProcAddress(LibHandle, 'cef_string_length');
-    cef_string_alloc := GetProcAddress(LibHandle, 'cef_string_alloc');
-    cef_string_alloc_length := GetProcAddress(LibHandle, 'cef_string_alloc_length');
-    cef_string_realloc := GetProcAddress(LibHandle, 'cef_string_realloc');
-    cef_string_realloc_length := GetProcAddress(LibHandle, 'cef_string_realloc_length');
-    cef_string_free := GetProcAddress(LibHandle, 'cef_string_free');
+
+    cef_string_wide_set := GetProcAddress(LibHandle, 'cef_string_wide_set');
+    cef_string_utf8_set := GetProcAddress(LibHandle, 'cef_string_utf8_set');
+    cef_string_utf16_set := GetProcAddress(LibHandle, 'cef_string_utf16_set');
+    cef_string_wide_clear := GetProcAddress(LibHandle, 'cef_string_wide_clear');
+    cef_string_utf8_clear := GetProcAddress(LibHandle, 'cef_string_utf8_clear');
+    cef_string_utf16_clear := GetProcAddress(LibHandle, 'cef_string_utf16_clear');
+    cef_string_wide_cmp := GetProcAddress(LibHandle, 'cef_string_wide_cmp');
+    cef_string_utf8_cmp := GetProcAddress(LibHandle, 'cef_string_utf8_cmp');
+    cef_string_utf16_cmp := GetProcAddress(LibHandle, 'cef_string_utf16_cmp');
+    cef_string_wide_to_utf8 := GetProcAddress(LibHandle, 'cef_string_wide_to_utf8');
+    cef_string_utf8_to_wide := GetProcAddress(LibHandle, 'cef_string_utf8_to_wide');
+    cef_string_wide_to_utf16 := GetProcAddress(LibHandle, 'cef_string_wide_to_utf16');
+    cef_string_utf16_to_wide := GetProcAddress(LibHandle, 'cef_string_utf16_to_wide');
+    cef_string_utf8_to_utf16 := GetProcAddress(LibHandle, 'cef_string_utf8_to_utf16');
+    cef_string_utf16_to_utf8 := GetProcAddress(LibHandle, 'cef_string_utf16_to_utf8');
+    cef_string_ascii_to_wide := GetProcAddress(LibHandle, 'cef_string_ascii_to_wide');
+    cef_string_ascii_to_utf16 := GetProcAddress(LibHandle, 'cef_string_ascii_to_utf16');
+    cef_string_userfree_wide_alloc := GetProcAddress(LibHandle, 'cef_string_userfree_wide_alloc');
+    cef_string_userfree_utf8_alloc := GetProcAddress(LibHandle, 'cef_string_userfree_utf8_alloc');
+    cef_string_userfree_utf16_alloc := GetProcAddress(LibHandle, 'cef_string_userfree_utf16_alloc');
+    cef_string_userfree_wide_free := GetProcAddress(LibHandle, 'cef_string_userfree_wide_free');
+    cef_string_userfree_utf8_free := GetProcAddress(LibHandle, 'cef_string_userfree_utf8_free');
+    cef_string_userfree_utf16_free := GetProcAddress(LibHandle, 'cef_string_userfree_utf16_free');
+
+{$IFDEF CEF_STRING_TYPE_UTF8}
+  cef_string_set := cef_string_utf8_set;
+  //cef_string_copy := cef_string_utf8_copy;
+  cef_string_clear := cef_string_utf8_clear;
+  cef_string_userfree_alloc := cef_string_userfree_utf8_alloc;
+  cef_string_userfree_free := cef_string_userfree_utf8_free;
+  cef_string_from_ascii := cef_string_utf8_copy;
+  cef_string_to_utf8 := cef_string_utf8_copy;
+  cef_string_from_utf8 := cef_string_utf8_copy;
+  cef_string_to_utf16 := cef_string_utf8_to_utf16;
+  cef_string_from_utf16 := cef_string_utf16_to_utf8;
+  cef_string_to_wide := cef_string_utf8_to_wide;
+  cef_string_from_wide := cef_string_wide_to_utf8;
+{$ENDIF}
+
+{$IFDEF CEF_STRING_TYPE_UTF16}
+    cef_string_set := cef_string_utf16_set;
+    //cef_string_copy := cef_string_utf16_copy;
+    cef_string_clear := cef_string_utf16_clear;
+    cef_string_userfree_alloc := cef_string_userfree_utf16_alloc;
+    cef_string_userfree_free := cef_string_userfree_utf16_free;
+    cef_string_from_ascii := cef_string_ascii_to_utf16;
+    cef_string_to_utf8 := cef_string_utf16_to_utf8;
+    cef_string_from_utf8 := cef_string_utf8_to_utf16;
+    cef_string_to_utf16 := cef_string_utf16_copy;
+    cef_string_from_utf16 := cef_string_utf16_copy;
+    cef_string_to_wide := cef_string_utf16_to_wide;
+    cef_string_from_wide := cef_string_wide_to_utf16;
+{$ENDIF}
+
+{$IFDEF CEF_STRING_TYPE_WIDE}
+    cef_string_set := cef_string_wide_set;
+    //cef_string_copy := cef_string_wide_copy;
+    cef_string_clear := cef_string_wide_clear;
+    cef_string_userfree_alloc := cef_string_userfree_wide_alloc;
+    cef_string_userfree_free := cef_string_userfree_wide_free;
+    cef_string_from_ascii := cef_string_ascii_to_wide;
+    cef_string_to_utf8 := cef_string_wide_to_utf8;
+    cef_string_from_utf8 := cef_string_utf8_to_wide;
+    cef_string_to_utf16 := cef_string_wide_to_utf16;
+    cef_string_from_utf16 := cef_string_utf16_to_wide;
+    cef_string_to_wide := cef_string_wide_copy;
+    cef_string_from_wide := cef_string_wide_copy;
+{$ENDIF}
+
     cef_string_map_alloc := GetProcAddress(LibHandle, 'cef_string_map_alloc');
     cef_string_map_size := GetProcAddress(LibHandle, 'cef_string_map_size');
     cef_string_map_find := GetProcAddress(LibHandle, 'cef_string_map_find');
@@ -3577,6 +3985,7 @@ begin
     cef_string_list_append := GetProcAddress(LibHandle, 'cef_string_list_append');
     cef_string_list_clear := GetProcAddress(LibHandle, 'cef_string_list_clear');
     cef_string_list_free := GetProcAddress(LibHandle, 'cef_string_list_free');
+    cef_string_list_copy := GetProcAddress(LibHandle, 'cef_string_list_copy');
     cef_initialize := GetProcAddress(LibHandle, 'cef_initialize');
     cef_shutdown := GetProcAddress(LibHandle, 'cef_shutdown');
     cef_do_message_loop_work := GetProcAddress(LibHandle, 'cef_do_message_loop_work');
@@ -3607,13 +4016,31 @@ begin
     cef_xml_reader_create := GetProcAddress(LibHandle, 'cef_xml_reader_create');
     cef_zip_reader_create := GetProcAddress(LibHandle, 'cef_zip_reader_create');
 
-    Assert(
-      Assigned(cef_string_length) and
-      Assigned(cef_string_alloc) and
-      Assigned(cef_string_alloc_length) and
-      Assigned(cef_string_realloc) and
-      Assigned(cef_string_realloc_length) and
-      Assigned(cef_string_free) and
+    if not (
+      Assigned(cef_string_wide_set) and
+      Assigned(cef_string_utf8_set) and
+      Assigned(cef_string_utf16_set) and
+      Assigned(cef_string_wide_clear) and
+      Assigned(cef_string_utf8_clear) and
+      Assigned(cef_string_utf16_clear) and
+      Assigned(cef_string_wide_cmp) and
+      Assigned(cef_string_utf8_cmp) and
+      Assigned(cef_string_utf16_cmp) and
+      Assigned(cef_string_wide_to_utf8) and
+      Assigned(cef_string_utf8_to_wide) and
+      Assigned(cef_string_wide_to_utf16) and
+      Assigned(cef_string_utf16_to_wide) and
+      Assigned(cef_string_utf8_to_utf16) and
+      Assigned(cef_string_utf16_to_utf8) and
+      Assigned(cef_string_ascii_to_wide) and
+      Assigned(cef_string_ascii_to_utf16) and
+      Assigned(cef_string_userfree_wide_alloc) and
+      Assigned(cef_string_userfree_utf8_alloc) and
+      Assigned(cef_string_userfree_utf16_alloc) and
+      Assigned(cef_string_userfree_wide_free) and
+      Assigned(cef_string_userfree_utf8_free) and
+      Assigned(cef_string_userfree_utf16_free) and
+
       Assigned(cef_string_map_alloc) and
       Assigned(cef_string_map_size) and
       Assigned(cef_string_map_find) and
@@ -3628,6 +4055,7 @@ begin
       Assigned(cef_string_list_append) and
       Assigned(cef_string_list_clear) and
       Assigned(cef_string_list_free) and
+      Assigned(cef_string_list_copy) and
       Assigned(cef_initialize) and
       Assigned(cef_shutdown) and
       Assigned(cef_do_message_loop_work) and
@@ -3657,7 +4085,7 @@ begin
       Assigned(cef_v8value_create_function) and
       Assigned(cef_xml_reader_create) and
       Assigned(cef_zip_reader_create)
-    );
+    ) then raise Exception.Create('Invalid CEF Library version');
     CefInitialize(True, cache);
   end;
 end;
@@ -3666,50 +4094,85 @@ function CefBrowserCreate(windowInfo: PCefWindowInfo; popup: Boolean;
   handler: PCefHandler; const url: ustring): Boolean;
 begin
   CefLoadLib(CefCache);
+
   Result :=
     cef_browser_create(
       windowInfo,
       Ord(popup),
       handler,
-      PWideChar(url)) <> 0;
+      CefString(url)) <> 0;
+end;
+
+//function CefStringAlloc(const str: ustring): TCefString;
+//begin
+{todo
+  if str <> '' then
+    Result := cef_string_alloc(PWideChar(str)) else
+    Result := nil;
+}
+//end;
+
+function CefString(const str: ustring): TCefString;
+begin
+  //FillChar(Result, SizeOf(Result), 0);
+  Result.str := PChar16(PWideChar(str));
+  Result.length := Length(str);
+  Result.dtor := nil;
+  //cef_string_from_wide(PWideChar(str), Length(str), @Result);
+end;
+
+function CefString(const str: PCefString): ustring; overload;
+var
+  w: TCefStringWide;
+begin
+  FillChar(w, SizeOf(w), 0);
+  if (str <> nil) then
+    cef_string_to_wide(str.str, str.length, @w);
+  Result := w.str;
+  cef_string_wide_clear(@w);
 end;
 
 function CefStringAlloc(const str: ustring): TCefString;
 begin
-  if str <> '' then
-    Result := cef_string_alloc(PWideChar(str)) else
-    Result := nil;
+  FillChar(Result, SizeOf(Result), 0);
+  cef_string_from_wide(PWideChar(str), Length(str), @Result);
 end;
 
-function CefStringFreeAndGet(const str: TCefString): ustring;
+function CefStringClearAndGet(var str: TCefString): ustring;
+begin
+  Result := CefString(@str);
+  cef_string_clear(@str);
+end;
+
+function CefStringFreeAndGet(const str: PCefStringUserFree): ustring;
 begin
   if str <> nil then
   begin
-    Result := str;
-    cef_string_free(str);
+    Result := CefString(PCefString(str));
+    cef_string_userfree_free(str);
   end else
     Result := '';
 end;
 
-procedure CefStringFree(const str: TCefString);
+procedure CefStringFree(const str: PCefString);
 begin
   if str <> nil then
-    cef_string_free(str);
+    cef_string_clear(str);
 end;
 
 function CefRegisterScheme(const SchemeName, HostName: ustring;
   const handler: TCefSchemeHandlerClass): Boolean;
 begin
   Result := cef_register_scheme(
-    PWideChar(SchemeName),
-    PWideChar(HostName),
+    CefString(SchemeName),
+    CefString(HostName),
     (TCefSchemeHandlerFactoryOwn.Create(handler) as ICefBase).Wrap) <> 0;
 end;
 
 function CefRegisterExtension(const name, code: ustring;
   const Handler: ICefv8Handler): Boolean;
 begin
-  Result := cef_register_extension(PWideChar(name), PWideChar(code), handler.Wrap) <> 0;
+  Result := cef_register_extension(CefString(name), CefString(code), handler.Wrap) <> 0;
 end;
 
 function CefCurrentlyOn(ThreadId: TCefThreadId): Boolean;
@@ -3794,7 +4257,7 @@ end;
 constructor TCefv8ValueRef.CreateFunction(const name: ustring;
   const handler: ICefv8Handler);
 begin
-  Create(cef_v8value_create_function(PWideChar(name), CefGetData(handler)));
+  Create(cef_v8value_create_function(CefString(name), CefGetData(handler)));
 end;
 
 constructor TCefv8ValueRef.CreateInt(value: Integer);
@@ -3814,7 +4277,7 @@ end;
 
 constructor TCefv8ValueRef.CreateString(const str: ustring);
 begin
-  Create(cef_v8value_create_string(PWideChar(str)));
+  Create(cef_v8value_create_string(CefString(str)));
 end;
 
 constructor TCefv8ValueRef.CreateUndefined;
@@ -3829,7 +4292,7 @@ end;
 
 function TCefv8ValueRef.DeleteValueByKey(const key: ustring): Boolean;
 begin
-  Result := PCefV8Value(FData)^.delete_value_bykey(PCefV8Value(FData), PWideChar(key)) <> 0;
+  Result := PCefV8Value(FData)^.delete_value_bykey(PCefV8Value(FData), CefString(key)) <> 0;
 end;
 
 function TCefv8ValueRef.ExecuteFunction(const obj: ICefv8Value;
@@ -3845,11 +4308,11 @@ begin
   for i := 0 to Length(arguments) - 1 do
     args[i] := CefGetData(arguments[i]);
   ret := nil;
-  exc := nil;
+  FillChar(exc, SizeOf(exc), 0);
   Result := PCefV8Value(FData)^.execute_function(PCefV8Value(FData),
     CefGetData(obj), Length(arguments), @args, ret, exc) <> 0;
   retval := TCefv8ValueRef.UnWrap(ret);
-  exception := CefStringFreeAndGet(exc);
+  exception := CefStringClearAndGet(exc);
 end;
 
 function TCefv8ValueRef.GetArrayLength: Integer;
@@ -3886,12 +4349,17 @@ function TCefv8ValueRef.GetKeys(const keys: TStrings): Integer;
 var
   list: TCefStringList;
   i: Integer;
+  str: TCefString;
 begin
   list := cef_string_list_alloc;
   try
     Result := PCefV8Value(FData)^.get_keys(PCefV8Value(FData), list);
+    FillChar(str, SizeOf(str), 0);
     for i := 0 to cef_string_list_size(list) - 1 do
-      keys.Add(CefStringFreeAndGet(cef_string_list_value(list, i)));
+    begin
+      cef_string_list_value(list, i, @str);
+      keys.Add(CefStringClearAndGet(str));
+    end;
   finally
     cef_string_list_free(list);
   end;
@@ -3914,7 +4382,7 @@ end;
 
 function TCefv8ValueRef.GetValueByKey(const key: ustring): ICefv8Value;
 begin
-  Result := TCefv8ValueRef.UnWrap(PCefV8Value(FData)^.get_value_bykey(PCefV8Value(FData), PWideChar(key)))
+  Result := TCefv8ValueRef.UnWrap(PCefV8Value(FData)^.get_value_bykey(PCefV8Value(FData), CefString(key)))
 end;
 
 function TCefv8ValueRef.HasValueByIndex(index: Integer): Boolean;
@@ -3924,7 +4392,7 @@ end;
 
 function TCefv8ValueRef.HasValueByKey(const key: ustring): Boolean;
 begin
-  Result := PCefV8Value(FData)^.has_value_bykey(PCefV8Value(FData), PWideChar(key)) <> 0;
+  Result := PCefV8Value(FData)^.has_value_bykey(PCefV8Value(FData), CefString(key)) <> 0;
 end;
 
 function TCefv8ValueRef.IsArray: Boolean;
@@ -3981,7 +4449,7 @@ end;
 function TCefv8ValueRef.SetValueByKey(const key: ustring;
   const value: ICefv8Value): Boolean;
 begin
-  Result:= PCefV8Value(FData)^.set_value_bykey(PCefV8Value(FData), PWideChar(key), CefGetData(value)) <> 0;
+  Result:= PCefV8Value(FData)^.set_value_bykey(PCefV8Value(FData), CefString(key), CefGetData(value)) <> 0;
 end;
 
 class function TCefv8ValueRef.UnWrap(data: Pointer): ICefv8Value;
@@ -4010,11 +4478,11 @@ begin
   for i := 0 to Length(arguments) - 1 do
     args[i] := CefGetData(arguments[i]);
   ret := nil;
-  exc := nil;
-  Result := PCefv8Handler(FData)^.execute(PCefv8Handler(FData), PWideChar(name),
+  FillChar(exc, SizeOf(exc), 0);
+  Result := PCefv8Handler(FData)^.execute(PCefv8Handler(FData), CefString(name),
     CefGetData(obj), Length(arguments), @args, ret, exc) <> 0;
   retval := TCefv8ValueRef.UnWrap(ret);
-  exception := CefStringFreeAndGet(exc);
+  exception := CefStringClearAndGet(exc);
 end;
 
 class function TCefv8HandlerRef.UnWrap(data: Pointer): ICefv8Handler;
@@ -4062,7 +4530,7 @@ end;
 
 procedure TCefStringMapOwn.Append(const key, value: ustring);
 begin
-  cef_string_map_append(FStringMap, PWideChar(key), PWideChar(value));
+  cef_string_map_append(FStringMap, CefString(key), CefString(value));
 end;
 
 procedure TCefStringMapOwn.Clear;
@@ -4081,8 +4549,12 @@ begin
 end;
 
 function TCefStringMapOwn.Find(const key: ustring): ustring;
+var
+  str: TCefString;
 begin
-  Result := cef_string_map_find(FStringMap, PWideChar(key));
+  FillChar(str, SizeOf(str), 0);
+  cef_string_map_find(FStringMap, CefString(key), str);
+  Result := CefString(@str);
 end;
 
 function TCefStringMapOwn.GetHandle: TCefStringMap;
@@ -4091,8 +4563,12 @@ begin
 end;
 
 function TCefStringMapOwn.GetKey(index: Integer): ustring;
+var
+  str: TCefString;
 begin
-  Result := cef_string_map_key(FStringMap, index);
+  FillChar(str, SizeOf(str), 0);
+  cef_string_map_key(FStringMap, index, str);
+  Result := CefString(@str);
 end;
 
 function TCefStringMapOwn.GetSize: Integer;
@@ -4101,8 +4577,12 @@ begin
 end;
 
 function TCefStringMapOwn.GetValue(index: Integer): ustring;
+var
+  str: TCefString;
 begin
-  Result := cef_string_map_value(FStringMap, index);
+  FillChar(str, SizeOf(str), 0);
+  cef_string_map_value(FStringMap, index, str);
+  Result := CefString(@str);
 end;
 
 { TCefDownloadHandlerOwn }
@@ -4127,7 +4607,7 @@ end;
 constructor TCefXmlReaderRef.Create(const stream: ICefStreamReader;
   encodingType: TCefXmlEncodingType; const URI: ustring);
 begin
-  inherited Create(cef_xml_reader_create(stream.Wrap, encodingType, PWideChar(URI)));
+  inherited Create(cef_xml_reader_create(stream.Wrap, encodingType, CefString(URI)));
 end;
 
 function TCefXmlReaderRef.GetAttributeByIndex(index: Integer): ustring;
@@ -4138,13 +4618,13 @@ end;
 function TCefXmlReaderRef.GetAttributeByLName(const localName,
   namespaceURI: ustring): ustring;
 begin
-  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_attribute_bylname(FData, PWideChar(localName), PWideChar(namespaceURI)));
+  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_attribute_bylname(FData, CefString(localName), CefString(namespaceURI)));
 end;
 
 function TCefXmlReaderRef.GetAttributeByQName(
   const qualifiedName: ustring): ustring;
 begin
-  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_attribute_byqname(FData, PWideChar(qualifiedName)));
+  Result := CefStringFreeAndGet(PCefXmlReader(FData).get_attribute_byqname(FData, CefString(qualifiedName)));
 end;
 
 function TCefXmlReaderRef.GetAttributeCount: Cardinal;
@@ -4245,13 +4725,13 @@ end;
 function TCefXmlReaderRef.MoveToAttributeByLName(const localName,
   namespaceURI: ustring): Boolean;
 begin
-  Result := PCefXmlReader(FData).move_to_attribute_bylname(FData, PWideChar(localName), PWideChar(namespaceURI)) <> 0;
+  Result := PCefXmlReader(FData).move_to_attribute_bylname(FData, CefString(localName), CefString(namespaceURI)) <> 0;
 end;
 
 function TCefXmlReaderRef.MoveToAttributeByQName(
   const qualifiedName: ustring): Boolean;
 begin
-  Result := PCefXmlReader(FData).move_to_attribute_byqname(FData, PWideChar(qualifiedName)) <> 0;
+  Result := PCefXmlReader(FData).move_to_attribute_byqname(FData, CefString(qualifiedName)) <> 0;
 end;
 
 function TCefXmlReaderRef.MoveToCarryingElement: Boolean;
@@ -4314,7 +4794,7 @@ end;
 function TCefZipReaderRef.MoveToFile(const fileName: ustring;
   caseSensitive: Boolean): Boolean;
 begin
-  Result := PCefZipReader(FData).move_to_file(FData, PWideChar(fileName), Ord(caseSensitive)) <> 0;
+  Result := PCefZipReader(FData).move_to_file(FData, CefString(fileName), Ord(caseSensitive)) <> 0;
 end;
 
 function TCefZipReaderRef.MoveToFirstFile: Boolean;
@@ -4329,7 +4809,7 @@ end;
 
 function TCefZipReaderRef.OpenFile(const password: ustring): Boolean;
 begin
-  Result := PCefZipReader(FData).open_file(FData, PWideChar(password)) <> 0;
+  Result := PCefZipReader(FData).open_file(FData, CefString(password)) <> 0;
 end;
 
 function TCefZipReaderRef.ReadFile(buffer: Pointer;
