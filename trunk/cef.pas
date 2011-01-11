@@ -8,7 +8,7 @@ type
 
   TOnBeforeCreated = procedure(Sender: TCustomChromium; const parentBrowser: ICefBrowser;
     var windowInfo: TCefWindowInfo; popup: Boolean;
-    var handler: ICefBase; var url: ustring; out Result: TCefRetval) of object;
+    var handler: ICefBase; var url: ustring; var popupFeatures: TCefPopupFeatures; out Result: TCefRetval) of object;
   TOnAfterCreated = procedure(Sender: TCustomChromium; const browser: ICefBrowser; out Result: TCefRetval) of object;
   TOnAddressChange = procedure(Sender: TCustomChromium; const browser: ICefBrowser;
     const frame: ICefFrame; const url: ustring; out Result: TCefRetval) of object;
@@ -60,6 +60,47 @@ type
   TOnDownloadResponse = procedure(const browser: ICefBrowser; const mimeType, fileName: ustring;
     contentLength: int64; var handler: ICefDownloadHandler; out Result: TCefRetval) of object;
 
+  TChromiumOption = (coDragDropDisabled, coEncodingDetectorEnabled, coJavascriptDisabled, coJavascriptOpenWindowsDisallowed,
+    coJavascriptCloseWindowsDisallowed, coJavascriptAccessClipboardDisallowed, coDomPasteDisabled,
+    coCaretBrowsingEnabled, coJavaDisabled, coPluginsDisabled, coUniversalAccessFromFileUrlsAllowed,
+    coFileAccessFromFileUrlsAllowed, coWebSecurityDisabled, coXssAuditorEnabled, coImageLoadDisabled,
+    coShrinkStandaloneImagesToFit, coSiteSpecificQuirksDisabled, coTextAreaResizeDisabled,
+    coPageCacheDisabled, coTabToLinksDisabled, coHyperlinkAuditingDisabled, coUserStyleSheetEnabled,
+    coAuthorAndUserStylesDisabled, coLocalStorageDisabled, coDatabasesDisabled,
+    coApplicationCacheDisabled, coExperimentalWebglEnabled, coAcceleratedCompositingDisabled,
+    coAccelerated2dCanvasDisabled);
+
+  TChromiumOptions = set of TChromiumOption;
+
+  TChromiumFontOptions = class(TPersistent)
+  private
+    FStandardFontFamily: ustring;
+    FCursiveFontFamily: ustring;
+    FSansSerifFontFamily: ustring;
+    FMinimumLogicalFontSize: Integer;
+    FFantasyFontFamily: ustring;
+    FSerifFontFamily: ustring;
+    FDefaultFixedFontSize: Integer;
+    FDefaultFontSize: Integer;
+    FRemoteFontsDisabled: Boolean;
+    FFixedFontFamily: ustring;
+    FMinimumFontSize: Integer;
+  public
+    constructor Create; virtual;
+  published
+    property StandardFontFamily: ustring read FStandardFontFamily;
+    property FixedFontFamily: ustring read FFixedFontFamily write FFixedFontFamily;
+    property SerifFontFamily: ustring read FSerifFontFamily write FSerifFontFamily;
+    property SansSerifFontFamily: ustring read FSansSerifFontFamily write FSansSerifFontFamily;
+    property CursiveFontFamily: ustring read FCursiveFontFamily write FCursiveFontFamily;
+    property FantasyFontFamily: ustring read FFantasyFontFamily write FFantasyFontFamily;
+    property DefaultFontSize: Integer read FDefaultFontSize write FDefaultFontSize default 0;
+    property DefaultFixedFontSize: Integer read FDefaultFixedFontSize write FDefaultFixedFontSize default 0;
+    property MinimumFontSize: Integer read FMinimumFontSize write FMinimumFontSize default 0;
+    property MinimumLogicalFontSize: Integer read FMinimumLogicalFontSize write FMinimumLogicalFontSize default 0;
+    property RemoteFontsDisabled: Boolean read FRemoteFontsDisabled write FRemoteFontsDisabled default False;
+  end;
+
   TCustomChromium = class(TWinControl)
   private
     FSelf: Pointer;
@@ -95,11 +136,16 @@ type
     FOnTooltip: TOnTooltip;
     FOnFindResult: TOnFindResult;
     FOnDownloadResponse: TOnDownloadResponse;
+
+    FOptions: TChromiumOptions;
+    FUserStyleSheetLocation: ustring;
+    FDefaultEncoding: ustring;
+    FFontOptions: TChromiumFontOptions;
   protected
     procedure WndProc(var Message: TMessage); override;
     function doOnBeforeCreated(const parentBrowser: ICefBrowser;
       var windowInfo: TCefWindowInfo; popup: Boolean;
-      var handler: ICefBase; var url: ustring): TCefRetval; virtual;
+      var handler: ICefBase; var url: ustring; var popupFeatures: TCefPopupFeatures): TCefRetval; virtual;
     function doOnAfterCreated(const browser: ICefBrowser): TCefRetval; virtual;
     function doOnAddressChange(const browser: ICefBrowser;
       const frame: ICefFrame; const url: ustring): TCefRetval; virtual;
@@ -181,6 +227,11 @@ type
     property OnFindResult: TOnFindResult read FOnFindResult write FOnFindResult;
     property OnDownloadResponse: TOnDownloadResponse read FOnDownloadResponse write FOnDownloadResponse;
     property OnConsoleMessage: TOnConsoleMessage read FOnConsoleMessage write FOnConsoleMessage;
+
+    property Options: TChromiumOptions read FOptions write FOptions default [];
+    property FontOptions: TChromiumFontOptions read FFontOptions;
+    property DefaultEncoding: ustring read FDefaultEncoding write FDefaultEncoding;
+    property UserStyleSheetLocation: ustring read FUserStyleSheetLocation write FUserStyleSheetLocation;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -218,6 +269,11 @@ type
     property OnKeyEvent;
     property OnDownloadResponse;
     property OnConsoleMessage;
+
+    property Options;
+    property FontOptions;
+    property DefaultEncoding;
+    property UserStyleSheetLocation;
   end;
 
 procedure Register;
@@ -233,7 +289,7 @@ end;
 function cef_handler_handle_before_created(
       self: PCefHandler; parentBrowser: PCefBrowser;
       var windowInfo: TCefWindowInfo; popup: Integer;
-      const popupFeatures: PCefPopupFeatures;
+      var popupFeatures: TCefPopupFeatures;
       var handler: PCefHandler; var url: TCefString;
       settings: PCefBrowserSettings): TCefRetval; stdcall;
 var
@@ -252,7 +308,52 @@ begin
       windowInfo,
       popup <> 0,
       _handler,
-      _url);
+      _url,
+      popupFeatures);
+
+    settings.standard_font_family := CefString(FFontOptions.FStandardFontFamily);
+    settings.fixed_font_family := CefString(FFontOptions.FFixedFontFamily);
+    settings.serif_font_family := CefString(FFontOptions.FSerifFontFamily);
+    settings.sans_serif_font_family := CefString(FFontOptions.FSansSerifFontFamily);
+    settings.cursive_font_family := CefString(FFontOptions.FCursiveFontFamily);
+    settings.fantasy_font_family := CefString(FFontOptions.FFantasyFontFamily);
+    settings.default_font_size := FFontOptions.FDefaultFontSize;
+    settings.default_fixed_font_size := FFontOptions.FDefaultFixedFontSize;
+    settings.minimum_font_size := FFontOptions.FMinimumFontSize;
+    settings.minimum_logical_font_size := FFontOptions.FMinimumLogicalFontSize;
+    settings.remote_fonts_disabled := FFontOptions.FRemoteFontsDisabled;
+    settings.default_encoding := CefString(FDefaultEncoding);
+    settings.user_style_sheet_location := CefString(FUserStyleSheetLocation);
+
+    settings.drag_drop_disabled := coDragDropDisabled in FOptions;
+    settings.encoding_detector_enabled := coEncodingDetectorEnabled in FOptions;
+    settings.javascript_disabled := coJavascriptDisabled in FOptions;
+    settings.javascript_open_windows_disallowed := coJavascriptOpenWindowsDisallowed in FOptions;
+    settings.javascript_close_windows_disallowed := coJavascriptCloseWindowsDisallowed in FOptions;
+    settings.javascript_access_clipboard_disallowed := coJavascriptAccessClipboardDisallowed in FOptions;
+    settings.dom_paste_disabled := coDomPasteDisabled in FOptions;
+    settings.caret_browsing_enabled := coCaretBrowsingEnabled in FOptions;
+    settings.java_disabled := coJavaDisabled in FOptions;
+    settings.plugins_disabled := coPluginsDisabled in FOptions;
+    settings.universal_access_from_file_urls_allowed := coUniversalAccessFromFileUrlsAllowed in FOptions;
+    settings.file_access_from_file_urls_allowed := coFileAccessFromFileUrlsAllowed in FOptions;
+    settings.web_security_disabled := coWebSecurityDisabled in FOptions;
+    settings.xss_auditor_enabled := coXssAuditorEnabled in FOptions;
+    settings.image_load_disabled := coImageLoadDisabled in FOptions;
+    settings.shrink_standalone_images_to_fit := coShrinkStandaloneImagesToFit in FOptions;
+    settings.site_specific_quirks_disabled := coSiteSpecificQuirksDisabled in FOptions;
+    settings.text_area_resize_disabled := coTextAreaResizeDisabled in FOptions;
+    settings.page_cache_disabled := coPageCacheDisabled in FOptions;
+    settings.tab_to_links_disabled := coTabToLinksDisabled in FOptions;
+    settings.hyperlink_auditing_disabled := coHyperlinkAuditingDisabled in FOptions;
+    settings.user_style_sheet_enabled := coUserStyleSheetEnabled in FOptions;
+    settings.author_and_user_styles_disabled := coAuthorAndUserStylesDisabled in FOptions;
+    settings.local_storage_disabled := coLocalStorageDisabled in FOptions;
+    settings.databases_disabled := coDatabasesDisabled in FOptions;
+    settings.application_cache_disabled := coApplicationCacheDisabled in FOptions;
+    settings.experimental_webgl_enabled := coExperimentalWebglEnabled in FOptions;
+    settings.accelerated_compositing_disabled := coAcceleratedCompositingDisabled in FOptions;
+    settings.accelerated_2d_canvas_disabled := coAccelerated2dCanvasDisabled in FOptions;
 
     if Result = RV_HANDLED then
     begin
@@ -601,6 +702,12 @@ begin
   FHandler.handle_console_message := @cef_handler_console_message;
   FHandler.handle_find_result := nil; // todo
 
+  FOptions := [];
+  FFontOptions := TChromiumFontOptions.Create;
+
+  FUserStyleSheetLocation := '';
+  FDefaultEncoding := '';
+
   FBrowserHandle := INVALID_HANDLE_VALUE;
   FBrowser := nil;
 end;
@@ -609,6 +716,7 @@ destructor TCustomChromium.Destroy;
 begin
   FBrowser := nil;
   DeleteCriticalSection(FCriticalSection);
+  FFontOptions.Free;
   inherited;
 end;
 
@@ -643,11 +751,11 @@ end;
 
 function TCustomChromium.doOnBeforeCreated(const parentBrowser: ICefBrowser;
   var windowInfo: TCefWindowInfo; popup: Boolean; var handler: ICefBase;
-  var url: ustring): TCefRetval;
+  var url: ustring; var popupFeatures: TCefPopupFeatures): TCefRetval;
 begin
   Result := RV_CONTINUE;
   if Assigned(FOnBeforeCreated) then
-    FOnBeforeCreated(Self, parentBrowser, windowInfo, popup, handler, url, Result);
+    FOnBeforeCreated(Self, parentBrowser, windowInfo, popup, handler, url, popupFeatures, Result);
 end;
 
 function TCustomChromium.doOnBeforeMenu(const browser: ICefBrowser;
@@ -896,6 +1004,23 @@ begin
   else
     inherited WndProc(Message);
   end;
+end;
+
+{ TChromiumFontOptions }
+
+constructor TChromiumFontOptions.Create;
+begin
+  FStandardFontFamily := '';
+  FCursiveFontFamily := '';
+  FSansSerifFontFamily := '';
+  FMinimumLogicalFontSize := 0;
+  FFantasyFontFamily := '';
+  FSerifFontFamily := '';
+  FDefaultFixedFontSize := 0;
+  FDefaultFontSize := 0;
+  FRemoteFontsDisabled := False;
+  FFixedFontFamily := '';
+  FMinimumFontSize := 0;
 end;
 
 end.

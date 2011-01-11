@@ -1,9 +1,9 @@
 object Form4: TForm4
   Left = 276
   Top = 194
-  Width = 776
-  Height = 480
   Caption = 'Chromium Embedded'
+  ClientHeight = 453
+  ClientWidth = 768
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -68,7 +68,6 @@ object Form4: TForm4
     OnTitleChange = crmTitleChange
     OnLoadStart = crmLoadStart
     OnLoadEnd = crmLoadEnd
-    OnBeforeWindowClose = crmBeforeWindowClose
   end
   object edAddress: TEdit
     Left = 96

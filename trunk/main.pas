@@ -31,20 +31,29 @@ type
     procedure actNextUpdate(Sender: TObject);
     procedure actReloadUpdate(Sender: TObject);
     procedure actGoToExecute(Sender: TObject);
-    procedure crmTitleChange(Sender: TChromium; const browser: ICefBrowser;
-      const title: ustring; out Result: TCefRetval);
-    procedure crmAddressChange(Sender: TChromium; const browser: ICefBrowser;
-      const frame: ICefFrame; const url: ustring; out Result: TCefRetval);
+//    procedure crmTitleChange(Sender: TChromium; const browser: ICefBrowser;
+//      const title: string; out Result: TCefRetval);
     procedure FormCreate(Sender: TObject);
-    procedure crmLoadEnd(Sender: TChromium; const browser: ICefBrowser;
-      const frame: ICefFrame; out Result: TCefRetval);
-    procedure crmAfterCreated(Sender: TChromium; const browser: ICefBrowser;
-      out Result: TCefRetval);
-    procedure crmLoadStart(Sender: TChromium; const browser: ICefBrowser;
-      const frame: ICefFrame; out Result: TCefRetval);
+//    procedure crmLoadEnd(Sender: TChromium; const browser: ICefBrowser;
+//      const frame: ICefFrame; out Result: TCefRetval);
+//    procedure crmAfterCreated(Sender: TChromium; const browser: ICefBrowser;
+//      var popupFeatures: TCefPopupFeatures; out Result: TCefRetval);
+//    procedure crmLoadStart(Sender: TChromium; const browser: ICefBrowser;
+//      const frame: ICefFrame; out Result: TCefRetval);
     procedure actHomeUpdate(Sender: TObject);
-    procedure crmBeforeWindowClose(Sender: TChromium;
+//    procedure crmBeforeWindowClose(Sender: TChromium;
+//      const browser: ICefBrowser; out Result: TCefRetval);
+    procedure crmAddressChange(Sender: TCustomChromium;
+      const browser: ICefBrowser; const frame: ICefFrame; const url: ustring;
+      out Result: TCefRetval);
+    procedure crmAfterCreated(Sender: TCustomChromium;
       const browser: ICefBrowser; out Result: TCefRetval);
+    procedure crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
+      const frame: ICefFrame; out Result: TCefRetval);
+    procedure crmLoadStart(Sender: TCustomChromium; const browser: ICefBrowser;
+      const frame: ICefFrame; out Result: TCefRetval);
+    procedure crmTitleChange(Sender: TCustomChromium;
+      const browser: ICefBrowser; const title: ustring; out Result: TCefRetval);
   private
     { Déclarations privées }
     FCanGoBack: Boolean;
@@ -113,25 +122,26 @@ begin
   TAction(Sender).Enabled := FBrowser <> nil;
 end;
 
-procedure TForm4.crmAddressChange(Sender: TChromium; const browser: ICefBrowser;
-  const frame: ICefFrame; const url: ustring; out Result: TCefRetval);
+procedure TForm4.crmAddressChange(Sender: TCustomChromium;
+  const browser: ICefBrowser; const frame: ICefFrame; const url: ustring;
+  out Result: TCefRetval);
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and frame.IsMain then
 {$IFDEF UNICODE}
     TThread.Queue(nil, procedure begin edAddress.Text := url end);
 {$ELSE}
     SetWindowTextW(edAddress.Handle, PWideChar(url))
-{$ENDIF}    
+{$ENDIF}
 end;
 
-procedure TForm4.crmAfterCreated(Sender: TChromium; const browser: ICefBrowser;
-  out Result: TCefRetval);
+procedure TForm4.crmAfterCreated(Sender: TCustomChromium;
+  const browser: ICefBrowser; out Result: TCefRetval);
 begin
   if not browser.IsPopup then
     FBrowser := browser;
 end;
 
-procedure TForm4.crmLoadEnd(Sender: TChromium; const browser: ICefBrowser;
+procedure TForm4.crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
   const frame: ICefFrame; out Result: TCefRetval);
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
@@ -142,15 +152,15 @@ begin
   end;
 end;
 
-procedure TForm4.crmLoadStart(Sender: TChromium; const browser: ICefBrowser;
-  const frame: ICefFrame; out Result: TCefRetval);
+procedure TForm4.crmLoadStart(Sender: TCustomChromium;
+  const browser: ICefBrowser; const frame: ICefFrame; out Result: TCefRetval);
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
     FLoading := True;
 end;
 
-procedure TForm4.crmTitleChange(Sender: TChromium; const browser: ICefBrowser;
-  const title: ustring; out Result: TCefRetval);
+procedure TForm4.crmTitleChange(Sender: TCustomChromium;
+  const browser: ICefBrowser; const title: ustring; out Result: TCefRetval);
 begin
   if browser.GetWindowHandle = crm.BrowserHandle then
 {$IFDEF UNICODE}
@@ -176,10 +186,11 @@ begin
   FLoading := False;
 end;
 
-procedure TForm4.crmBeforeWindowClose(Sender: TChromium;
-  const browser: ICefBrowser; out Result: TCefRetval);
-begin
-  FBrowser := nil;
-end;
+//procedure TForm4.crmBeforeWindowClose(Sender: TChromium;
+//  const browser: ICefBrowser; out Result: TCefRetval);
+//begin
+//  if not browser.IsPopup then
+//    FBrowser := nil;
+//end;
 
 end.

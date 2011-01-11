@@ -19,7 +19,11 @@ type
   ustring = type string;
 {$ELSE}
   {$IFDEF FPC}
-    ustring = type unicodestring;
+    {$if defined(unicodestring)}
+      ustring = type unicodestring;
+    {$else}
+      ustring = type WideString;
+    {$ifend}
   {$ELSE}
     ustring = type WideString;
   {$ENDIF}
@@ -565,7 +569,7 @@ type
     XML_NODE_COMMENT
   );
 
-  // Popup window features.
+  // Popup window features.
   PCefPopupFeatures = ^TCefPopupFeatures;
   TCefPopupFeatures = record
     x: Integer;
@@ -1938,7 +1942,8 @@ type
   protected
     function doOnBeforeCreated(const parentBrowser: ICefBrowser;
       var windowInfo: TCefWindowInfo; popup: Boolean;
-      var handler: ICefBase; var url: ustring): TCefRetval; virtual;
+      var handler: ICefBase; var url: ustring;
+      var settings: TCefBrowserSettings): TCefRetval; virtual;
     function doOnAfterCreated(const browser: ICefBrowser): TCefRetval; virtual;
     function doOnAddressChange(const browser: ICefBrowser;
       const frame: ICefFrame; const url: ustring): TCefRetval; virtual;
@@ -2147,7 +2152,8 @@ type
     constructor Create(const stream: ICefStreamReader); reintroduce; virtual;
   end;
 
-procedure CefLoadLib(const cache: ustring);
+procedure CefLoadLib(const Cache: ustring = ''; const UserAgent: ustring = '';
+  const ProductVersion: ustring = ''; const Locale: ustring = '');
 function CefGetObject(ptr: Pointer): TObject;
 function CefStringAlloc(const str: ustring): TCefString;
 
@@ -2170,7 +2176,10 @@ procedure CefPostTask(ThreadId: TCefThreadId; const task: ICefTask);
 procedure CefPostDelayedTask(ThreadId: TCefThreadId; const task: ICefTask; delayMs: Integer);
 
 var
-  CefCache: ustring;
+  CefCache: ustring = '';
+  CefUserAgent: ustring = '';
+  CefProductVersion: ustring = '';
+  CefLocale: ustring = '';
 
 implementation
 uses SysUtils;
@@ -2247,12 +2256,12 @@ var
   cef_string_userfree_free: procedure(str: PCefStringUserFree); cdecl;
 
 // Convenience macros for copying values.
-function cef_string_wide_copy(const src: PWideChar; src_len: Cardinal;  output: PCefStringWide): Integer; inline;
+function cef_string_wide_copy(const src: PWideChar; src_len: Cardinal;  output: PCefStringWide): Integer; //inline;
 begin
   Result := cef_string_wide_set(src, src_len, output, ord(True))
 end;
 
-function cef_string_utf8_copy(const src: PAnsiChar; src_len: Cardinal; output: PCefStringUtf8): Integer; inline;
+function cef_string_utf8_copy(const src: PAnsiChar; src_len: Cardinal; output: PCefStringUtf8): Integer; //inline;
 begin
   Result := cef_string_utf8_set(src, src_len, output, ord(True))
 end;
@@ -2500,7 +2509,8 @@ begin
       windowInfo,
       popup <> 0,
       _handler,
-      _url);
+      _url,
+      settings^);
 
     if Result = RV_HANDLED then
     begin
@@ -3090,7 +3100,8 @@ begin
 end;
 
 function TCefHandlerOwn.doOnBeforeCreated(const parentBrowser: ICefBrowser;
-  var windowInfo: TCefWindowInfo; popup: Boolean; var handler: ICefBase; var url: ustring): TCefRetval;
+  var windowInfo: TCefWindowInfo; popup: Boolean; var handler: ICefBase;
+  var url: ustring; var settings: TCefBrowserSettings): TCefRetval;
 begin
   Result := RV_CONTINUE;
 end;
@@ -3880,21 +3891,24 @@ end;
 { TCefLib }
 
 function CefInitialize(multi_threaded_message_loop: Boolean;
-  const cache_path: ustring): Boolean;
+  const cache_path, user_agent, product_version, locale: ustring): Boolean;
 var
   settings: TCefSettings;
 begin
   FillChar(settings, SizeOf(settings), 0);
   settings.size := SizeOf(settings);
   settings.multi_threaded_message_loop := multi_threaded_message_loop;
-  settings.cache_path := cefstring(cache_path);
+  settings.cache_path := CefString(cache_path);
+  settings.user_agent := cefstring(user_agent);
+  settings.product_version := CefString(product_version);
+  settings.locale := CefString(locale);
   Result := cef_initialize(@settings, nil) <> 0;
 end;
 
 var
   LibHandle: THandle = 0;
 
-procedure CefLoadLib(const cache: ustring);
+procedure CefLoadLib(const Cache, UserAgent, ProductVersion, Locale: ustring);
 begin
   if LibHandle = 0 then
   begin
@@ -3928,7 +3942,6 @@ begin
 
 {$IFDEF CEF_STRING_TYPE_UTF8}
   cef_string_set := cef_string_utf8_set;
-  //cef_string_copy := cef_string_utf8_copy;
   cef_string_clear := cef_string_utf8_clear;
   cef_string_userfree_alloc := cef_string_userfree_utf8_alloc;
   cef_string_userfree_free := cef_string_userfree_utf8_free;
@@ -3943,7 +3956,6 @@ begin
 
 {$IFDEF CEF_STRING_TYPE_UTF16}
     cef_string_set := cef_string_utf16_set;
-    //cef_string_copy := cef_string_utf16_copy;
     cef_string_clear := cef_string_utf16_clear;
     cef_string_userfree_alloc := cef_string_userfree_utf16_alloc;
     cef_string_userfree_free := cef_string_userfree_utf16_free;
@@ -3958,7 +3970,6 @@ begin
 
 {$IFDEF CEF_STRING_TYPE_WIDE}
     cef_string_set := cef_string_wide_set;
-    //cef_string_copy := cef_string_wide_copy;
     cef_string_clear := cef_string_wide_clear;
     cef_string_userfree_alloc := cef_string_userfree_wide_alloc;
     cef_string_userfree_free := cef_string_userfree_wide_free;
@@ -4086,14 +4097,14 @@ begin
       Assigned(cef_xml_reader_create) and
       Assigned(cef_zip_reader_create)
     ) then raise Exception.Create('Invalid CEF Library version');
-    CefInitialize(True, cache);
+    CefInitialize(True, Cache, UserAgent, ProductVersion, Locale);
   end;
 end;
 
 function CefBrowserCreate(windowInfo: PCefWindowInfo; popup: Boolean;
   handler: PCefHandler; const url: ustring): Boolean;
 begin
-  CefLoadLib(CefCache);
+  CefLoadLib(CefCache, CefUserAgent, CefProductVersion, CefLocale);
 
   Result :=
     cef_browser_create(
@@ -4103,22 +4114,11 @@ begin
       CefString(url)) <> 0;
 end;
 
-//function CefStringAlloc(const str: ustring): TCefString;
-//begin
-{todo
-  if str <> '' then
-    Result := cef_string_alloc(PWideChar(str)) else
-    Result := nil;
-}
-//end;
-
 function CefString(const str: ustring): TCefString;
 begin
-  //FillChar(Result, SizeOf(Result), 0);
   Result.str := PChar16(PWideChar(str));
   Result.length := Length(str);
   Result.dtor := nil;
-  //cef_string_from_wide(PWideChar(str), Length(str), @Result);
 end;
 
 function CefString(const str: PCefString): ustring; overload;
