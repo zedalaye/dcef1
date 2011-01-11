@@ -38,7 +38,7 @@ type
   // most other platforms.
 
   Char16 = WideChar;
-  PChar16 = ^Char16;
+  PChar16 = PWideChar;
 
   // CEF string type definitions. Whomever allocates |str| is responsible for
   // providing an appropriate |dtor| implementation that will free the string in
@@ -295,11 +295,15 @@ type
     // Set to true (1) to disable application cache.
     application_cache_disabled: Boolean;
 
-    // Set to true (1) to enable experimental WebGL features.
-    experimental_webgl_enabled: Boolean;
+    // Set to true (1) to disable WebGL.
+    webgl_disabled: Boolean;
 
     // Set to true (1) to disable accelerated compositing.
     accelerated_compositing_disabled: Boolean;
+
+    // Set to true (1) to disable accelerated layers. This affects features like
+    // 3D CSS transforms.
+    accelerated_layers_disabled: Boolean;
 
     // Set to true (1) to disable accelerated 2d canvas.
     accelerated_2d_canvas_disabled: Boolean;
@@ -882,6 +886,15 @@ type
         self: PCefHandler; browser: PCefBrowser;
         const mimeType, fileName: PCefString; contentLength: int64;
         var handler: PCefDownloadHandler): TCefRetval; stdcall;
+
+    // Called when the browser needs credentials from the user. |isProxy|
+    // indicates whether the host is a proxy server. |host| contains the hostname
+    // and port number. Set |username| and |password| and return RV_HANDLED to
+    // handle the request.  Return RV_CONTINUE to cancel the request.
+    handle_authentication_request: function(
+        self: PCefHandler; browser: PCefBrowser; isProxy: Integer;
+        const host: PCefString; const realm: PCefString; const scheme: PCefString;
+        username: PCefString; password: PCefString): TCefRetval; stdcall;
 
     // Event called before a context menu is displayed.  To cancel display of the
     // default context menu return RV_HANDLED.
@@ -1996,6 +2009,8 @@ type
       finalUpdate: Boolean): TCefRetval; virtual;
     function doOnDownloadResponse(const browser: ICefBrowser; const mimeType, fileName: ustring;
       contentLength: int64; var handler: ICefDownloadHandler): TCefRetval; virtual;
+    function doOnAuthenticationRequest(const browser: ICefBrowser; isProxy: Boolean;
+      const host, realm, scheme: ustring; var username, password: ustring): TCefRetval; virtual;
   public
     constructor Create; virtual;
   end;
@@ -2160,11 +2175,9 @@ function CefStringAlloc(const str: ustring): TCefString;
 function CefString(const str: ustring): TCefString; overload;
 function CefString(const str: PCefString): ustring; overload;
 function CefStringClearAndGet(var str: TCefString): ustring;
-
-
 procedure CefStringFree(const str: PCefString);
 function CefStringFreeAndGet(const str: PCefStringUserFree): ustring;
-
+procedure CefStringSet(const str: PCefString; const value: ustring);
 function CefBrowserCreate(windowInfo: PCefWindowInfo; popup: Boolean;
   handler: PCefHandler; const url: ustring): Boolean;
 function CefRegisterScheme(const SchemeName, HostName: ustring;
@@ -2174,6 +2187,7 @@ function CefRegisterExtension(const name, code: ustring;
 function CefCurrentlyOn(ThreadId: TCefThreadId): Boolean;
 procedure CefPostTask(ThreadId: TCefThreadId; const task: ICefTask);
 procedure CefPostDelayedTask(ThreadId: TCefThreadId; const task: ICefTask; delayMs: Integer);
+function CefGetData(const i: ICefBase): Pointer;
 
 var
   CefCache: ustring = '';
@@ -2423,7 +2437,7 @@ var
   // Create a new TCefPostData object.
   cef_post_data_create: function(): PCefPostData; cdecl;
 
-  // Create a new cef_post_data_tElement object.
+  // Create a new cef_post_data_Element object.
   cef_post_data_element_create: function(): PCefPostDataElement; cdecl;
 
   // Create a new TCefStreamReader object.
@@ -2512,12 +2526,8 @@ begin
       _url,
       settings^);
 
-    if Result = RV_HANDLED then
-    begin
-      handler :=  CefGetData(_handler);
-      CefStringFree(@url);
-      url := CefStringAlloc(_url);
-    end;
+    CefStringSet(@url, _url);
+    handler :=  CefGetData(_handler);
   end;
 end;
 
@@ -2597,10 +2607,7 @@ begin
       CefString(failedUrl),
       err);
     if Result = RV_HANDLED then
-    begin
-      CefStringFree(@errorText);
-      errorText := CefStringAlloc(err);
-    end;
+      CefStringSet(@errorText, err);
   end;
 end;
 
@@ -2653,6 +2660,28 @@ begin
   handler := CefGetData(_handler);
 end;
 
+function cef_handle_authentication_request(
+  self: PCefHandler; browser: PCefBrowser; isProxy: Integer;
+  const host: PCefString; const realm: PCefString; const scheme: PCefString;
+  username: PCefString; password: PCefString): TCefRetval; stdcall;
+var
+  _username, _password: ustring;
+begin
+  _username := CefString(username);
+  _password := CefString(password);
+  with TCefHandlerOwn(CefGetObject(self)) do
+    Result := doOnAuthenticationRequest(
+      TCefBrowserRef.UnWrap(browser), isProxy <> 0,
+      CefString(host), CefString(realm), CefString(scheme),
+      _username, _password
+    );
+  if Result = RV_HANDLED then
+  begin
+    CefStringSet(username, _username);
+    CefStringSet(password, _password);
+  end;
+end;
+
 function cef_handler_handle_before_menu(
     self: PCefHandler; browser: PCefBrowser;
     const menuInfo: PCefHandlerMenuInfo): TCefRetval; stdcall;
@@ -2677,10 +2706,7 @@ begin
       menuId,
       str);
     if Result = RV_HANDLED then
-    begin
-      CefStringFree(@label_);
-      label_ := CefStringAlloc(str);
-    end;
+      CefStringSet(@label_, str);
   end;
 end;
 
@@ -3062,6 +3088,7 @@ begin
     handle_load_error := @cef_handler_handle_load_error;
     handle_before_resource_load := @cef_handler_handle_before_resource_load;
     handle_download_response := @cef_handler_handle_download_response;
+    handle_authentication_request := @cef_handle_authentication_request;
     handle_before_menu := @cef_handler_handle_before_menu;
     handle_get_menu_label := @cef_handler_handle_get_menu_label;
     handle_menu_action := @cef_handler_handle_menu_action;
@@ -3088,6 +3115,13 @@ begin
 end;
 
 function TCefHandlerOwn.doOnAfterCreated(const browser: ICefBrowser): TCefRetval;
+begin
+  Result := RV_CONTINUE;
+end;
+
+function TCefHandlerOwn.doOnAuthenticationRequest(const browser: ICefBrowser;
+  isProxy: Boolean; const host, realm, scheme: ustring; var username,
+  password: ustring): TCefRetval;
 begin
   Result := RV_CONTINUE;
 end;
@@ -4122,20 +4156,28 @@ begin
 end;
 
 function CefString(const str: PCefString): ustring; overload;
-var
-  w: TCefStringWide;
+//var
+//  w: TCefStringWide;
 begin
-  FillChar(w, SizeOf(w), 0);
-  if (str <> nil) then
-    cef_string_to_wide(str.str, str.length, @w);
-  Result := w.str;
-  cef_string_wide_clear(@w);
+  if str <> nil then
+    SetString(Result, str.str, str.length) else
+    Result := '';
+//  FillChar(w, SizeOf(w), 0);
+//  if (str <> nil) then
+//    cef_string_to_wide(str.str, str.length, @w);
+//  Result := w.str;
+//  cef_string_wide_clear(@w);
 end;
 
 function CefStringAlloc(const str: ustring): TCefString;
 begin
   FillChar(Result, SizeOf(Result), 0);
   cef_string_from_wide(PWideChar(str), Length(str), @Result);
+end;
+
+procedure CefStringSet(const str: PCefString; const value: ustring);
+begin
+  cef_string_set(PWideChar(value), Length(value), str, 1);
 end;
 
 function CefStringClearAndGet(var str: TCefString): ustring;

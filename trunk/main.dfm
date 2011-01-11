@@ -68,6 +68,7 @@ object Form4: TForm4
     OnTitleChange = crmTitleChange
     OnLoadStart = crmLoadStart
     OnLoadEnd = crmLoadEnd
+    OnBeforeWindowClose = crmBeforeWindowClose
   end
   object edAddress: TEdit
     Left = 96

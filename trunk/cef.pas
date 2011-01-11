@@ -57,8 +57,10 @@ type
   TOnFindResult = procedure(Sender: TCustomChromium; const browser: ICefBrowser; count: Integer;
     selectionRect: PCefRect; identifier, activeMatchOrdinal,
     finalUpdate: Boolean; out Result: TCefRetval) of object;
-  TOnDownloadResponse = procedure(const browser: ICefBrowser; const mimeType, fileName: ustring;
+  TOnDownloadResponse = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const mimeType, fileName: ustring;
     contentLength: int64; var handler: ICefDownloadHandler; out Result: TCefRetval) of object;
+  TOnAuthenticationRequest = procedure(Sender: TCustomChromium; const browser: ICefBrowser; isProxy: Boolean;
+    const host, realm, scheme: ustring; var username, password: ustring; out Result: TCefRetval) of object;
 
   TChromiumOption = (coDragDropDisabled, coEncodingDetectorEnabled, coJavascriptDisabled, coJavascriptOpenWindowsDisallowed,
     coJavascriptCloseWindowsDisallowed, coJavascriptAccessClipboardDisallowed, coDomPasteDisabled,
@@ -67,8 +69,8 @@ type
     coShrinkStandaloneImagesToFit, coSiteSpecificQuirksDisabled, coTextAreaResizeDisabled,
     coPageCacheDisabled, coTabToLinksDisabled, coHyperlinkAuditingDisabled, coUserStyleSheetEnabled,
     coAuthorAndUserStylesDisabled, coLocalStorageDisabled, coDatabasesDisabled,
-    coApplicationCacheDisabled, coExperimentalWebglEnabled, coAcceleratedCompositingDisabled,
-    coAccelerated2dCanvasDisabled);
+    coApplicationCacheDisabled, coWebglDisabled, coAcceleratedCompositingDisabled,
+    coAcceleratedLayersDisabled, coAccelerated2dCanvasDisabled);
 
   TChromiumOptions = set of TChromiumOption;
 
@@ -136,6 +138,7 @@ type
     FOnTooltip: TOnTooltip;
     FOnFindResult: TOnFindResult;
     FOnDownloadResponse: TOnDownloadResponse;
+    FOnAuthenticationRequest: TOnAuthenticationRequest;
 
     FOptions: TChromiumOptions;
     FUserStyleSheetLocation: ustring;
@@ -198,6 +201,8 @@ type
       finalUpdate: Boolean): TCefRetval; virtual;
     function doOnDownloadResponse(const browser: ICefBrowser; const mimeType, fileName: ustring;
       contentLength: int64; var handler: ICefDownloadHandler): TCefRetval; virtual;
+    function doOnAuthenticationRequest(const browser: ICefBrowser; isProxy: Boolean;
+      const host, realm, scheme: ustring; var username, password: ustring): TCefRetval; virtual;
 
     property BrowserHandle: HWND read FBrowserHandle;
     property DefaultUrl: ustring read FDefaultUrl write FDefaultUrl;
@@ -227,6 +232,7 @@ type
     property OnFindResult: TOnFindResult read FOnFindResult write FOnFindResult;
     property OnDownloadResponse: TOnDownloadResponse read FOnDownloadResponse write FOnDownloadResponse;
     property OnConsoleMessage: TOnConsoleMessage read FOnConsoleMessage write FOnConsoleMessage;
+    property OnAuthenticationRequest: TOnAuthenticationRequest read FOnAuthenticationRequest write FOnAuthenticationRequest;
 
     property Options: TChromiumOptions read FOptions write FOptions default [];
     property FontOptions: TChromiumFontOptions read FFontOptions;
@@ -269,6 +275,7 @@ type
     property OnKeyEvent;
     property OnDownloadResponse;
     property OnConsoleMessage;
+    property OnAuthenticationRequest;
 
     property Options;
     property FontOptions;
@@ -351,17 +358,13 @@ begin
     settings.local_storage_disabled := coLocalStorageDisabled in FOptions;
     settings.databases_disabled := coDatabasesDisabled in FOptions;
     settings.application_cache_disabled := coApplicationCacheDisabled in FOptions;
-    settings.experimental_webgl_enabled := coExperimentalWebglEnabled in FOptions;
+    settings.webgl_disabled := coWebglDisabled in FOptions;
     settings.accelerated_compositing_disabled := coAcceleratedCompositingDisabled in FOptions;
+    settings.accelerated_layers_disabled := coAcceleratedLayersDisabled in FOptions;
     settings.accelerated_2d_canvas_disabled := coAccelerated2dCanvasDisabled in FOptions;
 
-    if Result = RV_HANDLED then
-    begin
-      if _handler <> nil then
-        handler := _handler.Wrap;
-      CefStringFree(@url);
-      url := CefStringAlloc(_url);
-    end;
+    handler := CefGetData(_handler);
+    CefStringSet(@url, _url);
   end;
 
 end;
@@ -442,10 +445,7 @@ begin
       CefString(failedUrl),
       err);
     if Result = RV_HANDLED then
-    begin
-      CefStringFree(@errorText);
-      errorText := CefStringAlloc(err);
-    end;
+      CefStringSet(@errorText, err);
   end;
 end;
 
@@ -512,10 +512,7 @@ begin
       menuId,
       str);
     if Result = RV_HANDLED then
-    begin
-      CefStringFree(@label_);
-      label_ := CefStringAlloc(str);
-    end;
+      CefStringSet(@label_, str);
   end;
 end;
 
@@ -669,6 +666,28 @@ begin
     handler := nil;
 end;
 
+function cef_handle_authentication_request(
+  self: PCefHandler; browser: PCefBrowser; isProxy: Integer;
+  const host: PCefString; const realm: PCefString; const scheme: PCefString;
+  username: PCefString; password: PCefString): TCefRetval; stdcall;
+var
+  _username, _password: ustring;
+begin
+  _username := CefString(username);
+  _password := CefString(password);
+  with TCustomChromium(CefGetObject(self)) do
+    Result := doOnAuthenticationRequest(
+      TCefBrowserRef.UnWrap(browser), isProxy <> 0,
+      CefString(host), CefString(realm), CefString(scheme),
+      _username, _password
+    );
+  if Result = RV_HANDLED then
+  begin
+    CefStringSet(username, _username);
+    CefStringSet(password, _password);
+  end;
+end;
+
 { TCustomChromium }
 
 constructor TCustomChromium.Create(AOwner: TComponent);
@@ -688,6 +707,7 @@ begin
   FHandler.handle_load_error := @cef_handler_handle_load_error;
   FHandler.handle_before_resource_load := @cef_handler_handle_before_resource_load;
   FHandler.handle_download_response := @cef_handler_handle_download_response;
+  FHandler.handle_authentication_request := @cef_handle_authentication_request;
   FHandler.handle_before_menu := @cef_handler_handle_before_menu;
   FHandler.handle_get_menu_label := @cef_handler_handle_get_menu_label;
   FHandler.handle_menu_action := @cef_handler_handle_menu_action;
@@ -738,6 +758,15 @@ begin
   Result := RV_CONTINUE;
   if Assigned(FOnAfterCreated) then
     FOnAfterCreated(Self, browser, Result);
+end;
+
+function TCustomChromium.doOnAuthenticationRequest(const browser: ICefBrowser;
+  isProxy: Boolean; const host, realm, scheme: ustring; var username,
+  password: ustring): TCefRetval;
+begin
+  Result := RV_CONTINUE;
+  if Assigned(FOnAuthenticationRequest) then
+    FOnAuthenticationRequest(Self, browser, isProxy, host, realm, scheme, username, password, Result);
 end;
 
 function TCustomChromium.doOnBeforeBrowse(const browser: ICefBrowser;
@@ -799,7 +828,7 @@ function TCustomChromium.doOnDownloadResponse(const browser: ICefBrowser;
 begin
   Result := RV_CONTINUE;
   if Assigned(FOnDownloadResponse) then
-    FOnDownloadResponse(browser, mimeType, fileName, contentLength, handler, Result);
+    FOnDownloadResponse(Self, browser, mimeType, fileName, contentLength, handler, Result);
 end;
 
 function TCustomChromium.doOnFindResult(const browser: ICefBrowser;

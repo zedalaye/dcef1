@@ -31,18 +31,8 @@ type
     procedure actNextUpdate(Sender: TObject);
     procedure actReloadUpdate(Sender: TObject);
     procedure actGoToExecute(Sender: TObject);
-//    procedure crmTitleChange(Sender: TChromium; const browser: ICefBrowser;
-//      const title: string; out Result: TCefRetval);
     procedure FormCreate(Sender: TObject);
-//    procedure crmLoadEnd(Sender: TChromium; const browser: ICefBrowser;
-//      const frame: ICefFrame; out Result: TCefRetval);
-//    procedure crmAfterCreated(Sender: TChromium; const browser: ICefBrowser;
-//      var popupFeatures: TCefPopupFeatures; out Result: TCefRetval);
-//    procedure crmLoadStart(Sender: TChromium; const browser: ICefBrowser;
-//      const frame: ICefFrame; out Result: TCefRetval);
     procedure actHomeUpdate(Sender: TObject);
-//    procedure crmBeforeWindowClose(Sender: TChromium;
-//      const browser: ICefBrowser; out Result: TCefRetval);
     procedure crmAddressChange(Sender: TCustomChromium;
       const browser: ICefBrowser; const frame: ICefFrame; const url: ustring;
       out Result: TCefRetval);
@@ -54,6 +44,8 @@ type
       const frame: ICefFrame; out Result: TCefRetval);
     procedure crmTitleChange(Sender: TCustomChromium;
       const browser: ICefBrowser; const title: ustring; out Result: TCefRetval);
+    procedure crmBeforeWindowClose(Sender: TCustomChromium;
+      const browser: ICefBrowser; out Result: TCefRetval);
   private
     { Déclarations privées }
     FCanGoBack: Boolean;
@@ -141,6 +133,13 @@ begin
     FBrowser := browser;
 end;
 
+procedure TForm4.crmBeforeWindowClose(Sender: TCustomChromium;
+  const browser: ICefBrowser; out Result: TCefRetval);
+begin
+  if not browser.IsPopup then
+    FBrowser := nil;
+end;
+
 procedure TForm4.crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
   const frame: ICefFrame; out Result: TCefRetval);
 begin
@@ -185,12 +184,5 @@ begin
   FCanGoForward := False;
   FLoading := False;
 end;
-
-//procedure TForm4.crmBeforeWindowClose(Sender: TChromium;
-//  const browser: ICefBrowser; out Result: TCefRetval);
-//begin
-//  if not browser.IsPopup then
-//    FBrowser := nil;
-//end;
 
 end.
