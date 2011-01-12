@@ -474,17 +474,14 @@ begin
       loadFlags
       );
 
-    if Result = RV_HANDLED then
-    begin
-      if _redirectUrl <> '' then
-        redirectUrl := CefStringAlloc(_redirectUrl);
+    if _redirectUrl <> '' then
+      redirectUrl := CefStringAlloc(_redirectUrl);
 
-      if _resourceStream <> nil then
-        resourceStream := _resourceStream.Wrap;
+    if _resourceStream <> nil then
+      resourceStream := _resourceStream.Wrap;
 
-      if _mimeType <> '' then
-        mimeType := CefStringAlloc(_mimeType);
-    end;
+    if _mimeType <> '' then
+      mimeType := CefStringAlloc(_mimeType);
   end;
 end;
 
@@ -511,8 +508,7 @@ begin
       TCefBrowserRef.UnWrap(browser),
       menuId,
       str);
-    if Result = RV_HANDLED then
-      CefStringSet(@label_, str);
+    CefStringSet(@label_, str);
   end;
 end;
 
@@ -543,15 +539,12 @@ begin
       printInfo, CefString(url), CefString(title), currentPage, maxPages,
       _topLeft, _topCenter, _topRight, _bottomLeft, _bottomCenter, _bottomRight
     );
-    if Result = RV_HANDLED then
-    begin
-      topLeft := CefStringAlloc(_topLeft);
-      topCenter := CefStringAlloc(_topCenter);
-      topRight := CefStringAlloc(_topRight);
-      bottomLeft := CefStringAlloc(_bottomLeft);
-      bottomCenter := CefStringAlloc(_bottomCenter);
-      bottomRight := CefStringAlloc(_bottomRight);
-    end;
+    topLeft := CefStringAlloc(_topLeft);
+    topCenter := CefStringAlloc(_topCenter);
+    topRight := CefStringAlloc(_topRight);
+    bottomLeft := CefStringAlloc(_bottomLeft);
+    bottomCenter := CefStringAlloc(_bottomCenter);
+    bottomRight := CefStringAlloc(_bottomRight);
   end;
 end;
 
