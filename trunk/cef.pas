@@ -204,6 +204,7 @@ type
     function doOnAuthenticationRequest(const browser: ICefBrowser; isProxy: Boolean;
       const host, realm, scheme: ustring; var username, password: ustring): TCefRetval; virtual;
 
+    property Browser: ICefBrowser read FBrowser;
     property BrowserHandle: HWND read FBrowserHandle;
     property DefaultUrl: ustring read FDefaultUrl write FDefaultUrl;
     property OnBeforeCreated: TOnBeforeCreated read FOnBeforeCreated write FOnBeforeCreated;
@@ -248,6 +249,7 @@ type
   TChromium = class(TCustomChromium)
   public
     property BrowserHandle;
+    property Browser;
   published
     property Align;
     property Anchors;
@@ -370,39 +372,39 @@ begin
 end;
 
 function cef_handler_handle_after_created(self: PCefHandler;
-  browser: PCefBrowser): TCefRetval; stdcall;
+  abrowser: PCefBrowser): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
-    Result := doOnAfterCreated(TCefBrowserRef.UnWrap(browser));
+    Result := doOnAfterCreated(TCefBrowserRef.UnWrap(abrowser));
 end;
 
 function cef_handler_handle_address_change(
-    self: PCefHandler; browser: PCefBrowser;
+    self: PCefHandler; abrowser: PCefBrowser;
     frame: PCefFrame; const uri: PCefString): TCefRetval; stdcall;
 begin
    with TCustomChromium(CefGetObject(self)) do
     Result := doOnAddressChange(
-      TCefBrowserRef.UnWrap(browser),
+      TCefBrowserRef.UnWrap(abrowser),
       TCefFrameRef.UnWrap(frame),
       CefString(uri))
 end;
 
 function cef_handler_handle_title_change(
-    self: PCefHandler; browser: PCefBrowser;
+    self: PCefHandler; abrowser: PCefBrowser;
     const title: PCefString): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
-    Result := doOnTitleChange(TCefBrowserRef.UnWrap(browser), CefString(title));
+    Result := doOnTitleChange(TCefBrowserRef.UnWrap(abrowser), CefString(title));
 end;
 
 function cef_handler_handle_before_browse(
-    self: PCefHandler; browser: PCefBrowser;
+    self: PCefHandler; abrowser: PCefBrowser;
     frame: PCefFrame; request: PCefRequest;
     navType: TCefHandlerNavtype; isRedirect: Integer): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnBeforeBrowse(
-      TCefBrowserRef.UnWrap(browser),
+      TCefBrowserRef.UnWrap(abrowser),
       TCefFrameRef.UnWrap(frame),
       TCefRequestRef.UnWrap(request),
       navType,
@@ -410,26 +412,26 @@ begin
 end;
 
 function cef_handler_handle_load_start(
-    self: PCefHandler; browser: PCefBrowser;
+    self: PCefHandler; abrowser: PCefBrowser;
     frame: PCefFrame): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnLoadStart(
-      TCefBrowserRef.UnWrap(browser),
+      TCefBrowserRef.UnWrap(abrowser),
       TCefFrameRef.UnWrap(frame));
 end;
 
 function cef_handler_handle_load_end(self: PCefHandler;
-    browser: PCefBrowser; frame: PCefFrame): TCefRetval; stdcall;
+    abrowser: PCefBrowser; frame: PCefFrame): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnLoadEnd(
-      TCefBrowserRef.UnWrap(browser),
+      TCefBrowserRef.UnWrap(abrowser),
       TCefFrameRef.UnWrap(frame));
 end;
 
 function cef_handler_handle_load_error(
-    self: PCefHandler; browser: PCefBrowser;
+    self: PCefHandler; abrowser: PCefBrowser;
     frame: PCefFrame; errorCode: TCefHandlerErrorcode;
     const failedUrl: PCefString; var errorText: TCefString): TCefRetval; stdcall;
 var
@@ -439,7 +441,7 @@ begin
   with TCustomChromium(CefGetObject(self)) do
   begin
     Result := doOnLoadError(
-      TCefBrowserRef.UnWrap(browser),
+      TCefBrowserRef.UnWrap(abrowser),
       TCefFrameRef.UnWrap(frame),
       errorCode,
       CefString(failedUrl),
@@ -450,7 +452,7 @@ begin
 end;
 
 function cef_handler_handle_before_resource_load(
-    self: PCefHandler; browser: PCefBrowser;
+    self: PCefHandler; abrowser: PCefBrowser;
     request: PCefRequest; var redirectUrl: TCefString;
     var resourceStream: PCefStreamReader; var mimeType: TCefString;
     loadFlags: Integer): TCefRetval; stdcall;
@@ -466,7 +468,7 @@ begin
     _mimeType := CefString(@mimeType);
 
     Result := doOnBeforeResourceLoad(
-      TCefBrowserRef.UnWrap(browser),
+      TCefBrowserRef.UnWrap(abrowser),
       TCefRequestRef.UnWrap(request),
       _redirectUrl,
       _resourceStream,
@@ -486,17 +488,17 @@ begin
 end;
 
 function cef_handler_handle_before_menu(
-    self: PCefHandler; browser: PCefBrowser;
+    self: PCefHandler; abrowser: PCefBrowser;
     const menuInfo: PCefHandlerMenuInfo): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnBeforeMenu(
-      TCefBrowserRef.UnWrap(browser),
+      TCefBrowserRef.UnWrap(abrowser),
       menuInfo);
 end;
 
 function cef_handler_handle_get_menu_label(
-    self: PCefHandler; browser: PCefBrowser;
+    self: PCefHandler; abrowser: PCefBrowser;
     menuId: TCefHandlerMenuId; var label_: TCefString): TCefRetval; stdcall;
 var
   str: ustring;
@@ -505,7 +507,7 @@ begin
   with TCustomChromium(CefGetObject(self)) do
   begin
     Result := doOnGetMenuLabel(
-      TCefBrowserRef.UnWrap(browser),
+      TCefBrowserRef.UnWrap(abrowser),
       menuId,
       str);
     CefStringSet(@label_, str);
@@ -513,17 +515,17 @@ begin
 end;
 
 function cef_handler_handle_menu_action(
-    self: PCefHandler; browser: PCefBrowser;
+    self: PCefHandler; abrowser: PCefBrowser;
     menuId: TCefHandlerMenuId): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnMenuAction(
-      TCefBrowserRef.UnWrap(browser),
+      TCefBrowserRef.UnWrap(abrowser),
       menuId);
 end;
 
 function cef_handler_handle_print_header_footer(
-    self: PCefHandler; browser: PCefBrowser;
+    self: PCefHandler; abrowser: PCefBrowser;
     frame: PCefFrame; printInfo: PCefPrintInfo;
     url, title: PCefString; currentPage, maxPages: Integer;
     var topLeft, topCenter, topRight, bottomLeft, bottomCenter,
@@ -534,7 +536,7 @@ begin
   with TCustomChromium(CefGetObject(self)) do
   begin
     Result := doOnPrintHeaderFooter(
-      TCefBrowserRef.UnWrap(browser),
+      TCefBrowserRef.UnWrap(abrowser),
       TCefFrameRef.UnWrap(frame),
       printInfo, CefString(url), CefString(title), currentPage, maxPages,
       _topLeft, _topCenter, _topRight, _bottomLeft, _bottomCenter, _bottomRight
@@ -549,18 +551,18 @@ begin
 end;
 
 function cef_handler_handle_jsalert(self: PCefHandler;
-    browser: PCefBrowser; frame: PCefFrame;
+    abrowser: PCefBrowser; frame: PCefFrame;
     const message: PCefString): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnJsAlert(
-      TCefBrowserRef.UnWrap(browser),
+      TCefBrowserRef.UnWrap(abrowser),
       TCefFrameRef.UnWrap(frame),
       CefString(message));
 end;
 
 function cef_handler_handle_jsconfirm(
-    self: PCefHandler; browser: PCefBrowser;
+    self: PCefHandler; abrowser: PCefBrowser;
     frame: PCefFrame; const message: PCefString;
     var retval: Integer): TCefRetval; stdcall;
 var
@@ -569,7 +571,7 @@ begin
   ret := retval <> 0;
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnJsConfirm(
-      TCefBrowserRef.UnWrap(browser),
+      TCefBrowserRef.UnWrap(abrowser),
       TCefFrameRef.UnWrap(frame),
       CefString(message), ret);
   if Result = RV_HANDLED then
@@ -578,7 +580,7 @@ begin
 end;
 
 function cef_handler_handle_jsprompt(self: PCefHandler;
-    browser: PCefBrowser; frame: PCefFrame;
+    abrowser: PCefBrowser; frame: PCefFrame;
     const message, defaultValue: PCefString; var retval: Integer;
     var return: TCefString): TCefRetval; stdcall;
 var
@@ -589,7 +591,7 @@ begin
   with TCustomChromium(CefGetObject(self)) do
   begin
     Result := doOnJsPrompt(
-      TCefBrowserRef.UnWrap(browser),
+      TCefBrowserRef.UnWrap(abrowser),
       TCefFrameRef.UnWrap(frame),
       CefString(message), CefString(defaultValue), ret, str);
     if Result = RV_HANDLED then
@@ -601,58 +603,58 @@ begin
 end;
 
 function cef_handler_handle_before_window_close(
-    self: PCefHandler; browser: PCefBrowser): TCefRetval; stdcall;
+    self: PCefHandler; abrowser: PCefBrowser): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnBeforeWindowClose(
-      TCefBrowserRef.UnWrap(browser))
+      TCefBrowserRef.UnWrap(abrowser))
 end;
 
 function cef_handler_handle_take_focus(
-    self: PCefHandler; browser: PCefBrowser;
+    self: PCefHandler; abrowser: PCefBrowser;
     reverse: Integer): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnTakeFocus(
-      TCefBrowserRef.UnWrap(browser), reverse);
+      TCefBrowserRef.UnWrap(abrowser), reverse);
 end;
 
 function cef_handler_handle_set_focus(
-    self: PCefHandler; browser: PCefBrowser;
+    self: PCefHandler; abrowser: PCefBrowser;
     isWidget: Integer): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnSetFocus(
-      TCefBrowserRef.UnWrap(browser), isWidget <> 0);
+      TCefBrowserRef.UnWrap(abrowser), isWidget <> 0);
 end;
 
 function cef_handler_handle_key_event(
-    self: PCefHandler; browser: PCefBrowser;
+    self: PCefHandler; abrowser: PCefBrowser;
     event: TCefHandlerKeyEventType; code, modifiers,
     isSystemKey: Integer): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnKeyEvent(
-      TCefBrowserRef.UnWrap(browser),
+      TCefBrowserRef.UnWrap(abrowser),
       event, code, modifiers, isSystemKey <> 0);
 end;
 
-function cef_handler_console_message(self: PCefHandler; browser: PCefBrowser;
+function cef_handler_console_message(self: PCefHandler; abrowser: PCefBrowser;
   const message, source: PCefString; line: Integer): TCefRetval; stdcall;
 begin
  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnConsoleMessage(TCefBrowserRef.UnWrap(browser), CefString(message), CefString(source), line);
+    Result := doOnConsoleMessage(TCefBrowserRef.UnWrap(abrowser), CefString(message), CefString(source), line);
 end;
 
 function cef_handler_handle_download_response(self: PCefHandler;
-  browser: PCefBrowser; const mimeType, fileName: PCefString; contentLength: int64;
+  abrowser: PCefBrowser; const mimeType, fileName: PCefString; contentLength: int64;
   var handler: PCefDownloadHandler): TCefRetval; stdcall;
 var
   _handler: ICefDownloadHandler;
 begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnDownloadResponse(
-      TCefBrowserRef.UnWrap(browser),
+      TCefBrowserRef.UnWrap(abrowser),
       CefString(mimeType), CefString(fileName), contentLength, _handler);
   if _handler <> nil then
     handler := _handler.Wrap else
@@ -660,7 +662,7 @@ begin
 end;
 
 function cef_handle_authentication_request(
-  self: PCefHandler; browser: PCefBrowser; isProxy: Integer;
+  self: PCefHandler; abrowser: PCefBrowser; isProxy: Integer;
   const host: PCefString; const realm: PCefString; const scheme: PCefString;
   username: PCefString; password: PCefString): TCefRetval; stdcall;
 var
@@ -670,7 +672,7 @@ begin
   _password := CefString(password);
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnAuthenticationRequest(
-      TCefBrowserRef.UnWrap(browser), isProxy <> 0,
+      TCefBrowserRef.UnWrap(abrowser), isProxy <> 0,
       CefString(host), CefString(realm), CefString(scheme),
       _username, _password
     );
