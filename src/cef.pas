@@ -207,6 +207,7 @@ type
     property Browser: ICefBrowser read FBrowser;
     property BrowserHandle: HWND read FBrowserHandle;
     property DefaultUrl: ustring read FDefaultUrl write FDefaultUrl;
+
     property OnBeforeCreated: TOnBeforeCreated read FOnBeforeCreated write FOnBeforeCreated;
     property OnAfterCreated: TOnAfterCreated read FOnAfterCreated write FOnAfterCreated;
     property OnAddressChange: TOnAddressChange read FOnAddressChange write FOnAddressChange;
@@ -255,6 +256,7 @@ type
     property Anchors;
     property Constraints;
     property DefaultUrl;
+
     property OnBeforeCreated;
     property OnAfterCreated;
     property OnAddressChange;
@@ -275,6 +277,10 @@ type
     property OnTakeFocus;
     property OnSetFocus;
     property OnKeyEvent;
+    property OnPrintOptions;
+    property OnJsBinding;
+    property OnTooltip;
+    property OnFindResult;
     property OnDownloadResponse;
     property OnConsoleMessage;
     property OnAuthenticationRequest;
@@ -646,6 +652,19 @@ begin
     Result := doOnConsoleMessage(TCefBrowserRef.UnWrap(abrowser), CefString(message), CefString(source), line);
 end;
 
+function cef_handler_handle_find_result(self: PCefHandler; abrowser: PCefBrowser;
+  identifier, count: Integer; const selectionRect: PCefRect;
+  activeMatchOrdinal, finalUpdate: Integer): TCefRetval; stdcall;
+begin
+ with TCustomChromium(CefGetObject(self)) do
+    Result := doOnFindResult(
+      TCefBrowserRef.UnWrap(abrowser),
+        count, selectionRect,
+        identifier <> 0,
+        activeMatchOrdinal <> 0,
+        finalUpdate <> 0);
+end;
+
 function cef_handler_handle_download_response(self: PCefHandler;
   abrowser: PCefBrowser; const mimeType, fileName: PCefString; contentLength: int64;
   var handler: PCefDownloadHandler): TCefRetval; stdcall;
@@ -715,7 +734,7 @@ begin
   FHandler.handle_set_focus := @cef_handler_handle_set_focus;
   FHandler.handle_key_event := @cef_handler_handle_key_event;
   FHandler.handle_console_message := @cef_handler_console_message;
-  FHandler.handle_find_result := nil; // todo
+  FHandler.handle_find_result := @cef_handler_handle_find_result;
 
   FOptions := [];
   FFontOptions := TChromiumFontOptions.Create;
