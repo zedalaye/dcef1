@@ -17,6 +17,7 @@ uses
 type
 {$IFDEF UNICODE}
   ustring = type string;
+  rbstring = type RawByteString;
 {$ELSE}
   {$IFDEF FPC}
     {$if defined(unicodestring)}
@@ -27,6 +28,7 @@ type
   {$ELSE}
     ustring = type WideString;
   {$ENDIF}
+  rbstring = type AnsiString;
 {$ENDIF}
 
   // CEF provides functions for converting between UTF-8, -16 and -32 strings.
