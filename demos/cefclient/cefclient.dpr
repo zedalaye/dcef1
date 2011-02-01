@@ -9,7 +9,8 @@ uses
   Windows,
   Messages,
   SysUtils,
-  ceflib;
+  ceflib,
+  ceffilescheme in '..\filescheme\ceffilescheme.pas';
 
 type
   THandler = class(TCefHandlerOwn)
@@ -449,8 +450,10 @@ var
 begin
   CefLoadLib;
   CefRegisterScheme('client', 'test', TScheme);
+  CefRegisterScheme('file', '', TFileScheme);
   CefRegisterExtension('v8/test', code, TExtension.Create as ICefV8Handler);
   //navigateto := 'client://test/';
+  navigateto := 'file://c:\';
   try
     wndClass.style          := CS_HREDRAW or CS_VREDRAW;
     wndClass.lpfnWndProc    := @CefWndProc;

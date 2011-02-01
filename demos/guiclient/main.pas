@@ -61,6 +61,7 @@ var
   Form4: TForm4;
 
 implementation
+uses ceffilescheme;
 
 {$R *.dfm}
 
@@ -184,5 +185,9 @@ begin
   FCanGoForward := False;
   FLoading := False;
 end;
+
+initialization
+  CefLoadLib;
+  CefRegisterScheme('file', '', TFileScheme)
 
 end.
