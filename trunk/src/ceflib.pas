@@ -151,6 +151,18 @@ type
   // Window handle.
   CefWindowHandle = HWND;
 
+
+  // Log severity levels.
+  TCefLogSeverity = (
+    LOGSEVERITY_VERBOSE = -1,
+    LOGSEVERITY_INFO,
+    LOGSEVERITY_WARNING,
+    LOGSEVERITY_ERROR,
+    LOGSEVERITY_ERROR_REPORT,
+    // Disables logging completely.
+    LOGSEVERITY_DISABLE = 99
+  );
+
   // Initialization settings. Specify NULL or 0 to get the recommended default
   // values.
   PCefSettings = ^TCefSettings;
@@ -184,6 +196,15 @@ type
     // List of file system paths that will be searched by the browser to locate
     // plugins. This is in addition to the default search paths.
     extra_plugin_paths: TCefStringList;
+
+    // The directory and file name to use for the debug log. If empty, the
+    // default name of "debug.log" will be used and the file will be written
+    // to the application directory.
+    log_file: TCefString;
+
+    // The log severity. Only messages of this severity level or higher will be
+    // logged.
+    log_severity: TCefLogSeverity;
   end;
 
   // Browser initialization settings. Specify NULL or 0 to get the recommended
@@ -309,7 +330,40 @@ type
 
     // Set to true (1) to disable accelerated 2d canvas.
     accelerated_2d_canvas_disabled: Boolean;
+
+    // Set to true (1) to disable developer tools (WebKit inspector).
+    developer_tools_disabled: Boolean;
   end;
+
+  // URL component parts.
+  PCefUrlParts = ^TCefUrlParts;
+  TCefUrlParts = record
+    // The complete URL specification.
+    spec: TCefString;
+
+    // Scheme component not including the colon (e.g., "http").
+    scheme: TCefString;
+
+    // User name component.
+    username: TCefString;
+
+    // Password component.
+    password: TCefString;
+
+    // Host component. This may be a hostname, an IPv4 address or an IPv6 literal
+    // surrounded by square brackets (e.g., "[2001:db8::1]").
+    host: TCefString;
+
+    // Port number component.
+    port: TCefString;
+
+    // Path component including the first slash following the host.
+    path: TCefString;
+
+    // Query string component (i.e., everything following the '?').
+    query: TCefString;
+  end;
+
 
   // Define handler return value types. Returning RV_HANDLED indicates
   // that the implementation completely handled the method and that no further
@@ -575,6 +629,13 @@ type
     XML_NODE_COMMENT
   );
 
+  // Status message types.
+  TCefHandlerStatusType = (
+    STATUSTYPE_TEXT = 0,
+    STATUSTYPE_MOUSEOVER_URL,
+    STATUSTYPE_KEYBOARD_FOCUS_URL
+  );
+
   // Popup window features.
   PCefPopupFeatures = ^TCefPopupFeatures;
   TCefPopupFeatures = record
@@ -641,7 +702,8 @@ type
     get_refct: function(self: PCefBase): Integer; stdcall;
   end;
 
-  // Implement this structure for task execution.
+  // Implement this structure for task execution. The functions of this structure
+  // may be called on any thread.
   TCefTask = record
     // Base structure.
     base: TCefBase;
@@ -649,8 +711,8 @@ type
     execute: procedure(self: PCefTask; threadId: TCefThreadId); stdcall;
   end;
 
-  // Structure used to represent a browser window.  All functions exposed by this
-  // structure should be thread safe.
+  // Structure used to represent a browser window. The functions of this structure
+  // may be called on any thread unless otherwise indicated in the comments.
   TCefBrowser = record
     // Base structure.
     base: TCefBase;
@@ -676,8 +738,8 @@ type
     // Stop loading the page.
     stop_load: procedure(self: PCefBrowser); stdcall;
 
-    // Set focus for the browser window.  If |enable| is true (1) focus will be
-    // set to the window.  Otherwise, focus will be removed.
+    // Set focus for the browser window. If |enable| is true (1) focus will be set
+    // to the window. Otherwise, focus will be removed.
     set_focus: procedure(self: PCefBrowser; enable: Integer); stdcall;
 
     // Retrieve the window handle for this browser.
@@ -692,13 +754,16 @@ type
     // Returns the main (top-level) frame for the browser window.
     get_main_frame: function(self: PCefBrowser): PCefFrame; stdcall;
 
-    // Returns the focused frame for the browser window.
+    // Returns the focused frame for the browser window. This function should only
+    // be called on the UI thread.
     get_focused_frame: function (self: PCefBrowser): PCefFrame; stdcall;
 
-    // Returns the frame with the specified name, or NULL if not found.
+    // Returns the frame with the specified name, or NULL if not found. This
+    // function should only be called on the UI thread.
     get_frame: function(self: PCefBrowser; const name: TCefString): PCefFrame; stdcall;
 
-    // Returns the names of all existing frames.
+    // Returns the names of all existing frames. This function should only be
+    // called on the UI thread.
     get_frame_names: procedure(self: PCefBrowser; names: TCefStringList); stdcall;
 
     // Search for |searchText|. |identifier| can be used to have multiple searches
@@ -711,10 +776,24 @@ type
 
     // Cancel all searches that are currently going on.
     stop_finding: procedure(self: PCefBrowser; clearSelection: Integer); stdcall;
+
+    // Get the zoom level.
+    get_zoom_level: function(self: PCefBrowser): Double; stdcall;
+
+    // Change the zoom level to the specified value.
+    set_zoom_level: procedure(self: PCefBrowser; zoomLevel: Double); stdcall;
+
+    // Open developer tools in its own window.
+    show_dev_tools: procedure(self: PCefBrowser); stdcall;
+
+    // Explicitly close the developer tools window if one exists for this browser
+    // instance.
+    close_dev_tools: procedure(self: PCefBrowser); stdcall;
   end;
 
-  // Structure used to represent a frame in the browser window.  All functions
-  // exposed by this structure should be thread safe.
+  // Structure used to represent a frame in the browser window. The functions of
+  // this structure may be called on any thread unless otherwise indicated in the
+  // comments.
   TCefFrame = record
     // Base structure.
     base: TCefBase;
@@ -748,12 +827,12 @@ type
     // default text viewing application.
     view_source: procedure(self: PCefFrame); stdcall;
 
-    // Returns this frame's HTML source as a string.
-    // The resulting string must be freed by calling cef_string_userfree_free().
+    // Returns this frame's HTML source as a string. This function should only be
+    // called on the UI thread.
     get_source: function(self: PCefFrame): PCefStringUserFree; stdcall;
 
-    // Returns this frame's display text as a string.
-    // The resulting string must be freed by calling cef_string_userfree_free().
+    // Returns this frame's display text as a string. This function should only be
+    // called on the UI thread.
     get_text: function(self: PCefFrame): PCefStringUserFree; stdcall;
 
     // Load the request represented by the |request| object.
@@ -778,34 +857,35 @@ type
     // Returns true (1) if this is the main frame.
     is_main: function(self: PCefFrame): Integer; stdcall;
 
-    // Returns true (1) if this is the focused frame.
+    // Returns true (1) if this is the focused frame. This function should only be
+    // called on the UI thread.
     is_focused: function(self: PCefFrame): Integer; stdcall;
 
     // Returns this frame's name.
     // The resulting string must be freed by calling cef_string_userfree_free().
     get_name: function(self: PCefFrame): PCefStringUserFree; stdcall;
 
-    // Return the URL currently loaded in this frame.
-    // The resulting string must be freed by calling cef_string_userfree_free().
+    // Return the URL currently loaded in this frame. This function should only be
+    // called on the UI thread.
     get_url: function(self: PCefFrame): PCefStringUserFree; stdcall;
   end;
 
   // Structure that should be implemented to handle events generated by the
-  // browser window.  All functions exposed by this structure should be thread
-  // safe. Each function in the structure returns a RetVal value.
+  // browser window. The functions of this structure will be called on the thread
+  // indicated in the function comments.
   TCefHandler = record
     // Base structure.
     base: TCefBase;
 
-    // Event called before a new window is created. The |parentBrowser| parameter
-    // will point to the parent browser window, if any. The |popup| parameter will
-    // be true (1) if the new window is a popup window, in which case
-    // |popupFeatures| will contain information about the style of popup window
-    // requested. If you create the window yourself you should populate the window
-    // handle member of |createInfo| and return RV_HANDLED.  Otherwise, return
-    // RV_CONTINUE and the framework will create the window.  By default, a newly
-    // created window will recieve the same handler as the parent window.  To
-    // change the handler for the new window modify the object that |handler|
+    // Called on the UI thread before a new window is created. The |parentBrowser|
+    // parameter will point to the parent browser window, if any. The |popup|
+    // parameter will be true (1) if the new window is a popup window, in which
+    // case |popupFeatures| will contain information about the style of popup
+    // window requested. If you create the window yourself you should populate the
+    // window handle member of |createInfo| and return RV_HANDLED.  Otherwise,
+    // return RV_CONTINUE and the framework will create the window.  By default, a
+    // newly created window will recieve the same handler as the parent window.
+    // To change the handler for the new window modify the object that |handler|
     // points to.
     handle_before_created: function(
       self: PCefHandler; parentBrowser: PCefBrowser;
@@ -814,129 +894,146 @@ type
       var handler: PCefHandler; url: PCefString;
       settings: PCefBrowserSettings): TCefRetval; stdcall;
 
-    // Event called after a new window is created. The return value is currently
-    // ignored.
+    // Called on the UI thread after a new window is created. The return value is
+    // currently ignored.
     handle_after_created: function(self: PCefHandler;
       browser: PCefBrowser): TCefRetval; stdcall;
 
-    // Event called when a frame's address has changed. The return value is
-    // currently ignored.
+    // Called on the UI thread when a frame's address has changed. The return
+    // value is currently ignored.
     handle_address_change: function(
         self: PCefHandler; browser: PCefBrowser;
         frame: PCefFrame; const url: PCefString): TCefRetval; stdcall;
 
-    // Event called when the page title changes. The return value is currently
-    // ignored.
+    // Called on the UI thread when the page title changes. The return value is
+    // currently ignored.
     handle_title_change: function(
         self: PCefHandler; browser: PCefBrowser;
         const title: PCefString): TCefRetval; stdcall;
 
-    // Event called before browser navigation. The client has an opportunity to
-    // modify the |request| object if desired.  Return RV_HANDLED to cancel
-    // navigation.
+    // Called on the UI thread before browser navigation. The client has an
+    // opportunity to modify the |request| object if desired.  Return RV_HANDLED
+    // to cancel navigation.
     handle_before_browse: function(
         self: PCefHandler; browser: PCefBrowser;
         frame: PCefFrame; request: PCefRequest;
         navType: TCefHandlerNavtype; isRedirect: Integer): TCefRetval; stdcall;
 
-    // Event called when the browser begins loading a page.  The |frame| pointer
-    // will be NULL if the event represents the overall load status and not the
-    // load status for a particular frame.  The return value is currently ignored.
+    // Called on the UI thread when the browser begins loading a page. The |frame|
+    // pointer will be NULL if the event represents the overall load status and
+    // not the load status for a particular frame. |isMainContent| will be true
+    // (1) if this load is for the main content area and not an iframe. This
+    // function may not be called if the load request fails. The return value is
+    // currently ignored.
     handle_load_start: function(
         self: PCefHandler; browser: PCefBrowser;
-        frame: PCefFrame): TCefRetval; stdcall;
+        frame: PCefFrame; isMainContent: Integer): TCefRetval; stdcall;
 
-    // Event called when the browser is done loading a page. The |frame| pointer
-    // will be NULL if the event represents the overall load status and not the
-    // load status for a particular frame. This event will be generated
-    // irrespective of whether the request completes successfully. The return
-    // value is currently ignored.
-    handle_load_end: function(self: PCefHandler;
-        browser: PCefBrowser; frame: PCefFrame): TCefRetval; stdcall;
+    // Called on the UI thread when the browser is done loading a page. The
+    // |frame| pointer will be NULL if the event represents the overall load
+    // status and not the load status for a particular frame. |isMainContent| will
+    // be true (1) if this load is for the main content area and not an iframe.
+    // This function will be called irrespective of whether the request completes
+    // successfully. The return value is currently ignored.
+    handle_load_end: function(self: PCefHandler; browser: PCefBrowser;
+      frame: PCefFrame; isMainContent, httpStatusCode: Integer): TCefRetval; stdcall;
 
-    // Called when the browser fails to load a resource.  |errorCode| is the error
-    // code number and |failedUrl| is the URL that failed to load.  To provide
-    // custom error text assign the text to |errorText| and return RV_HANDLED.
-    // Otherwise, return RV_CONTINUE for the default error text.
+    // Called on the UI thread when the browser fails to load a resource.
+    // |errorCode| is the error code number and |failedUrl| is the URL that failed
+    // to load. To provide custom error text assign the text to |errorText| and
+    // return RV_HANDLED.  Otherwise, return RV_CONTINUE for the default error
+    // text.
     handle_load_error: function(
         self: PCefHandler; browser: PCefBrowser;
         frame: PCefFrame; errorCode: TCefHandlerErrorcode;
         const failedUrl: PCefString; var errorText: TCefString): TCefRetval; stdcall;
 
-    // Event called before a resource is loaded.  To allow the resource to load
-    // normally return RV_CONTINUE. To redirect the resource to a new url populate
-    // the |redirectUrl| value and return RV_CONTINUE.  To specify data for the
-    // resource return a CefStream object in |resourceStream|, set |mimeType| to
-    // the resource stream's mime type, and return RV_CONTINUE. To cancel loading
-    // of the resource return RV_HANDLED.  Any modifications to |request| will be
-    // observed.  If the URL in |request| is changed and |redirectUrl| is also
-    // set, the URL in |request| will be used.
+    // Called on the IO thread before a resource is loaded.  To allow the resource
+    // to load normally return RV_CONTINUE. To redirect the resource to a new url
+    // populate the |redirectUrl| value and return RV_CONTINUE.  To specify data
+    // for the resource return a CefStream object in |resourceStream|, set
+    // |mimeType| to the resource stream's mime type, and return RV_CONTINUE. To
+    // cancel loading of the resource return RV_HANDLED. Any modifications to
+    // |request| will be observed.  If the URL in |request| is changed and
+    // |redirectUrl| is also set, the URL in |request| will be used.
     handle_before_resource_load: function(
         self: PCefHandler; browser: PCefBrowser;
         request: PCefRequest; var redirectUrl: TCefString;
         var resourceStream: PCefStreamReader; var mimeType: TCefString;
         loadFlags: Integer): TCefRetval; stdcall;
 
-    // Called when a server indicates via the 'Content-Disposition' header that a
-    // response represents a file to download. |mimeType| is the mime type for the
-    // download, |fileName| is the suggested target file name and |contentLength|
-    // is either the value of the 'Content-Size' header or -1 if no size was
-    // provided. Set |handler| to the cef_download_handler_t instance that will
-    // recieve the file contents.  Return RV_CONTINUE to download the file or
-    // RV_HANDLED to cancel the file download.
+    // Called on the IO thread to handle requests for URLs with an unknown
+    // protocol component. Return RV_HANDLED to indicate that the request should
+    // succeed because it was externally handled. Set |allow_os_execution| to true
+    // (1) and return RV_CONTINUE to attempt execution via the registered OS
+    // protocol handler, if any. If RV_CONTINUE is returned and either
+    // |allow_os_execution| is false (0) or OS protocol handler execution fails
+    // then the request will fail with an error condition. SECURITY WARNING: YOU
+    // SHOULD USE THIS METHOD TO ENFORCE RESTRICTIONS BASED ON SCHEME, HOST OR
+    // OTHER URL ANALYSIS BEFORE ALLOWING OS EXECUTION.
+    handle_protocol_execution: function(self: PCefHandler; browser: PCefBrowser;
+      const url: TCefString; var allow_os_execution: Integer): TCefRetval; stdcall;
+
+    // Called on the UI thread when a server indicates via the 'Content-
+    // Disposition' header that a response represents a file to download.
+    // |mimeType| is the mime type for the download, |fileName| is the suggested
+    // target file name and |contentLength| is either the value of the 'Content-
+    // Size' header or -1 if no size was provided. Set |handler| to the
+    // cef_download_handler_t instance that will recieve the file contents. Return
+    // RV_CONTINUE to download the file or RV_HANDLED to cancel the file download.
     handle_download_response: function (
         self: PCefHandler; browser: PCefBrowser;
         const mimeType, fileName: PCefString; contentLength: int64;
         var handler: PCefDownloadHandler): TCefRetval; stdcall;
 
-    // Called when the browser needs credentials from the user. |isProxy|
-    // indicates whether the host is a proxy server. |host| contains the hostname
-    // and port number. Set |username| and |password| and return RV_HANDLED to
-    // handle the request.  Return RV_CONTINUE to cancel the request.
+    // Called on the IO thread when the browser needs credentials from the user.
+    // |isProxy| indicates whether the host is a proxy server. |host| contains the
+    // hostname and port number. Set |username| and |password| and return
+    // RV_HANDLED to handle the request. Return RV_CONTINUE to cancel the request.
     handle_authentication_request: function(
         self: PCefHandler; browser: PCefBrowser; isProxy: Integer;
         const host: PCefString; const realm: PCefString; const scheme: PCefString;
         username: PCefString; password: PCefString): TCefRetval; stdcall;
 
-    // Event called before a context menu is displayed.  To cancel display of the
-    // default context menu return RV_HANDLED.
+    // Called on the UI thread before a context menu is displayed. To cancel
+    // display of the default context menu return RV_HANDLED.
     handle_before_menu: function(
         self: PCefHandler; browser: PCefBrowser;
         const menuInfo: PCefHandlerMenuInfo): TCefRetval; stdcall;
 
-    // Event called to optionally override the default text for a context menu
-    // item.  |label| contains the default text and may be modified to substitute
-    // alternate text.  The return value is currently ignored.
+    // Called on the UI thread to optionally override the default text for a
+    // context menu item. |label| contains the default text and may be modified to
+    // substitute alternate text. The return value is currently ignored.
     handle_get_menu_label: function(
         self: PCefHandler; browser: PCefBrowser;
         menuId: TCefHandlerMenuId; var label_: TCefString): TCefRetval; stdcall;
 
-    // Event called when an option is selected from the default context menu.
-    // Return RV_HANDLED to cancel default handling of the action.
+    // Called on the UI thread when an option is selected from the default context
+    // menu. Return RV_HANDLED to cancel default handling of the action.
     handle_menu_action: function(
         self: PCefHandler; browser: PCefBrowser;
         menuId: TCefHandlerMenuId): TCefRetval; stdcall;
 
-    // Event called to allow customization of standard print options before the
-    // print dialog is displayed. |printOptions| allows specification of paper
-    // size, orientation and margins. Note that the specified margins may be
-    // adjusted if they are outside the range supported by the printer. All units
-    // are in inches. Return RV_CONTINUE to display the default print options or
-    // RV_HANDLED to display the modified |printOptions|.
+    // Called on the UI thread to allow customization of standard print options
+    // before the print dialog is displayed. |printOptions| allows specification
+    // of paper size, orientation and margins. Note that the specified margins may
+    // be adjusted if they are outside the range supported by the printer. All
+    // units are in inches. Return RV_CONTINUE to display the default print
+    // options or RV_HANDLED to display the modified |printOptions|.
     handle_print_options: function(self: PCefHandler; browser: PCefBrowser;
         printOptions: PCefPrintOptions): TCefRetval;
 
 
-    // Event called to format print headers and footers.  |printInfo| contains
-    // platform-specific information about the printer context.  |url| is the URL
-    // if the currently printing page, |title| is the title of the currently
-    // printing page, |currentPage| is the current page number and |maxPages| is
-    // the total number of pages.  Six default header locations are provided by
-    // the implementation: top left, top center, top right, bottom left, bottom
-    // center and bottom right.  To use one of these default locations just assign
-    // a string to the appropriate variable.  To draw the header and footer
-    // yourself return RV_HANDLED.  Otherwise, populate the approprate variables
-    // and return RV_CONTINUE.
+    // Called on the UI thread to format print headers and footers. |printInfo|
+    // contains platform-specific information about the printer context. |url| is
+    // the URL if the currently printing page, |title| is the title of the
+    // currently printing page, |currentPage| is the current page number and
+    // |maxPages| is the total number of pages. Six default header locations are
+    // provided by the implementation: top left, top center, top right, bottom
+    // left, bottom center and bottom right. To use one of these default locations
+    // just assign a string to the appropriate variable. To draw the header and
+    // footer yourself return RV_HANDLED. Otherwise, populate the approprate
+    // variables and return RV_CONTINUE.
     handle_print_header_footer: function(
         self: PCefHandler; browser: PCefBrowser;
         frame: PCefFrame; printInfo: PCefPrintInfo;
@@ -944,95 +1041,103 @@ type
         var topLeft, topCenter, topRight, bottomLeft, bottomCenter,
         bottomRight: TCefString): TCefRetval; stdcall;
 
-    // Run a JS alert message.  Return RV_CONTINUE to display the default alert or
-    // RV_HANDLED if you displayed a custom alert.
+    // Called on the UI thread to run a JS alert message. Return RV_CONTINUE to
+    // display the default alert or RV_HANDLED if you displayed a custom alert.
     handle_jsalert: function(self: PCefHandler;
         browser: PCefBrowser; frame: PCefFrame;
         const message: PCefString): TCefRetval; stdcall;
 
-    // Run a JS confirm request.  Return RV_CONTINUE to display the default alert
-    // or RV_HANDLED if you displayed a custom alert.  If you handled the alert
-    // set |retval| to true (1) if the user accepted the confirmation.
+    // Called on the UI thread to run a JS confirm request. Return RV_CONTINUE to
+    // display the default alert or RV_HANDLED if you displayed a custom alert. If
+    // you handled the alert set |retval| to true (1) if the user accepted the
+    // confirmation.
     handle_jsconfirm: function(
         self: PCefHandler; browser: PCefBrowser;
         frame: PCefFrame; const message: PCefString;
         var retval: Integer): TCefRetval; stdcall;
 
-    // Run a JS prompt request.  Return RV_CONTINUE to display the default prompt
-    // or RV_HANDLED if you displayed a custom prompt.  If you handled the prompt
-    // set |retval| to true (1) if the user accepted the prompt and request and
-    // |result| to the resulting value.
+    // Called on the UI thread to run a JS prompt request. Return RV_CONTINUE to
+    // display the default prompt or RV_HANDLED if you displayed a custom prompt.
+    // If you handled the prompt set |retval| to true (1) if the user accepted the
+    // prompt and request and |result| to the resulting value.
     handle_jsprompt: function(self: PCefHandler;
         browser: PCefBrowser; frame: PCefFrame;
         const message, defaultValue: PCefString; var retval: Integer;
         var result: TCefString): TCefRetval; stdcall;
 
-    // Event called for adding values to a frame's JavaScript 'window' object. The
-    // return value is currently ignored.
+    // Called on the UI thread for adding values to a frame's JavaScript 'window'
+    // object. The return value is currently ignored.
     handle_jsbinding: function(self: PCefHandler; browser: PCefBrowser;
       frame: PCefFrame; obj: PCefv8Value): TCefRetval; stdcall;
 
-    // Called just before a window is closed. The return value is currently
-    // ignored.
+    // Called on the UI thread just before a window is closed. The return value is
+    // currently ignored.
     handle_before_window_close: function(
         self: PCefHandler; browser: PCefBrowser): TCefRetval; stdcall;
 
-    // Called when the browser component is about to loose focus. For instance, if
-    // focus was on the last HTML element and the user pressed the TAB key. The
-    // return value is currently ignored.
+    // Called on the UI thread when the browser component is about to loose focus.
+    // For instance, if focus was on the last HTML element and the user pressed
+    // the TAB key. The return value is currently ignored.
     handle_take_focus: function(
         self: PCefHandler; browser: PCefBrowser;
         reverse: Integer): TCefRetval; stdcall;
 
-    // Called when the browser component is requesting focus. |isWidget| will be
-    // true (1) if the focus is requested for a child widget of the browser
-    // window. Return RV_CONTINUE to allow the focus to be set or RV_HANDLED to
-    // cancel setting the focus.
+    // Called on the UI thread when the browser component is requesting focus.
+    // |isWidget| will be true (1) if the focus is requested for a child widget of
+    // the browser window. Return RV_CONTINUE to allow the focus to be set or
+    // RV_HANDLED to cancel setting the focus.
     handle_set_focus: function(
         self: PCefHandler; browser: PCefBrowser;
         isWidget: Integer): TCefRetval; stdcall;
 
-    // Called when the browser component receives a keyboard event. |type| is the
-    // type of keyboard event (see |KeyEventType|). |code| is the windows scan-
-    // code for the event. |modifiers| is a set of bit-flags describing any
-    // pressed modifier keys. |isSystemKey| is set if Windows considers this a
-    // 'system key' message;
-    //   (see http://msdn.microsoft.com/en-us/library/ms646286(VS.85).aspx)
-    // Return RV_HANDLED if the keyboard event was handled or RV_CONTINUE to allow
-    // the browser component to handle the event.
+    // Called on the UI thread when the browser component receives a keyboard
+    // event. |type| is the type of keyboard event, |code| is the windows scan-
+    // code for the event, |modifiers| is a set of bit-flags describing any
+    // pressed modifier keys and |isSystemKey| is true (1) if Windows considers
+    // this a 'system key' message (see http://msdn.microsoft.com/en-
+    // us/library/ms646286(VS.85).aspx). Return RV_HANDLED if the keyboard event
+    // was handled or RV_CONTINUE to allow the browser component to handle the
+    // event.
     handle_key_event: function(
         self: PCefHandler; browser: PCefBrowser;
         event: TCefHandlerKeyEventType; code, modifiers,
         isSystemKey: Integer): TCefRetval; stdcall;
 
-    // Event called when the browser is about to display a tooltip.  |text|
-    // contains the text that will be displayed in the tooltip.  To handle the
-    // display of the tooltip yourself return RV_HANDLED.  Otherwise, you can
+    // Called on the UI thread when the browser is about to display a tooltip.
+    // |text| contains the text that will be displayed in the tooltip. To handle
+    // the display of the tooltip yourself return RV_HANDLED. Otherwise, you can
     // optionally modify |text| and then return RV_CONTINUE to allow the browser
     // to display the tooltip.
     handle_tooltip: function(self: PCefHandler;
         browser: PCefBrowser; text: PCefString): TCefRetval; stdcall;
 
-    // Called to display a console message. Return RV_HANDLED to stop the message
-    // from being output to the console.
+    // Called on the UI thread when the browser has a status message. |text|
+    // contains the text that will be displayed in the status message and |type|
+    // indicates the status message type. The return value is currently ignored.
+    handle_status: function(self: PCefHandler; browser: PCefBrowser;
+      value: PCefString; type_: TCefHandlerStatusType): TCefRetval; stdcall;
+
+    // Called on the UI thread to display a console message. Return RV_HANDLED to
+    // stop the message from being output to the console.
     handle_console_message: function(
         self: PCefHandler; browser: PCefBrowser;
         const message, source: PCefString; line: Integer): TCefRetval; stdcall;
 
-    // Called to report find results returned by cef_browser_t::find().
-    // |identifer| is the identifier passed to cef_browser_t::find(), |count| is
-    // the number of matches currently identified, |selectionRect| is the location
-    // of where the match was found (in window coordinates), |activeMatchOrdinal|
-    // is the current position in the search results, and |finalUpdate| is true
-    // (1) if this is the last find notification.  The return value is currently
-    // ignored.
+    // Called on the UI thread to report find results returned by
+    // cef_browser_t::find(). |identifer| is the identifier passed to
+    // cef_browser_t::find(), |count| is the number of matches currently
+    // identified, |selectionRect| is the location of where the match was found
+    // (in window coordinates), |activeMatchOrdinal| is the current position in
+    // the search results, and |finalUpdate| is true (1) if this is the last find
+    // notification. The return value is currently ignored.
     handle_find_result: function(self: PCefHandler; browser: PCefBrowser;
         identifier, count: Integer; const selectionRect: Pointer;
         activeMatchOrdinal, finalUpdate: Integer): TCefRetval; stdcall;
 
   end;
 
-  // Structure used to represent a web request.
+  // Structure used to represent a web request. The functions of this structure
+  // may be called on any thread.
   TCefRequest = record
     // Base structure.
     base: TCefBase;
@@ -1062,7 +1167,8 @@ type
 
   end;
 
-  // Structure used to represent post data for a web request.
+  // Structure used to represent post data for a web request. The functions of
+  // this structure may be called on any thread.
   TCefPostData = record
     // Base structure.
     base: TCefBase;
@@ -1088,7 +1194,8 @@ type
 
   end;
 
-  // Structure used to represent a single element in the request post data.
+  // Structure used to represent a single element in the request post data. The
+  // functions of this structure may be called on any thread.
   TCefPostDataElement = record
     // Base structure.
     base: TCefBase;
@@ -1121,7 +1228,8 @@ type
         size: Cardinal; bytes: Pointer): Cardinal; stdcall;
   end;
 
-  // Structure the client can implement to provide a custom stream reader.
+  // Structure the client can implement to provide a custom stream reader. The
+  // functions of this structure may be called on any thread.
   TCefReadHandler = record
     // Base structure.
     base: TCefBase;
@@ -1142,7 +1250,8 @@ type
     eof: function(self: PCefReadHandler): Integer; stdcall;
   end;
 
-  // Structure used to read data from a stream.
+  // Structure used to read data from a stream. The functions of this structure
+  // may be called on any thread.
   TCefStreamReader = record
     // Base structure.
     base: TCefBase;
@@ -1163,7 +1272,8 @@ type
     eof: function(self: PCefStreamReader): Integer; stdcall;
   end;
 
-  // Structure the client can implement to provide a custom stream writer.
+  // Structure the client can implement to provide a custom stream writer. The
+  // functions of this structure may be called on any thread.
   TCefWriteHandler = record
     // Base structure.
     base: TCefBase;
@@ -1184,7 +1294,8 @@ type
     flush: function(self: PCefWriteHandler): Integer; stdcall;
   end;
 
-  // Structure used to write data to a stream.
+  // Structure used to write data to a stream. The functions of this structure may
+  // be called on any thread.
   TCefStreamWriter = record
     // Base structure.
     base: TCefBase;
@@ -1205,7 +1316,8 @@ type
     flush: function(self: PCefStreamWriter): Integer; stdcall;
   end;
 
-  // Structure that should be implemented to handle V8 function calls.
+  // Structure that should be implemented to handle V8 function calls. The
+  // functions of this structure will always be called on the UI thread.
   TCefv8Handler = record
     // Base structure.
     base: TCefBase;
@@ -1218,7 +1330,8 @@ type
         var exception: TCefString): Integer; stdcall;
   end;
 
-  // Structure representing a V8 value.
+  // Structure representing a V8 value. The functions of this structure should
+  // only be called on the UI thread.
   TCefv8Value = record
     // Base structure.
     base: TCefBase;
@@ -1299,7 +1412,8 @@ type
         var exception: TCefString): Integer; stdcall;
   end;
 
-  // Structure that creates TCefSchemeHandler instances.
+  // Structure that creates cef_scheme_handler_t instances. The functions of this
+  // structure will always be called on the IO thread.
   TCefSchemeHandlerFactory = record
     // Base structure.
     base: TCefBase;
@@ -1308,20 +1422,8 @@ type
     create: function(self: PCefSchemeHandlerFactory): PCefSchemeHandler; stdcall;
   end;
 
-  TCefDownloadHandler = record
-    // Base structure.
-    base: TCefBase;
-
-    // A portion of the file contents have been received. This function will be
-    // called multiple times until the download is complete. Return |true (1)| to
-    // continue receiving data and |false (0)| to cancel.
-    received_data: function(self: PCefDownloadHandler; data: Pointer; data_size: Integer): Integer; stdcall;
-
-    // The download is complete.
-    complete: procedure(self: PCefDownloadHandler); stdcall;
-  end;
-
-  // Structure used to represent a custom scheme handler structure.
+  // Structure used to represent a custom scheme handler structure. The functions
+  // of this structure will always be called on the IO thread.
   TCefSchemeHandler = record
     // Base structure.
     base: TCefBase;
@@ -1349,8 +1451,24 @@ type
         data_out: Pointer; bytes_to_read: Integer; var bytes_read: Integer): Integer; stdcall;
   end;
 
+  // Structure used to handle file downloads. The functions of this structure will
+  // always be called on the UI thread.
+  TCefDownloadHandler = record
+    // Base structure.
+    base: TCefBase;
+
+    // A portion of the file contents have been received. This function will be
+    // called multiple times until the download is complete. Return |true (1)| to
+    // continue receiving data and |false (0)| to cancel.
+    received_data: function(self: PCefDownloadHandler; data: Pointer; data_size: Integer): Integer; stdcall;
+
+    // The download is complete.
+    complete: procedure(self: PCefDownloadHandler); stdcall;
+  end;
 
   // Structure that supports the reading of XML data via the libxml streaming API.
+  // The functions of this structure should only be called on the thread that
+  // creates the object.
   TCefXmlReader = record
     // Base structure.
     base: TcefBase;
@@ -1485,6 +1603,8 @@ type
   end;
 
   // Structure that supports the reading of zip archives via the zlib unzip API.
+  // The functions of this structure should only be called on the thread that
+  // creates the object.
   TCefZipReader = record
     // Base structure.
     base: TCefBase;
@@ -1568,8 +1688,13 @@ type
     procedure Find(const searchText: ustring;
       identifier, forward, matchCase, findNext: Boolean);
     procedure StopFinding(ClearSelection: Boolean);
+    function GetZoomLevel: Double;
+    procedure SetZoomLevel(zoomLevel: Double);
+    procedure ShowDevTools;
+    procedure CloseDevTools;
     property MainFrame: ICefFrame read GetMainFrame;
     property Frame[const name: ustring]: ICefFrame read GetFrame;
+    property ZoomLevel: Double read GetZoomLevel write SetZoomLevel;
   end;
 
   ICefPostDataElement = interface(ICefBase)
@@ -1821,6 +1946,10 @@ type
     procedure Find(const searchText: ustring;
       identifier, forward, matchCase, findNext: Boolean);
     procedure StopFinding(ClearSelection: Boolean);
+    function GetZoomLevel: Double;
+    procedure SetZoomLevel(zoomLevel: Double);
+    procedure ShowDevTools;
+    procedure CloseDevTools;
   public
     class function UnWrap(data: Pointer): ICefBrowser;
   end;
@@ -1967,8 +2096,8 @@ type
     function doOnBeforeBrowse(const browser: ICefBrowser; const frame: ICefFrame;
       const request: ICefRequest; navType: TCefHandlerNavtype;
       isRedirect: boolean): TCefRetval; virtual;
-    function doOnLoadStart(const browser: ICefBrowser; const frame: ICefFrame): TCefRetval; virtual;
-    function doOnLoadEnd(const browser: ICefBrowser; const frame: ICefFrame): TCefRetval; virtual;
+    function doOnLoadStart(const browser: ICefBrowser; const frame: ICefFrame; isMainContent: Boolean): TCefRetval; virtual;
+    function doOnLoadEnd(const browser: ICefBrowser; const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer): TCefRetval; virtual;
     function doOnLoadError(const browser: ICefBrowser;
       const frame: ICefFrame; errorCode: TCefHandlerErrorcode;
       const failedUrl: ustring; var errorText: ustring): TCefRetval; virtual;
@@ -1976,6 +2105,8 @@ type
       const request: ICefRequest; var redirectUrl: ustring;
       var resourceStream: ICefStreamReader; var mimeType: ustring;
       loadFlags: Integer): TCefRetval; virtual;
+    function doOnProtocolExecution(const browser: ICefBrowser;
+      const url: ustring; var AllowOsExecution: Boolean): TCefRetval; virtual;
     function doOnBeforeMenu(const browser: ICefBrowser;
       const menuInfo: PCefHandlerMenuInfo): TCefRetval; virtual;
     function doOnGetMenuLabel(const browser: ICefBrowser;
@@ -2004,6 +2135,8 @@ type
     function doOnKeyEvent(const browser: ICefBrowser; event: TCefHandlerKeyEventType;
       code, modifiers: Integer; isSystemKey: Boolean): TCefRetval; virtual;
     function doOnTooltip(const browser: ICefBrowser; var text: ustring): TCefRetval; virtual;
+    function doOnStatus(const browser: ICefBrowser; const value: ustring;
+      StatusType: TCefHandlerStatusType): TCefRetval; virtual;
     function doOnConsoleMessage(const browser: ICefBrowser; const message,
       source: ustring; line: Integer): TCefRetval; virtual;
     function doOnFindResult(const browser: ICefBrowser; count: Integer;
@@ -2170,7 +2303,9 @@ type
   end;
 
 procedure CefLoadLib(const Cache: ustring = ''; const UserAgent: ustring = '';
-  const ProductVersion: ustring = ''; const Locale: ustring = '');
+  const ProductVersion: ustring = ''; const Locale: ustring = '';
+  const LogFile: ustring = ''; LogSeverity: TCefLogSeverity = LOGSEVERITY_DISABLE;
+  ExtraPluginPaths: TStrings = nil);
 function CefGetObject(ptr: Pointer): TObject;
 function CefStringAlloc(const str: ustring): TCefString;
 
@@ -2196,6 +2331,8 @@ var
   CefUserAgent: ustring = '';
   CefProductVersion: ustring = '';
   CefLocale: ustring = '';
+  CefLogFile: ustring = '';
+  CefLogSeverity: TCefLogSeverity = LOGSEVERITY_DISABLE;
 
 implementation
 uses SysUtils;
@@ -2301,20 +2438,21 @@ var
 
   // Create a new browser window using the window parameters specified by
   // |windowInfo|. The |popup| parameter should be true (1) if the new window is a
-  // popup window. This function call will block and can only be used if the
-  // |multi_threaded_message_loop| parameter to cef_initialize() is false (0).
+  // popup window. This function should only be called on the UI thread.
   cef_browser_create_sync: function(windowInfo: PCefWindowInfo; popup: Integer; handler: PCefHandler; const url: PCefString): PCefBrowser; cdecl;
 
-  // Perform message loop processing.  Has no affect if the browser UI loop is
-  // running in a separate thread.
+  // Perform message loop processing. This function must be called on the main
+  // application thread if cef_initialize() is called with a
+  // CefSettings.multi_threaded_message_loop value of false (0).
   cef_do_message_loop_work: procedure(); cdecl;
 
-  // This function should be called once when the application is started to
-  // initialize CEF.  A return value of true (1) indicates that it succeeded and
-  // false (0) indicates that it failed.
+  // This function should be called on the main application thread to initialize
+  // CEF when the application is started.  A return value of true (1) indicates
+  // that it succeeded and false (0) indicates that it failed.
   cef_initialize: function(const settings: PCefSettings;  const browser_defaults: PCefBrowserSettings): Integer; cdecl;
 
-  // This function should be called once before the application exits to shut down CEF
+  // This function should be called on the main application thread to shut down
+  // CEF before the application exits.
   cef_shutdown: procedure(); cdecl;
 
   // Allocate a new string map.
@@ -2342,7 +2480,7 @@ var
   // true (1) if the value was successfully retrieved.
   cef_string_list_value: function(list: TCefStringList; index: Integer; value: PCefString): Integer; cdecl;
   // Append a new value at the end of the string list.
-  cef_string_list_append: procedure(list: TCefStringList; const value: PCefString); cdecl;
+  cef_string_list_append: procedure(list: TCefStringList; const value: TCefString); cdecl;
   // Clear the string list.
   cef_string_list_clear: procedure(list: TCefStringList); cdecl;
   // Free the string list.
@@ -2354,7 +2492,8 @@ var
   // Register a new V8 extension with the specified JavaScript extension code and
   // handler. Functions implemented by the handler are prototyped using the
   // keyword 'native'. The calling of a native function is restricted to the scope
-  // in which the prototype of the native function is defined.
+  // in which the prototype of the native function is defined. This function may
+  // be called on any thread.
   //
   // Example JavaScript extension code:
   //
@@ -2412,26 +2551,38 @@ var
   // Register a custom scheme handler factory for the specified |scheme_name| and
   // |host_name|. All URLs beginning with scheme_name://host_name/ can be handled
   // by TCefSchemeHandler instances returned by the factory. Specify an NULL
-  // |host_name| value to match all host names.
+  // |host_name| value to match all host names. This function may be called on any
+  // thread.
   cef_register_scheme: function(const scheme_name, host_name: TCefString; factory: PCefSchemeHandlerFactory): Integer; cdecl;
 
 
   // CEF maintains multiple internal threads that are used for handling different
   // types of tasks. The UI thread creates the browser window and is used for all
   // interaction with the WebKit rendering engine and V8 JavaScript engine (The UI
-  // thread will be the same as the main application thread if cef_initialize()
-  // was called with a |multi_threaded_message_loop| value of false (0).) The IO
-  // thread is used for handling schema and network requests. The FILE thread is
-  // used for the application cache and other miscellaneous activities. This
-  // function will return true (1) if called on the specified thread.
+  // thread will be the same as the main application thread if cef_initialize() is
+  // called with a CefSettings.multi_threaded_message_loop value of false (0).)
+  // The IO thread is used for handling schema and network requests. The FILE
+  // thread is used for the application cache and other miscellaneous activities.
+  // This function will return true (1) if called on the specified thread.
   cef_currently_on: function(threadId: TCefThreadId): Integer; cdecl;
 
-  // Post a task for execution on the specified thread.
+  // Post a task for execution on the specified thread. This function may be
+  // called on any thread.
   cef_post_task: function(threadId: TCefThreadId; task: PCefTask): Integer; cdecl;
 
-  // Post a task for delayed execution on the specified thread.
+  // Post a task for delayed execution on the specified thread. This function may
+  // be called on any thread.
   cef_post_delayed_task: function(threadId: TCefThreadId;
       task: PCefTask; delay_ms: LongInt): Integer; cdecl;
+
+  // Parse the specified |url| into its component parts. Returns false (0) if the
+  // URL is NULL or invalid.
+  cef_parse_url: function(const url: TCefString; parts: PCefUrlParts): Integer; cdecl;
+
+  // Creates a URL from the specified |parts|, which must contain a non-NULL spec
+  // or a non-NULL host and path (at a minimum), but not both. Returns false (0)
+  // if |parts| isn't initialized as described.
+  cef_create_url: function(parts: PCefUrlParts; url: PCefString): Integer; cdecl;
 
   // Create a new TCefRequest object.
   cef_request_create: function(): PCefRequest; cdecl;
@@ -2575,21 +2726,23 @@ end;
 
 function cef_handler_handle_load_start(
     self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame): TCefRetval; stdcall;
+    frame: PCefFrame; isMainContent: Integer): TCefRetval; stdcall;
 begin
   with TCefHandlerOwn(CefGetObject(self)) do
     Result := doOnLoadStart(
       TCefBrowserRef.UnWrap(browser),
-      TCefFrameRef.UnWrap(frame));
+      TCefFrameRef.UnWrap(frame), isMainContent <> 0);
 end;
 
 function cef_handler_handle_load_end(self: PCefHandler;
-    browser: PCefBrowser; frame: PCefFrame): TCefRetval; stdcall;
+    browser: PCefBrowser; frame: PCefFrame; isMainContent, httpStatusCode: Integer): TCefRetval; stdcall;
 begin
   with TCefHandlerOwn(CefGetObject(self)) do
     Result := doOnLoadEnd(
       TCefBrowserRef.UnWrap(browser),
-      TCefFrameRef.UnWrap(frame));
+      TCefFrameRef.UnWrap(frame),
+      isMainContent <> 0,
+      httpStatusCode);
 end;
 
 function cef_handler_handle_load_error(
@@ -2647,6 +2800,21 @@ begin
       mimeType := CefStringAlloc(_mimeType);
     end;
   end;
+end;
+
+function cef_handler_handle_protocol_execution(self: PCefHandler; browser: PCefBrowser;
+  const url: TCefString; var allow_os_execution: Integer): TCefRetval; stdcall;
+var
+  allow: Boolean;
+begin
+  allow := allow_os_execution <> 0;
+  with TCefHandlerOwn(CefGetObject(self)) do
+    Result := doOnProtocolExecution(
+      TCefBrowserRef.UnWrap(browser),
+      CefString(@url), allow);
+  if allow then
+    allow_os_execution := 1 else
+    allow_os_execution := 0;
 end;
 
 function cef_handler_handle_download_response(self: PCefHandler;
@@ -2870,6 +3038,13 @@ begin
   text := CefStringAlloc(t);
 end;
 
+function cef_handler_handle_status(self: PCefHandler; browser: PCefBrowser;
+  value: PCefString; type_: TCefHandlerStatusType): TCefRetval; stdcall;
+begin
+  with TCefHandlerOwn(CefGetObject(self)) do
+    Result := doOnStatus(TCefBrowserRef.UnWrap(browser), CefString(value), type_);
+end;
+
 function cef_handler_handle_console_message(self: PCefHandler; browser: PCefBrowser;
   const message, source: PCefString; line: Integer): TCefRetval; stdcall;
 begin
@@ -3089,6 +3264,7 @@ begin
     handle_load_end := @cef_handler_handle_load_end;
     handle_load_error := @cef_handler_handle_load_error;
     handle_before_resource_load := @cef_handler_handle_before_resource_load;
+    handle_protocol_execution := @cef_handler_handle_protocol_execution;
     handle_download_response := @cef_handler_handle_download_response;
     handle_authentication_request := @cef_handle_authentication_request;
     handle_before_menu := @cef_handler_handle_before_menu;
@@ -3105,6 +3281,7 @@ begin
     handle_set_focus := @cef_handler_handle_set_focus;
     handle_key_event := @cef_handler_handle_key_event;
     handle_tooltip := @cef_handler_handle_tooltip;
+    handle_status := @cef_handler_handle_status;
     handle_console_message := @cef_handler_handle_console_message;
     handle_find_result := @cef_handler_handle_find_result;
   end;
@@ -3221,7 +3398,7 @@ begin
 end;
 
 function TCefHandlerOwn.doOnLoadEnd(const browser: ICefBrowser;
-  const frame: ICefFrame): TCefRetval;
+  const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer): TCefRetval;
 begin
   Result := RV_CONTINUE;
 end;
@@ -3234,7 +3411,7 @@ begin
 end;
 
 function TCefHandlerOwn.doOnLoadStart(const browser: ICefBrowser;
-  const frame: ICefFrame): TCefRetval;
+  const frame: ICefFrame; isMainContent: Boolean): TCefRetval;
 begin
   Result := RV_CONTINUE;
 end;
@@ -3259,8 +3436,20 @@ begin
   Result := RV_CONTINUE;
 end;
 
+function TCefHandlerOwn.doOnProtocolExecution(const browser: ICefBrowser;
+  const url: ustring; var AllowOsExecution: Boolean): TCefRetval;
+begin
+  Result := RV_CONTINUE;
+end;
+
 function TCefHandlerOwn.doOnSetFocus(const browser: ICefBrowser;
   isWidget: Boolean): TCefRetval;
+begin
+  Result := RV_CONTINUE;
+end;
+
+function TCefHandlerOwn.doOnStatus(const browser: ICefBrowser;
+  const value: ustring; StatusType: TCefHandlerStatusType): TCefRetval;
 begin
   Result := RV_CONTINUE;
 end;
@@ -3329,6 +3518,11 @@ begin
   Result := PCefBrowser(FData)^.can_go_forward(PCefBrowser(FData)) <> 0;
 end;
 
+procedure TCefBrowserRef.CloseDevTools;
+begin
+  PCefBrowser(FData)^.close_dev_tools(PCefBrowser(FData));
+end;
+
 procedure TCefBrowserRef.Find(const searchText: ustring; identifier,
   forward, matchCase, findNext: Boolean);
 begin
@@ -3381,6 +3575,11 @@ begin
   Result := PCefBrowser(FData)^.get_window_handle(PCefBrowser(FData));
 end;
 
+function TCefBrowserRef.GetZoomLevel: Double;
+begin
+  Result := PCefBrowser(FData)^.get_zoom_level(PCefBrowser(FData))
+end;
+
 procedure TCefBrowserRef.GoBack;
 begin
   PCefBrowser(FData)^.go_back(PCefBrowser(FData));
@@ -3409,6 +3608,16 @@ end;
 procedure TCefBrowserRef.SetFocus(enable: Boolean);
 begin
   PCefBrowser(FData)^.set_focus(PCefBrowser(FData), ord(enable));
+end;
+
+procedure TCefBrowserRef.SetZoomLevel(zoomLevel: Double);
+begin
+  PCefBrowser(FData)^.set_zoom_level(PCefBrowser(FData), zoomlevel);
+end;
+
+procedure TCefBrowserRef.ShowDevTools;
+begin
+  PCefBrowser(FData)^.show_dev_tools(PCefBrowser(FData));
 end;
 
 procedure TCefBrowserRef.StopFinding(ClearSelection: Boolean);
@@ -3926,25 +4135,14 @@ end;
 
 { TCefLib }
 
-function CefInitialize(multi_threaded_message_loop: Boolean;
-  const cache_path, user_agent, product_version, locale: ustring): Boolean;
-var
-  settings: TCefSettings;
-begin
-  FillChar(settings, SizeOf(settings), 0);
-  settings.size := SizeOf(settings);
-  settings.multi_threaded_message_loop := multi_threaded_message_loop;
-  settings.cache_path := CefString(cache_path);
-  settings.user_agent := cefstring(user_agent);
-  settings.product_version := CefString(product_version);
-  settings.locale := CefString(locale);
-  Result := cef_initialize(@settings, nil) <> 0;
-end;
-
 var
   LibHandle: THandle = 0;
 
-procedure CefLoadLib(const Cache, UserAgent, ProductVersion, Locale: ustring);
+procedure CefLoadLib(const Cache, UserAgent, ProductVersion, Locale, LogFile: ustring;
+  LogSeverity: TCefLogSeverity; ExtraPluginPaths: TStrings);
+var
+  settings: TCefSettings;
+  i: Integer;
 begin
   if LibHandle = 0 then
   begin
@@ -4041,6 +4239,8 @@ begin
     cef_currently_on := GetProcAddress(LibHandle, 'cef_currently_on');
     cef_post_task := GetProcAddress(LibHandle, 'cef_post_task');
     cef_post_delayed_task := GetProcAddress(LibHandle, 'cef_post_delayed_task');
+    cef_parse_url := GetProcAddress(LibHandle, 'cef_parse_url');
+    cef_create_url := GetProcAddress(LibHandle, 'cef_create_url');
     cef_browser_create := GetProcAddress(LibHandle, 'cef_browser_create');
     cef_browser_create_sync := GetProcAddress(LibHandle, 'cef_browser_create_sync');
     cef_request_create := GetProcAddress(LibHandle, 'cef_request_create');
@@ -4111,6 +4311,8 @@ begin
       Assigned(cef_currently_on) and
       Assigned(cef_post_task) and
       Assigned(cef_post_delayed_task) and
+      Assigned(cef_parse_url) and
+      Assigned(cef_create_url) and
       Assigned(cef_browser_create) and
       Assigned(cef_browser_create_sync) and
       Assigned(cef_request_create) and
@@ -4133,14 +4335,32 @@ begin
       Assigned(cef_xml_reader_create) and
       Assigned(cef_zip_reader_create)
     ) then raise Exception.Create('Invalid CEF Library version');
-    CefInitialize(True, Cache, UserAgent, ProductVersion, Locale);
+
+    FillChar(settings, SizeOf(settings), 0);
+    settings.size := SizeOf(settings);
+    settings.multi_threaded_message_loop := True;
+    settings.cache_path := CefString(Cache);
+    settings.user_agent := cefstring(UserAgent);
+    settings.product_version := CefString(ProductVersion);
+    settings.locale := CefString(Locale);
+    if (ExtraPluginPaths <> nil) then
+    begin
+      settings.extra_plugin_paths := cef_string_list_alloc;
+      for i := 0 to ExtraPluginPaths.Count - 1 do
+        cef_string_list_append(settings.extra_plugin_paths, cefString(ExtraPluginPaths[i]));
+    end;
+    settings.log_file := CefString(LogFile);
+    settings.log_severity := LogSeverity;
+    cef_initialize(@settings, nil);
+    if settings.extra_plugin_paths <> nil then
+      cef_string_list_free(settings.extra_plugin_paths);
   end;
 end;
 
 function CefBrowserCreate(windowInfo: PCefWindowInfo; popup: Boolean;
   handler: PCefHandler; const url: ustring): Boolean;
 begin
-  CefLoadLib(CefCache, CefUserAgent, CefProductVersion, CefLocale);
+  CefLoadLib(CefCache, CefUserAgent, CefProductVersion, CefLocale, CefLogFile, CefLogSeverity);
 
   Result :=
     cef_browser_create(

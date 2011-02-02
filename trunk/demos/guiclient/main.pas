@@ -39,9 +39,9 @@ type
     procedure crmAfterCreated(Sender: TCustomChromium;
       const browser: ICefBrowser; out Result: TCefRetval);
     procedure crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
-      const frame: ICefFrame; out Result: TCefRetval);
+      const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer; out Result: TCefRetval);
     procedure crmLoadStart(Sender: TCustomChromium; const browser: ICefBrowser;
-      const frame: ICefFrame; out Result: TCefRetval);
+      const frame: ICefFrame; isMainContent: Boolean; out Result: TCefRetval);
     procedure crmTitleChange(Sender: TCustomChromium;
       const browser: ICefBrowser; const title: ustring; out Result: TCefRetval);
     procedure crmBeforeWindowClose(Sender: TCustomChromium;
@@ -142,7 +142,8 @@ begin
 end;
 
 procedure TForm4.crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
-  const frame: ICefFrame; out Result: TCefRetval);
+  const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer;
+  out Result: TCefRetval);
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
   begin
@@ -153,7 +154,7 @@ begin
 end;
 
 procedure TForm4.crmLoadStart(Sender: TCustomChromium;
-  const browser: ICefBrowser; const frame: ICefFrame; out Result: TCefRetval);
+  const browser: ICefBrowser; const frame: ICefFrame; isMainContent: Boolean; out Result: TCefRetval);
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
     FLoading := True;

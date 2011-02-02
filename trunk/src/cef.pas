@@ -17,8 +17,8 @@ type
   TOnBeforeBrowse = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const frame: ICefFrame;
     const request: ICefRequest; navType: TCefHandlerNavtype;
     isRedirect: boolean; out Result: TCefRetval) of object;
-  TOnLoadStart = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const frame: ICefFrame; out Result: TCefRetval) of object;
-  TOnLoadEnd = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const frame: ICefFrame; out Result: TCefRetval) of object;
+  TOnLoadStart = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const frame: ICefFrame; isMainContent: Boolean; out Result: TCefRetval) of object;
+  TOnLoadEnd = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer; out Result: TCefRetval) of object;
   TOnLoadError = procedure(Sender: TCustomChromium; const browser: ICefBrowser;
     const frame: ICefFrame; errorCode: TCefHandlerErrorcode;
     const failedUrl: ustring; var errorText: ustring; out Result: TCefRetval) of object;
@@ -47,6 +47,8 @@ type
   TOnBeforeWindowClose = procedure(Sender: TCustomChromium; const browser: ICefBrowser; out Result: TCefRetval) of object;
   TOnTakeFocus = procedure(Sender: TCustomChromium; const browser: ICefBrowser; reverse: Integer; out Result: TCefRetval) of object;
   TOnSetFocus = procedure(Sender: TCustomChromium; const browser: ICefBrowser; isWidget: Boolean; out Result: TCefRetval) of object;
+  TOnProtocolExecution = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const url: ustring; var AllowOsExecution: Boolean; out Result: TCefRetval) of object;
+  TOnStatus = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const value: ustring; StatusType: TCefHandlerStatusType; out Result: TCefRetval) of object;
   TOnKeyEvent = procedure(Sender: TCustomChromium; const browser: ICefBrowser; event: TCefHandlerKeyEventType;
     code, modifiers: Integer; isSystemKey: Boolean; out Result: TCefRetval) of object;
   TOnConsoleMessage = procedure(Sender: TCustomChromium; const browser: ICefBrowser; message, source: ustring;
@@ -70,7 +72,7 @@ type
     coPageCacheDisabled, coTabToLinksDisabled, coHyperlinkAuditingDisabled, coUserStyleSheetEnabled,
     coAuthorAndUserStylesDisabled, coLocalStorageDisabled, coDatabasesDisabled,
     coApplicationCacheDisabled, coWebglDisabled, coAcceleratedCompositingDisabled,
-    coAcceleratedLayersDisabled, coAccelerated2dCanvasDisabled);
+    coAcceleratedLayersDisabled, coAccelerated2dCanvasDisabled, coDeveloperToolsDisabled);
 
   TChromiumOptions = set of TChromiumOption;
 
@@ -130,7 +132,9 @@ type
     FOnJsPrompt: TOnJsPrompt;
     FOnBeforeWindowClose: TOnBeforeWindowClose;
     FOnTakeFocus: TOnTakeFocus;
+    FOnStatus: TOnStatus;
     FOnSetFocus: TOnSetFocus;
+    FOnProtocolExecution: TOnProtocolExecution;
     FOnKeyEvent: TOnKeyEvent;
     FOnConsoleMessage: TOnConsoleMessage;
     FOnPrintOptions: TOnPrintOptions;
@@ -157,8 +161,8 @@ type
     function doOnBeforeBrowse(const browser: ICefBrowser; const frame: ICefFrame;
       const request: ICefRequest; navType: TCefHandlerNavtype;
       isRedirect: boolean): TCefRetval; virtual;
-    function doOnLoadStart(const browser: ICefBrowser; const frame: ICefFrame): TCefRetval; virtual;
-    function doOnLoadEnd(const browser: ICefBrowser; const frame: ICefFrame): TCefRetval; virtual;
+    function doOnLoadStart(const browser: ICefBrowser; const frame: ICefFrame; isMainContent: Boolean): TCefRetval; virtual;
+    function doOnLoadEnd(const browser: ICefBrowser; const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer): TCefRetval; virtual;
     function doOnLoadError(const browser: ICefBrowser;
       const frame: ICefFrame; errorCode: TCefHandlerErrorcode;
       const failedUrl: ustring; var errorText: ustring): TCefRetval; virtual;
@@ -166,6 +170,8 @@ type
       const request: ICefRequest; var redirectUrl: ustring;
       var resourceStream: ICefStreamReader; var mimeType: ustring;
       loadFlags: Integer): TCefRetval; virtual;
+    function doOnProtocolExecution(const browser: ICefBrowser;
+      const url: ustring; var AllowOsExecution: Boolean): TCefRetval; virtual;
     function doOnBeforeMenu(const browser: ICefBrowser;
       const menuInfo: PCefHandlerMenuInfo): TCefRetval; virtual;
     function doOnGetMenuLabel(const browser: ICefBrowser;
@@ -203,6 +209,9 @@ type
       contentLength: int64; var handler: ICefDownloadHandler): TCefRetval; virtual;
     function doOnAuthenticationRequest(const browser: ICefBrowser; isProxy: Boolean;
       const host, realm, scheme: ustring; var username, password: ustring): TCefRetval; virtual;
+    function doOnStatus(const browser: ICefBrowser; const value: ustring;
+      StatusType: TCefHandlerStatusType): TCefRetval; virtual;
+
 
     property Browser: ICefBrowser read FBrowser;
     property BrowserHandle: HWND read FBrowserHandle;
@@ -235,6 +244,8 @@ type
     property OnDownloadResponse: TOnDownloadResponse read FOnDownloadResponse write FOnDownloadResponse;
     property OnConsoleMessage: TOnConsoleMessage read FOnConsoleMessage write FOnConsoleMessage;
     property OnAuthenticationRequest: TOnAuthenticationRequest read FOnAuthenticationRequest write FOnAuthenticationRequest;
+    property OnStatus: TOnStatus read FOnStatus write FOnStatus;
+    property OnProtocolExecution: TOnProtocolExecution read FOnProtocolExecution write FOnProtocolExecution;
 
     property Options: TChromiumOptions read FOptions write FOptions default [];
     property FontOptions: TChromiumFontOptions read FFontOptions;
@@ -284,6 +295,8 @@ type
     property OnDownloadResponse;
     property OnConsoleMessage;
     property OnAuthenticationRequest;
+    property OnStatus;
+    property OnProtocolExecution;
 
     property Options;
     property FontOptions;
@@ -370,6 +383,7 @@ begin
     settings.accelerated_compositing_disabled := coAcceleratedCompositingDisabled in FOptions;
     settings.accelerated_layers_disabled := coAcceleratedLayersDisabled in FOptions;
     settings.accelerated_2d_canvas_disabled := coAccelerated2dCanvasDisabled in FOptions;
+    settings.developer_tools_disabled := coDeveloperToolsDisabled in FOptions;
 
     handler := CefGetData(_handler);
     CefStringSet(@url, _url);
@@ -419,21 +433,25 @@ end;
 
 function cef_handler_handle_load_start(
     self: PCefHandler; abrowser: PCefBrowser;
-    frame: PCefFrame): TCefRetval; stdcall;
+    frame: PCefFrame; isMainContent: Integer): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnLoadStart(
       TCefBrowserRef.UnWrap(abrowser),
-      TCefFrameRef.UnWrap(frame));
+      TCefFrameRef.UnWrap(frame),
+      isMainContent <> 0);
 end;
 
 function cef_handler_handle_load_end(self: PCefHandler;
-    abrowser: PCefBrowser; frame: PCefFrame): TCefRetval; stdcall;
+    abrowser: PCefBrowser; frame: PCefFrame; isMainContent,
+    httpStatusCode: Integer): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnLoadEnd(
       TCefBrowserRef.UnWrap(abrowser),
-      TCefFrameRef.UnWrap(frame));
+      TCefFrameRef.UnWrap(frame),
+      isMainContent <> 0,
+      httpStatusCode);
 end;
 
 function cef_handler_handle_load_error(
@@ -491,6 +509,21 @@ begin
     if _mimeType <> '' then
       mimeType := CefStringAlloc(_mimeType);
   end;
+end;
+
+function cef_handler_handle_protocol_execution(self: PCefHandler; abrowser: PCefBrowser;
+  const url: TCefString; var allow_os_execution: Integer): TCefRetval; stdcall;
+var
+  allow: Boolean;
+begin
+  allow := allow_os_execution <> 0;
+  with TCustomChromium(CefGetObject(self)) do
+    Result := doOnProtocolExecution(
+      TCefBrowserRef.UnWrap(abrowser),
+      CefString(@url), allow);
+  if allow then
+    allow_os_execution := 1 else
+    allow_os_execution := 0;
 end;
 
 function cef_handler_handle_before_menu(
@@ -648,8 +681,15 @@ end;
 function cef_handler_console_message(self: PCefHandler; abrowser: PCefBrowser;
   const message, source: PCefString; line: Integer): TCefRetval; stdcall;
 begin
- with TCustomChromium(CefGetObject(self)) do
+  with TCustomChromium(CefGetObject(self)) do
     Result := doOnConsoleMessage(TCefBrowserRef.UnWrap(abrowser), CefString(message), CefString(source), line);
+end;
+
+function cef_handler_handle_status(self: PCefHandler; abrowser: PCefBrowser;
+  value: PCefString; type_: TCefHandlerStatusType): TCefRetval; stdcall;
+begin
+  with TCustomChromium(CefGetObject(self)) do
+    Result := doOnStatus(TCefBrowserRef.UnWrap(abrowser), CefString(value), type_);
 end;
 
 function cef_handler_handle_find_result(self: PCefHandler; abrowser: PCefBrowser;
@@ -720,6 +760,7 @@ begin
   FHandler.handle_load_end := @cef_handler_handle_load_end;
   FHandler.handle_load_error := @cef_handler_handle_load_error;
   FHandler.handle_before_resource_load := @cef_handler_handle_before_resource_load;
+  FHandler.handle_protocol_execution := @cef_handler_handle_protocol_execution;
   FHandler.handle_download_response := @cef_handler_handle_download_response;
   FHandler.handle_authentication_request := @cef_handle_authentication_request;
   FHandler.handle_before_menu := @cef_handler_handle_before_menu;
@@ -734,6 +775,7 @@ begin
   FHandler.handle_set_focus := @cef_handler_handle_set_focus;
   FHandler.handle_key_event := @cef_handler_handle_key_event;
   FHandler.handle_console_message := @cef_handler_console_message;
+  FHandler.handle_status := @cef_handler_handle_status;
   FHandler.handle_find_result := @cef_handler_handle_find_result;
 
   FOptions := [];
@@ -907,11 +949,11 @@ begin
 end;
 
 function TCustomChromium.doOnLoadEnd(const browser: ICefBrowser;
-  const frame: ICefFrame): TCefRetval;
+  const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer): TCefRetval;
 begin
   Result := RV_CONTINUE;
   if Assigned(FOnLoadEnd) then
-    FOnLoadEnd(Self, browser, frame, Result);
+    FOnLoadEnd(Self, browser, frame, isMainContent, httpStatusCode, Result);
 end;
 
 function TCustomChromium.doOnLoadError(const browser: ICefBrowser;
@@ -924,11 +966,11 @@ begin
 end;
 
 function TCustomChromium.doOnLoadStart(const browser: ICefBrowser;
-  const frame: ICefFrame): TCefRetval;
+  const frame: ICefFrame; isMainContent: Boolean): TCefRetval;
 begin
   Result := RV_CONTINUE;
   if Assigned(FOnLoadStart) then
-    FOnLoadStart(Self, browser, frame, Result);
+    FOnLoadStart(Self, browser, frame, isMainContent, Result);
 end;
 
 function TCustomChromium.doOnMenuAction(const browser: ICefBrowser;
@@ -959,12 +1001,28 @@ begin
     FOnPrintOptions(Self, browser, printOptions, Result);
 end;
 
+function TCustomChromium.doOnProtocolExecution(const browser: ICefBrowser;
+  const url: ustring; var AllowOsExecution: Boolean): TCefRetval;
+begin
+  Result := RV_CONTINUE;
+  if Assigned(FOnProtocolExecution) then
+    FOnProtocolExecution(Self, browser, url, AllowOsExecution, Result);
+end;
+
 function TCustomChromium.doOnSetFocus(const browser: ICefBrowser;
   isWidget: Boolean): TCefRetval;
 begin
   Result := RV_CONTINUE;
   if Assigned(FOnSetFocus) then
     FOnSetFocus(Self, browser, isWidget, Result);
+end;
+
+function TCustomChromium.doOnStatus(const browser: ICefBrowser;
+  const value: ustring; StatusType: TCefHandlerStatusType): TCefRetval;
+begin
+  Result := RV_CONTINUE;
+  if Assigned(FOnStatus) then
+    FOnStatus(Self, browser, value, StatusType, Result);
 end;
 
 function TCustomChromium.doOnTakeFocus(const browser: ICefBrowser;
