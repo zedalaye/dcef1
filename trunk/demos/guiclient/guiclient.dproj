@@ -50,9 +50,8 @@
 				<MainSource>MainSource</MainSource>
 			</DelphiCompile>
 			<DCCReference Include="main.pas">
-				<Form>Form4</Form>
+				<Form>MainForm</Form>
 			</DCCReference>
-			<DCCReference Include="cef.pas"/>
 			<DCCReference Include="..\filescheme\ceffilescheme.pas"/>
 			<BuildConfiguration Include="Base">
 				<Key>Base</Key>

@@ -1,21 +1,22 @@
-object Form4: TForm4
+object MainForm: TMainForm
   Left = 276
   Top = 194
   ActiveControl = edAddress
   Caption = 'Chromium Embedded'
-  ClientHeight = 453
-  ClientWidth = 768
+  ClientHeight = 445
+  ClientWidth = 784
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
   Font.Height = -11
   Font.Name = 'Tahoma'
   Font.Style = []
+  Menu = MainMenu
   OldCreateOrder = False
   OnCreate = FormCreate
   DesignSize = (
-    768
-    453)
+    784
+    445)
   PixelsPerInch = 96
   TextHeight = 13
   object SpeedButton1: TSpeedButton
@@ -50,7 +51,7 @@ object Form4: TForm4
   end
   object SpeedButton5: TSpeedButton
     Left = 745
-    Top = -1
+    Top = 0
     Width = 23
     Height = 22
     Action = actGoTo
@@ -58,18 +59,17 @@ object Form4: TForm4
   end
   object crm: TChromium
     Left = 0
-    Top = 24
-    Width = 768
-    Height = 410
+    Top = 27
+    Width = 784
+    Height = 399
     Align = alBottom
     Anchors = [akLeft, akTop, akRight, akBottom]
     DefaultUrl = 'http://www.google.com'
-    OnAfterCreated = crmAfterCreated
     OnAddressChange = crmAddressChange
     OnTitleChange = crmTitleChange
     OnLoadStart = crmLoadStart
     OnLoadEnd = crmLoadEnd
-    OnBeforeWindowClose = crmBeforeWindowClose
+    OnStatus = crmStatus
   end
   object edAddress: TEdit
     Left = 95
@@ -83,15 +83,15 @@ object Form4: TForm4
   end
   object StatusBar: TStatusBar
     Left = 0
-    Top = 434
-    Width = 768
+    Top = 426
+    Width = 784
     Height = 19
     Panels = <>
     SimplePanel = True
   end
   object ActionList: TActionList
     Left = 624
-    Top = 32
+    Top = 112
     object actPrev: TAction
       Caption = '<-'
       Enabled = False
@@ -117,6 +117,76 @@ object Form4: TForm4
     object actGoTo: TAction
       Caption = '>'
       OnExecute = actGoToExecute
+    end
+    object actGetSource: TAction
+      Caption = 'Get source'
+      OnExecute = actGetSourceExecute
+    end
+    object actGetText: TAction
+      Caption = 'Get text'
+      OnExecute = actGetTextExecute
+    end
+    object actShowDevTools: TAction
+      Caption = 'Show developper tools'
+      OnExecute = actShowDevToolsExecute
+    end
+    object actCloseDevTools: TAction
+      Caption = 'Close developper tools'
+      OnExecute = actCloseDevToolsExecute
+    end
+    object actZoomIn: TAction
+      Caption = 'Zoom in'
+      OnExecute = actZoomInExecute
+    end
+    object actZoomOut: TAction
+      Caption = 'Zoom out'
+      OnExecute = actZoomOutExecute
+    end
+    object actZoomReset: TAction
+      Caption = 'Zoom reset'
+      OnExecute = actZoomResetExecute
+    end
+    object actExecuteJS: TAction
+      Caption = 'Execute JavaScript'
+      OnExecute = actExecuteJSExecute
+    end
+  end
+  object MainMenu: TMainMenu
+    Left = 624
+    Top = 56
+    object File1: TMenuItem
+      Caption = '&File'
+      object Exit1: TMenuItem
+        Caption = 'Exit'
+        OnClick = Exit1Click
+      end
+    end
+    object est1: TMenuItem
+      Caption = '&Test'
+      object mGetsource: TMenuItem
+        Action = actGetSource
+      end
+      object mGetText: TMenuItem
+        Action = actGetText
+      end
+      object ExecuteJavaScript1: TMenuItem
+        Action = actExecuteJS
+      end
+      object Zoomin1: TMenuItem
+        Action = actZoomIn
+      end
+      object Zoomout1: TMenuItem
+        Action = actZoomOut
+      end
+      object Zoomreset1: TMenuItem
+        Action = actZoomReset
+      end
+      object Showdevtools1: TMenuItem
+        Action = actShowDevTools
+      end
+      object Closedeveloppertools1: TMenuItem
+        Action = actCloseDevTools
+      end
     end
   end
 end
