@@ -8,7 +8,7 @@ unit ceflib;
 
 interface
 uses
-  Classes, Windows;
+  Classes, Windows, SysUtils;
 
 type
 {$IFDEF UNICODE}
@@ -2299,18 +2299,15 @@ type
   end;
 
 {$IFDEF DELPHI12_UP}
-  TCefGenericTask<T> = class(TCefTaskOwn)
-  type
-    TCefTaskMethod = reference to procedure(const param: T);
+  TCefFastTask = class(TCefTaskOwn)
   private
-    FParam: T;
-    FMethod: TCefTaskMethod;
+    FMethod: TProc;
   protected
     procedure Execute(threadId: TCefThreadId); override;
   public
-    class procedure Post(threadId: TCefThreadId; const param: T; const method: TCefTaskMethod);
-    class procedure PostDelayed(threadId: TCefThreadId; Delay: Integer; const param: T; const method: TCefTaskMethod);
-    constructor Create(const param: T; const method: TCefTaskMethod); reintroduce;
+    class procedure Post(threadId: TCefThreadId; const method: TProc);
+    class procedure PostDelayed(threadId: TCefThreadId; Delay: Integer; const method: TProc);
+    constructor Create(const method: TProc); reintroduce;
   end;
 {$ENDIF}
 
@@ -2337,6 +2334,7 @@ function CefCurrentlyOn(ThreadId: TCefThreadId): Boolean;
 procedure CefPostTask(ThreadId: TCefThreadId; const task: ICefTask);
 procedure CefPostDelayedTask(ThreadId: TCefThreadId; const task: ICefTask; delayMs: Integer);
 function CefGetData(const i: ICefBase): Pointer;
+function CefParseUrl(const url: ustring; var parts: TCefUrlParts): Boolean;
 
 var
   CefCache: ustring = '';
@@ -2347,7 +2345,6 @@ var
   CefLogSeverity: TCefLogSeverity = LOGSEVERITY_DISABLE;
 
 implementation
-uses SysUtils;
 
 const
   LIBCEF = 'libcef.dll';
@@ -2589,7 +2586,7 @@ var
 
   // Parse the specified |url| into its component parts. Returns false (0) if the
   // URL is NULL or invalid.
-  cef_parse_url: function(const url: TCefString; parts: PCefUrlParts): Integer; cdecl;
+  cef_parse_url: function(const url: TCefString; var parts: TCefUrlParts): Integer; cdecl;
 
   // Creates a URL from the specified |parts|, which must contain a non-NULL spec
   // or a non-NULL host and path (at a minimum), but not both. Returns false (0)
@@ -2647,6 +2644,12 @@ function CefGetObject(ptr: Pointer): TObject;
 begin
   Dec(PByte(ptr), SizeOf(Pointer));
   Result := TObject(PPointer(ptr)^);
+end;
+
+function CefParseUrl(const url: ustring; var parts: TCefUrlParts): Boolean;
+begin
+  FillChar(parts, sizeof(parts), 0);
+  Result := cef_parse_url(CefString(url), parts) <> 0;
 end;
 
 { cef_base }
@@ -5101,31 +5104,28 @@ end;
 
 {$IFDEF DELPHI12_UP}
 
-{ TCefGenericTask<T> }
+{ TCefFastTask }
 
-constructor TCefGenericTask<T>.Create(const param: T;
-  const method: TCefTaskMethod);
+constructor TCefFastTask.Create(const method: TProc);
 begin
   inherited Create;
-  FParam := param;
   FMethod := method;
 end;
 
-procedure TCefGenericTask<T>.Execute(threadId: TCefThreadId);
+procedure TCefFastTask.Execute(threadId: TCefThreadId);
 begin
-  FMethod(FParam);
+  FMethod();
 end;
 
-class procedure TCefGenericTask<T>.Post(threadId: TCefThreadId; const param: T;
-  const method: TCefTaskMethod);
+class procedure TCefFastTask.Post(threadId: TCefThreadId; const method: TProc);
 begin
-  CefPostTask(threadId, Create(param, method));
+  CefPostTask(threadId, Create(method));
 end;
 
-class procedure TCefGenericTask<T>.PostDelayed(threadId: TCefThreadId;
-  Delay: Integer; const param: T; const method: TCefTaskMethod);
+class procedure TCefFastTask.PostDelayed(threadId: TCefThreadId;
+  Delay: Integer; const method: TProc);
 begin
-  CefPostDelayedTask(threadId, Create(param, method), Delay);
+  CefPostDelayedTask(threadId, Create(method), Delay);
 end;
 {$ENDIF}
 
