@@ -1,6 +1,7 @@
 object Form4: TForm4
   Left = 276
   Top = 194
+  ActiveControl = edAddress
   Caption = 'Chromium Embedded'
   ClientHeight = 453
   ClientWidth = 768
@@ -48,8 +49,8 @@ object Form4: TForm4
     Caption = 'R'
   end
   object SpeedButton5: TSpeedButton
-    Left = 728
-    Top = 0
+    Left = 745
+    Top = -1
     Width = 23
     Height = 22
     Action = actGoTo
@@ -71,9 +72,9 @@ object Form4: TForm4
     OnBeforeWindowClose = crmBeforeWindowClose
   end
   object edAddress: TEdit
-    Left = 96
-    Top = 1
-    Width = 630
+    Left = 95
+    Top = 0
+    Width = 650
     Height = 21
     Anchors = [akLeft, akTop, akRight]
     TabOrder = 1

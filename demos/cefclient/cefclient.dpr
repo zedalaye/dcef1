@@ -21,9 +21,9 @@ type
     function doOnAddressChange(const browser: ICefBrowser;
       const frame: ICefFrame; const url: ustring): TCefRetval; override;
     function doOnLoadStart(const browser: ICefBrowser;
-      const frame: ICefFrame): TCefRetval; override;
+      const frame: ICefFrame; isMainContent: Boolean): TCefRetval; override;
     function doOnLoadEnd(const browser: ICefBrowser;
-      const frame: ICefFrame): TCefRetval; override;
+      const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer): TCefRetval; override;
   end;
 
   TScheme = class(TCefSchemeHandlerOwn)
@@ -276,7 +276,7 @@ begin
 end;
 
 function THandler.doOnLoadEnd(const browser: ICefBrowser;
-  const frame: ICefFrame): TCefRetval;
+  const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer): TCefRetval;
 begin
   if browser.GetWindowHandle = browsrHwnd then
     isLoading := False;
@@ -284,7 +284,7 @@ begin
 end;
 
 function THandler.doOnLoadStart(const browser: ICefBrowser;
-  const frame: ICefFrame): TCefRetval;
+  const frame: ICefFrame; isMainContent: Boolean): TCefRetval;
 begin
   Lock;
   try
@@ -453,7 +453,7 @@ begin
   CefRegisterScheme('file', '', TFileScheme);
   CefRegisterExtension('v8/test', code, TExtension.Create as ICefV8Handler);
   //navigateto := 'client://test/';
-  navigateto := 'file://c:\';
+  //navigateto := 'file://c:\';
   try
     wndClass.style          := CS_HREDRAW or CS_VREDRAW;
     wndClass.lpfnWndProc    := @CefWndProc;
