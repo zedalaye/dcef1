@@ -96,7 +96,7 @@ uses ceffilescheme;
 
 {$R *.dfm}
 
-procedure unimplemented;
+procedure notimplemented;
 begin
   MessageDlg('you really should try a newest Delphi version', mtInformation, mbOKCancel, 0);
 end;
@@ -113,10 +113,12 @@ begin
 end;
 
 procedure TMainForm.actGetSourceExecute(Sender: TObject);
+var
+  frame: ICefFrame;
 begin
 {$IFDEF DELPHI12_UP}
-  TCefGenericTask<ICefFrame>.Post(TID_UI, crm.Browser.MainFrame,
-    procedure (const frame: ICefFrame)
+  frame := crm.Browser.MainFrame;
+  TCefFastTask.Post(TID_UI, procedure
     var
       source: ustring;
     begin
@@ -127,15 +129,17 @@ begin
       frame.LoadString(source, 'http://tests/gettext');
     end);
 {$ELSE}
-  unimplemented;
+  notimplemented;
 {$ENDIF}
 end;
 
 procedure TMainForm.actGetTextExecute(Sender: TObject);
+var
+  frame: ICefFrame;
 begin
 {$IFDEF DELPHI12_UP}
-  TCefGenericTask<ICefFrame>.Post(TID_UI, crm.Browser.MainFrame,
-    procedure (const frame: ICefFrame)
+  frame := crm.Browser.MainFrame;
+  TCefFastTask.Post(TID_UI, procedure
     var
       source: ustring;
     begin
@@ -146,7 +150,7 @@ begin
       frame.LoadString(source, 'http://tests/getsource');
     end);
 {$ELSE}
-    unimplemented;
+    notimplemented;
 {$ENDIF}
 end;
 
