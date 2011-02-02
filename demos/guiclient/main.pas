@@ -1,13 +1,14 @@
 unit main;
 
 interface
+{$I cef.inc}
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, StdCtrls, cef, ceflib, Buttons, ComCtrls, ActnList;
+  Dialogs, StdCtrls, cef, ceflib, Buttons, ComCtrls, ActnList, Menus;
 
 type
-  TForm4 = class(TForm)
+  TMainForm = class(TForm)
     crm: TChromium;
     edAddress: TEdit;
     SpeedButton1: TSpeedButton;
@@ -22,6 +23,26 @@ type
     actHome: TAction;
     actReload: TAction;
     actGoTo: TAction;
+    MainMenu: TMainMenu;
+    File1: TMenuItem;
+    est1: TMenuItem;
+    mGetsource: TMenuItem;
+    mGetText: TMenuItem;
+    actGetSource: TAction;
+    actGetText: TAction;
+    actShowDevTools: TAction;
+    Showdevtools1: TMenuItem;
+    actCloseDevTools: TAction;
+    Closedeveloppertools1: TMenuItem;
+    actZoomIn: TAction;
+    actZoomOut: TAction;
+    actZoomReset: TAction;
+    Zoomin1: TMenuItem;
+    Zoomout1: TMenuItem;
+    Zoomreset1: TMenuItem;
+    actExecuteJS: TAction;
+    ExecuteJavaScript1: TMenuItem;
+    Exit1: TMenuItem;
     procedure edAddressKeyPress(Sender: TObject; var Key: Char);
     procedure actPrevExecute(Sender: TObject);
     procedure actNextExecute(Sender: TObject);
@@ -36,112 +57,179 @@ type
     procedure crmAddressChange(Sender: TCustomChromium;
       const browser: ICefBrowser; const frame: ICefFrame; const url: ustring;
       out Result: TCefRetval);
-    procedure crmAfterCreated(Sender: TCustomChromium;
-      const browser: ICefBrowser; out Result: TCefRetval);
     procedure crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
       const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer; out Result: TCefRetval);
     procedure crmLoadStart(Sender: TCustomChromium; const browser: ICefBrowser;
       const frame: ICefFrame; isMainContent: Boolean; out Result: TCefRetval);
     procedure crmTitleChange(Sender: TCustomChromium;
       const browser: ICefBrowser; const title: ustring; out Result: TCefRetval);
-    procedure crmBeforeWindowClose(Sender: TCustomChromium;
-      const browser: ICefBrowser; out Result: TCefRetval);
+    procedure actGetSourceExecute(Sender: TObject);
+    procedure actGetTextExecute(Sender: TObject);
+    procedure actShowDevToolsExecute(Sender: TObject);
+    procedure actCloseDevToolsExecute(Sender: TObject);
+    procedure actZoomInExecute(Sender: TObject);
+    procedure actZoomOutExecute(Sender: TObject);
+    procedure actZoomResetExecute(Sender: TObject);
+    procedure actExecuteJSExecute(Sender: TObject);
+    procedure Exit1Click(Sender: TObject);
+    procedure crmStatus(Sender: TCustomChromium; const browser: ICefBrowser;
+      const value: ustring; StatusType: TCefHandlerStatusType;
+      out Result: TCefRetval);
   private
     { Déclarations privées }
     FCanGoBack: Boolean;
     FCanGoForward: Boolean;
     FLoading: Boolean;
-    FBrowser: ICefBrowser;
   public
     { Déclarations publiques }
     brws: TChromium;
   end;
 
 var
-  Form4: TForm4;
+  MainForm: TMainForm;
 
 implementation
 uses ceffilescheme;
 
 {$R *.dfm}
 
-procedure TForm4.actGoToExecute(Sender: TObject);
+procedure unimplemented;
 begin
-  FBrowser.MainFrame.LoadUrl(edAddress.Text);
+  MessageDlg('you really should try a newest Delphi version', mtInformation, mbOKCancel, 0);
 end;
 
-procedure TForm4.actHomeExecute(Sender: TObject);
+procedure TMainForm.actCloseDevToolsExecute(Sender: TObject);
 begin
-  FBrowser.MainFrame.LoadUrl(crm.DefaultUrl);
+   crm.Browser.CloseDevTools;
 end;
 
-procedure TForm4.actHomeUpdate(Sender: TObject);
+procedure TMainForm.actExecuteJSExecute(Sender: TObject);
 begin
-  TAction(Sender).Enabled := FBrowser <> nil;
+  crm.Browser.MainFrame.ExecuteJavaScript(
+    'alert(''JavaScript execute works!'');', 'about:blank', 0);
 end;
 
-procedure TForm4.actNextExecute(Sender: TObject);
+procedure TMainForm.actGetSourceExecute(Sender: TObject);
 begin
-  FBrowser.GoForward;
+{$IFDEF DELPHI12_UP}
+  TCefGenericTask<ICefFrame>.Post(TID_UI, crm.Browser.MainFrame,
+    procedure (const frame: ICefFrame)
+    var
+      source: ustring;
+    begin
+      source := frame.Source;
+      source := StringReplace(source, '<', '&lt;', [rfReplaceAll]);
+      source := StringReplace(source, '>', '&gt;', [rfReplaceAll]);
+      source := '<html><body>Source:<pre>' + source + '</pre></body></html>';
+      frame.LoadString(source, 'http://tests/gettext');
+    end);
+{$ELSE}
+  unimplemented;
+{$ENDIF}
 end;
 
-procedure TForm4.actNextUpdate(Sender: TObject);
+procedure TMainForm.actGetTextExecute(Sender: TObject);
+begin
+{$IFDEF DELPHI12_UP}
+  TCefGenericTask<ICefFrame>.Post(TID_UI, crm.Browser.MainFrame,
+    procedure (const frame: ICefFrame)
+    var
+      source: ustring;
+    begin
+      source := frame.Text;
+      source := StringReplace(source, '<', '&lt;', [rfReplaceAll]);
+      source := StringReplace(source, '>', '&gt;', [rfReplaceAll]);
+      source := '<html><body>Source:<pre>' + source + '</pre></body></html>';
+      frame.LoadString(source, 'http://tests/getsource');
+    end);
+{$ELSE}
+    unimplemented;
+{$ENDIF}
+end;
+
+procedure TMainForm.actGoToExecute(Sender: TObject);
+begin
+  crm.Browser.MainFrame.LoadUrl(edAddress.Text);
+end;
+
+procedure TMainForm.actHomeExecute(Sender: TObject);
+begin
+  crm.Browser.MainFrame.LoadUrl(crm.DefaultUrl);
+end;
+
+procedure TMainForm.actHomeUpdate(Sender: TObject);
+begin
+  TAction(Sender).Enabled := crm.Browser <> nil;
+end;
+
+procedure TMainForm.actNextExecute(Sender: TObject);
+begin
+  crm.Browser.GoForward;
+end;
+
+procedure TMainForm.actNextUpdate(Sender: TObject);
 begin
   TAction(Sender).Enabled := FCanGoForward;
 end;
 
-procedure TForm4.actPrevExecute(Sender: TObject);
+procedure TMainForm.actPrevExecute(Sender: TObject);
 begin
-  FBrowser.GoBack;
+  crm.Browser.GoBack;
 end;
 
-procedure TForm4.actPrevUpdate(Sender: TObject);
+procedure TMainForm.actPrevUpdate(Sender: TObject);
 begin
   TAction(Sender).Enabled := FCanGoBack;
 end;
 
-procedure TForm4.actReloadExecute(Sender: TObject);
+procedure TMainForm.actReloadExecute(Sender: TObject);
 begin
   if FLoading then
-    FBrowser.StopLoad else
-    FBrowser.Reload;
+    crm.Browser.StopLoad else
+    crm.Browser.Reload;
 end;
 
-procedure TForm4.actReloadUpdate(Sender: TObject);
+procedure TMainForm.actReloadUpdate(Sender: TObject);
 begin
   if FLoading then
     TAction(sender).Caption := 'X' else
     TAction(sender).Caption := 'R';
-  TAction(Sender).Enabled := FBrowser <> nil;
+  TAction(Sender).Enabled := crm.Browser <> nil;
 end;
 
-procedure TForm4.crmAddressChange(Sender: TCustomChromium;
+procedure TMainForm.actShowDevToolsExecute(Sender: TObject);
+begin
+  crm.Browser.ShowDevTools;
+end;
+
+procedure TMainForm.actZoomInExecute(Sender: TObject);
+begin
+  crm.Browser.ZoomLevel := crm.Browser.ZoomLevel + 0.5;
+end;
+
+procedure TMainForm.actZoomOutExecute(Sender: TObject);
+begin
+  crm.Browser.ZoomLevel := crm.Browser.ZoomLevel - 0.5;
+end;
+
+procedure TMainForm.actZoomResetExecute(Sender: TObject);
+begin
+  crm.Browser.ZoomLevel := 0;
+end;
+
+procedure TMainForm.crmAddressChange(Sender: TCustomChromium;
   const browser: ICefBrowser; const frame: ICefFrame; const url: ustring;
   out Result: TCefRetval);
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and frame.IsMain then
-{$IFDEF UNICODE}
+{$IFDEF DELPHI12_UP}
     TThread.Queue(nil, procedure begin edAddress.Text := url end);
 {$ELSE}
     SetWindowTextW(edAddress.Handle, PWideChar(url))
 {$ENDIF}
 end;
 
-procedure TForm4.crmAfterCreated(Sender: TCustomChromium;
-  const browser: ICefBrowser; out Result: TCefRetval);
-begin
-  if not browser.IsPopup then
-    FBrowser := browser;
-end;
-
-procedure TForm4.crmBeforeWindowClose(Sender: TCustomChromium;
-  const browser: ICefBrowser; out Result: TCefRetval);
-begin
-  if not browser.IsPopup then
-    FBrowser := nil;
-end;
-
-procedure TForm4.crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
+procedure TMainForm.crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
   const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer;
   out Result: TCefRetval);
 begin
@@ -153,34 +241,53 @@ begin
   end;
 end;
 
-procedure TForm4.crmLoadStart(Sender: TCustomChromium;
+procedure TMainForm.crmLoadStart(Sender: TCustomChromium;
   const browser: ICefBrowser; const frame: ICefFrame; isMainContent: Boolean; out Result: TCefRetval);
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
     FLoading := True;
 end;
 
-procedure TForm4.crmTitleChange(Sender: TCustomChromium;
-  const browser: ICefBrowser; const title: ustring; out Result: TCefRetval);
+procedure TMainForm.crmStatus(Sender: TCustomChromium;
+  const browser: ICefBrowser; const value: ustring;
+  StatusType: TCefHandlerStatusType; out Result: TCefRetval);
 begin
-  if browser.GetWindowHandle = crm.BrowserHandle then
-{$IFDEF UNICODE}
-    TThread.Queue(nil, procedure begin Caption := title end);
-{$ELSE}
-    SetWindowTextW(Form4.Handle, PWideChar(title))
+{$IFDEF DELPHI12_UP}
+  case StatusType of
+    STATUSTYPE_MOUSEOVER_URL, STATUSTYPE_KEYBOARD_FOCUS_URL:
+      TThread.Queue(nil, procedure begin
+        StatusBar.SimpleText := value
+      end);
+  end;
 {$ENDIF}
 end;
 
-procedure TForm4.edAddressKeyPress(Sender: TObject; var Key: Char);
+procedure TMainForm.crmTitleChange(Sender: TCustomChromium;
+  const browser: ICefBrowser; const title: ustring; out Result: TCefRetval);
+begin
+  if browser.GetWindowHandle = crm.BrowserHandle then
+{$IFDEF DELPHI12_UP}
+    TThread.Queue(nil, procedure begin Caption := title end);
+{$ELSE}
+    SetWindowTextW(MainForm.Handle, PWideChar(title))
+{$ENDIF}
+end;
+
+procedure TMainForm.edAddressKeyPress(Sender: TObject; var Key: Char);
 begin
   if Key = #13 then
   begin
-    FBrowser.MainFrame.LoadUrl(edAddress.Text);
+    crm.Browser.MainFrame.LoadUrl(edAddress.Text);
     Abort;
   end;
 end;
 
-procedure TForm4.FormCreate(Sender: TObject);
+procedure TMainForm.Exit1Click(Sender: TObject);
+begin
+  Close;
+end;
+
+procedure TMainForm.FormCreate(Sender: TObject);
 begin
   FCanGoBack := False;
   FCanGoForward := False;

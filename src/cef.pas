@@ -705,6 +705,36 @@ begin
         finalUpdate <> 0);
 end;
 
+function cef_handler_handle_print_options(self: PCefHandler; abrowser: PCefBrowser;
+        printOptions: PCefPrintOptions): TCefRetval; stdcall;
+begin
+  with TCustomChromium(CefGetObject(self)) do
+    Result := doOnPrintOptions(
+      TCefBrowserRef.UnWrap(abrowser), printOptions);
+end;
+
+function cef_handler_handle_jsbinding(self: PCefHandler; abrowser: PCefBrowser;
+      frame: PCefFrame; obj: PCefv8Value): TCefRetval; stdcall;
+begin
+  with TCustomChromium(CefGetObject(self)) do
+    Result := doOnJsBinding(
+      TCefBrowserRef.UnWrap(abrowser),
+      TCefFrameRef.UnWrap(frame),
+      TCefv8ValueRef.UnWrap(obj));
+end;
+
+function cef_handler_handle_tooltip(self: PCefHandler;
+        abrowser: PCefBrowser; var text: TCefString): TCefRetval; stdcall;
+var
+  t: ustring;
+begin
+  t := CefStringClearAndGet(text);
+  with TCustomChromium(CefGetObject(self)) do
+    Result := doOnTooltip(
+      TCefBrowserRef.UnWrap(abrowser), t);
+  text := CefStringAlloc(t);
+end;
+
 function cef_handler_handle_download_response(self: PCefHandler;
   abrowser: PCefBrowser; const mimeType, fileName: PCefString; contentLength: int64;
   var handler: PCefDownloadHandler): TCefRetval; stdcall;
@@ -777,6 +807,9 @@ begin
   FHandler.handle_console_message := @cef_handler_console_message;
   FHandler.handle_status := @cef_handler_handle_status;
   FHandler.handle_find_result := @cef_handler_handle_find_result;
+  FHandler.handle_print_options := @cef_handler_handle_print_options;
+  FHandler.handle_jsbinding := @cef_handler_handle_jsbinding;
+  FHandler.handle_tooltip := @cef_handler_handle_tooltip;
 
   FOptions := [];
   FFontOptions := TChromiumFontOptions.Create;

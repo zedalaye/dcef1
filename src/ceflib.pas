@@ -4,11 +4,7 @@
 unit ceflib;
 {$ALIGN ON}
 {$MINENUMSIZE 4}
-
-
-{.$define CEF_STRING_TYPE_UTF8}
-{$define CEF_STRING_TYPE_UTF16}
-{.$define CEF_STRING_TYPE_WIDE}
+{$I cef.inc}
 
 interface
 uses
@@ -2301,6 +2297,22 @@ type
   public
     constructor Create(const stream: ICefStreamReader); reintroduce; virtual;
   end;
+
+{$IFDEF DELPHI12_UP}
+  TCefGenericTask<T> = class(TCefTaskOwn)
+  type
+    TCefTaskMethod = reference to procedure(const param: T);
+  private
+    FParam: T;
+    FMethod: TCefTaskMethod;
+  protected
+    procedure Execute(threadId: TCefThreadId); override;
+  public
+    class procedure Post(threadId: TCefThreadId; const param: T; const method: TCefTaskMethod);
+    class procedure PostDelayed(threadId: TCefThreadId; Delay: Integer; const param: T; const method: TCefTaskMethod);
+    constructor Create(const param: T; const method: TCefTaskMethod); reintroduce;
+  end;
+{$ENDIF}
 
 procedure CefLoadLib(const Cache: ustring = ''; const UserAgent: ustring = '';
   const ProductVersion: ustring = ''; const Locale: ustring = '';
@@ -5086,6 +5098,36 @@ function TCefZipReaderRef.Tell: LongInt;
 begin
   Result := PCefZipReader(FData).tell(FData);
 end;
+
+{$IFDEF DELPHI12_UP}
+
+{ TCefGenericTask<T> }
+
+constructor TCefGenericTask<T>.Create(const param: T;
+  const method: TCefTaskMethod);
+begin
+  inherited Create;
+  FParam := param;
+  FMethod := method;
+end;
+
+procedure TCefGenericTask<T>.Execute(threadId: TCefThreadId);
+begin
+  FMethod(FParam);
+end;
+
+class procedure TCefGenericTask<T>.Post(threadId: TCefThreadId; const param: T;
+  const method: TCefTaskMethod);
+begin
+  CefPostTask(threadId, Create(param, method));
+end;
+
+class procedure TCefGenericTask<T>.PostDelayed(threadId: TCefThreadId;
+  Delay: Integer; const param: T; const method: TCefTaskMethod);
+begin
+  CefPostDelayedTask(threadId, Create(param, method), Delay);
+end;
+{$ENDIF}
 
 initialization
   IsMultiThread := True;
