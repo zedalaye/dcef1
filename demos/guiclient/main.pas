@@ -43,6 +43,8 @@ type
     actExecuteJS: TAction;
     ExecuteJavaScript1: TMenuItem;
     Exit1: TMenuItem;
+    actPrint: TAction;
+    Print1: TMenuItem;
     procedure edAddressKeyPress(Sender: TObject; var Key: Char);
     procedure actPrevExecute(Sender: TObject);
     procedure actNextExecute(Sender: TObject);
@@ -75,6 +77,7 @@ type
     procedure crmStatus(Sender: TCustomChromium; const browser: ICefBrowser;
       const value: ustring; StatusType: TCefHandlerStatusType;
       out Result: TCefRetval);
+    procedure actPrintExecute(Sender: TObject);
   private
     { Déclarations privées }
     FCanGoBack: Boolean;
@@ -180,6 +183,11 @@ end;
 procedure TMainForm.actPrevUpdate(Sender: TObject);
 begin
   TAction(Sender).Enabled := FCanGoBack;
+end;
+
+procedure TMainForm.actPrintExecute(Sender: TObject);
+begin
+  crm.Browser.MainFrame.Print;
 end;
 
 procedure TMainForm.actReloadExecute(Sender: TObject);

@@ -150,12 +150,19 @@ object MainForm: TMainForm
       Caption = 'Execute JavaScript'
       OnExecute = actExecuteJSExecute
     end
+    object actPrint: TAction
+      Caption = 'Print'
+      OnExecute = actPrintExecute
+    end
   end
   object MainMenu: TMainMenu
     Left = 624
     Top = 56
     object File1: TMenuItem
       Caption = '&File'
+      object Print1: TMenuItem
+        Action = actPrint
+      end
       object Exit1: TMenuItem
         Caption = 'Exit'
         OnClick = Exit1Click
