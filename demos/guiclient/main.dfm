@@ -62,7 +62,6 @@ object MainForm: TMainForm
     Top = 27
     Width = 784
     Height = 399
-    Align = alBottom
     Anchors = [akLeft, akTop, akRight, akBottom]
     DefaultUrl = 'http://www.google.com'
     OnAddressChange = crmAddressChange
@@ -154,6 +153,10 @@ object MainForm: TMainForm
       Caption = 'Print'
       OnExecute = actPrintExecute
     end
+    object actFileScheme: TAction
+      Caption = 'File scheme'
+      OnExecute = actFileSchemeExecute
+    end
   end
   object MainMenu: TMainMenu
     Left = 624
@@ -193,6 +196,9 @@ object MainForm: TMainForm
       end
       object Closedeveloppertools1: TMenuItem
         Action = actCloseDevTools
+      end
+      object actFileScheme1: TMenuItem
+        Action = actFileScheme
       end
     end
   end

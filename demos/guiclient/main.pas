@@ -45,6 +45,8 @@ type
     Exit1: TMenuItem;
     actPrint: TAction;
     Print1: TMenuItem;
+    actFileScheme: TAction;
+    actFileScheme1: TMenuItem;
     procedure edAddressKeyPress(Sender: TObject; var Key: Char);
     procedure actPrevExecute(Sender: TObject);
     procedure actNextExecute(Sender: TObject);
@@ -78,6 +80,7 @@ type
       const value: ustring; StatusType: TCefHandlerStatusType;
       out Result: TCefRetval);
     procedure actPrintExecute(Sender: TObject);
+    procedure actFileSchemeExecute(Sender: TObject);
   private
     { Déclarations privées }
     FCanGoBack: Boolean;
@@ -110,6 +113,11 @@ procedure TMainForm.actExecuteJSExecute(Sender: TObject);
 begin
   crm.Browser.MainFrame.ExecuteJavaScript(
     'alert(''JavaScript execute works!'');', 'about:blank', 0);
+end;
+
+procedure TMainForm.actFileSchemeExecute(Sender: TObject);
+begin
+  crm.Browser.MainFrame.LoadUrl('file://c:');
 end;
 
 procedure TMainForm.actGetSourceExecute(Sender: TObject);
@@ -146,7 +154,7 @@ begin
       source := frame.Text;
       source := StringReplace(source, '<', '&lt;', [rfReplaceAll]);
       source := StringReplace(source, '>', '&gt;', [rfReplaceAll]);
-      source := '<html><body>Source:<pre>' + source + '</pre></body></html>';
+      source := '<html><body>Text:<pre>' + source + '</pre></body></html>';
       frame.LoadString(source, 'http://tests/getsource');
     end);
 {$ELSE}
@@ -307,7 +315,6 @@ begin
 end;
 
 initialization
-  CefLoadLib;
-  CefRegisterScheme('file', '', TFileScheme)
+  CefRegisterScheme('file', '', TFileScheme);
 
 end.
