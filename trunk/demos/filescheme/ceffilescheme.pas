@@ -237,7 +237,21 @@ begin
 {$ENDIF}
 end;
 
+procedure OutputUTF8(const str: string);
+var
+  rb: rbstring;
 begin
+{$IFDEF UNICODE}
+  rb := utf8string(str);
+{$ELSE}
+  rb := UTF8Encode(str);
+{$ENDIF}
+  FDataStream.Write(rb[1], Length(rb))
+end;
+
+begin
+  Result := True;
+
   FPath := ParseFileUrl(Request.Url);
   if FindFirst(FPath, 0, rec) = 0 then
   begin
@@ -255,10 +269,7 @@ begin
     if MimeType = '' then
       MimeType := 'application/octet-stream';
     FDataStream := TFileStream.Create(FPath, fmOpenRead);
-    Result := True;
-    Exit;
-  end;
-
+  end else
   if DirectoryExists(FPath) then
   begin
     Items := TObjectList.Create(True);
@@ -293,11 +304,18 @@ begin
     finally
       Items.Free;
     end;
-    Result := True;
     Exit;
-  end;
+  end else
+  begin
+    // error
+    FDataStream := TMemoryStream.Create;
 
-  Result := False;
+    OutputUTF8('<html><head><meta http-equiv="content-type" content="text/html; '+
+      'charset=UTF-8"/></head><body><h1>'+ FPath+'</h1><h2>not found</h2></body></html>');
+    ResponseLength := FDataStream.Size;
+    MimeType := 'text/html';
+    FDataStream.Seek(0, soFromBeginning);
+  end;
 end;
 
 function TFileScheme.ReadResponse(DataOut: Pointer; BytesToRead: Integer;

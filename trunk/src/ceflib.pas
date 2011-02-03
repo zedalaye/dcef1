@@ -2311,10 +2311,10 @@ type
   end;
 {$ENDIF}
 
+procedure CefLoadLibDefault;
 procedure CefLoadLib(const Cache: ustring = ''; const UserAgent: ustring = '';
   const ProductVersion: ustring = ''; const Locale: ustring = '';
-  const LogFile: ustring = ''; LogSeverity: TCefLogSeverity = LOGSEVERITY_DISABLE;
-  ExtraPluginPaths: TStrings = nil);
+  const LogFile: ustring = ''; const ExtraPluginPaths: ustring = ''; LogSeverity: TCefLogSeverity = LOGSEVERITY_DISABLE);
 function CefGetObject(ptr: Pointer): TObject;
 function CefStringAlloc(const str: ustring): TCefString;
 
@@ -2343,6 +2343,7 @@ var
   CefLocale: ustring = '';
   CefLogFile: ustring = '';
   CefLogSeverity: TCefLogSeverity = LOGSEVERITY_DISABLE;
+  CefExtraPluginPaths: ustring = '';
 
 implementation
 
@@ -4153,11 +4154,19 @@ end;
 var
   LibHandle: THandle = 0;
 
-procedure CefLoadLib(const Cache, UserAgent, ProductVersion, Locale, LogFile: ustring;
-  LogSeverity: TCefLogSeverity; ExtraPluginPaths: TStrings);
+procedure CefLoadLibDefault;
+begin
+  if LibHandle = 0 then
+    CefLoadLib(CefCache, CefUserAgent, CefProductVersion, CefLocale, CefLogFile,
+      CefExtraPluginPaths, CefLogSeverity);
+end;
+
+procedure CefLoadLib(const Cache, UserAgent, ProductVersion, Locale, LogFile, ExtraPluginPaths: ustring;
+  LogSeverity: TCefLogSeverity);
 var
   settings: TCefSettings;
   i: Integer;
+  paths: TStringList;
 begin
   if LibHandle = 0 then
   begin
@@ -4358,11 +4367,18 @@ begin
     settings.user_agent := cefstring(UserAgent);
     settings.product_version := CefString(ProductVersion);
     settings.locale := CefString(Locale);
-    if (ExtraPluginPaths <> nil) then
+    if (ExtraPluginPaths <> '') then
     begin
       settings.extra_plugin_paths := cef_string_list_alloc;
-      for i := 0 to ExtraPluginPaths.Count - 1 do
-        cef_string_list_append(settings.extra_plugin_paths, cefString(ExtraPluginPaths[i]));
+      paths := TStringList.Create;
+      try
+        paths.Delimiter := ';';
+        paths.DelimitedText := ExtraPluginPaths;
+        for i := 0 to paths.Count - 1 do
+          cef_string_list_append(settings.extra_plugin_paths, cefString(paths[i]));
+      finally
+        paths.free;
+      end;
     end;
     settings.log_file := CefString(LogFile);
     settings.log_severity := LogSeverity;
@@ -4375,7 +4391,7 @@ end;
 function CefBrowserCreate(windowInfo: PCefWindowInfo; popup: Boolean;
   handler: PCefHandler; const url: ustring): Boolean;
 begin
-  CefLoadLib(CefCache, CefUserAgent, CefProductVersion, CefLocale, CefLogFile, CefLogSeverity);
+  CefLoadLibDefault;
 
   Result :=
     cef_browser_create(
@@ -4442,6 +4458,7 @@ end;
 function CefRegisterScheme(const SchemeName, HostName: ustring;
   const handler: TCefSchemeHandlerClass): Boolean;
 begin
+  CefLoadLibDefault;
   Result := cef_register_scheme(
     CefString(SchemeName),
     CefString(HostName),
@@ -4451,6 +4468,7 @@ end;
 function CefRegisterExtension(const name, code: ustring;
   const Handler: ICefv8Handler): Boolean;
 begin
+  CefLoadLibDefault;
   Result := cef_register_extension(CefString(name), CefString(code), handler.Wrap) <> 0;
 end;
 
