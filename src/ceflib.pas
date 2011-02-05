@@ -3508,7 +3508,7 @@ class function TCefBaseRef.UnWrap(data: Pointer): ICefBase;
 begin
   if data <> nil then
   begin
-    Result := Create(data);
+    Result := Create(data) as ICefBase;
     if Assigned(PCefBase(Data)^.release) then
       PCefBase(Data)^.release(PCefBase(Data));
   end else
@@ -3650,7 +3650,7 @@ class function TCefBrowserRef.UnWrap(data: Pointer): ICefBrowser;
 begin
   if data <> nil then
   begin
-    Result := Create(data);
+    Result := Create(data) as ICefBrowser;
     if Assigned(PCefBase(Data)^.release) then
       PCefBase(Data)^.release(PCefBase(Data));
   end else
@@ -3714,7 +3714,7 @@ procedure TCefFrameRef.LoadFile(const filename, url: ustring);
 var
   strm: ICefStreamReader;
 begin
-  strm := TCefStreamReaderRef.Create(cef_stream_reader_create_for_file(CefString(filename)));
+  strm := TCefStreamReaderRef.Create(cef_stream_reader_create_for_file(CefString(filename))) as ICefStreamReader;
   PCefFrame(FData)^.load_stream(PCefFrame(FData), strm.Wrap, CefString(url));
 end;
 
@@ -3727,7 +3727,7 @@ procedure TCefFrameRef.LoadStream(const stream: TStream; const url: ustring);
 var
   strm: ICefStreamReader;
 begin
-  strm := TCefStreamReaderOwn.Create(stream, False);
+  strm := TCefStreamReaderOwn.Create(stream, False) as ICefStreamReader;
   PCefFrame(FData)^.load_stream(PCefFrame(FData), strm.Wrap, CefString(url));
 end;
 
@@ -3775,7 +3775,7 @@ class function TCefFrameRef.UnWrap(data: Pointer): ICefFrame;
 begin
   if data <> nil then
   begin
-    Result := Create(data);
+    Result := Create(data) as ICefFrame;
     if Assigned(PCefBase(Data)^.release) then
       PCefBase(Data)^.release(PCefBase(Data));
   end else
@@ -3883,7 +3883,7 @@ class function TCefPostDataRef.UnWrap(data: Pointer): ICefPostData;
 begin
   if data <> nil then
   begin
-    Result := Create(data);
+    Result := Create(data) as ICefPostData;
     if Assigned(PCefBase(Data)^.release) then
       PCefBase(Data)^.release(PCefBase(Data));
   end else
@@ -3932,7 +3932,7 @@ class function TCefPostDataElementRef.UnWrap(data: Pointer): ICefPostDataElement
 begin
   if data <> nil then
   begin
-    Result := Create(data);
+    Result := Create(data) as ICefPostDataElement;
     if Assigned(PCefBase(Data)^.release) then
       PCefBase(Data)^.release(PCefBase(Data));
   end else
@@ -4109,7 +4109,7 @@ class function TCefRequestRef.UnWrap(data: Pointer): ICefRequest;
 begin
   if data <> nil then
   begin
-    Result := Create(data);
+    Result := Create(data) as ICefRequest;
     if Assigned(PCefBase(Data)^.release) then
       PCefBase(Data)^.release(PCefBase(Data));
   end else
@@ -4142,7 +4142,7 @@ class function TCefStreamReaderRef.UnWrap(data: Pointer): ICefStreamReader;
 begin
   if data <> nil then
   begin
-    Result := Create(data);
+    Result := Create(data) as ICefStreamReader;
     if Assigned(PCefBase(Data)^.release) then
       PCefBase(Data)^.release(PCefBase(Data));
   end else
@@ -4499,7 +4499,7 @@ end;
 
 function TCefSchemeHandlerFactoryOwn.New: ICefSchemeHandler;
 begin
-  Result := FClass.Create;
+  Result := FClass.Create as ICefSchemeHandler;
 end;
 
 { TCefSchemeHandlerOwn }
@@ -4753,7 +4753,7 @@ class function TCefv8ValueRef.UnWrap(data: Pointer): ICefv8Value;
 begin
   if data <> nil then
   begin
-    Result := Create(data);
+    Result := Create(data) as ICefv8Value;
     if Assigned(PCefBase(Data)^.release) then
       PCefBase(Data)^.release(PCefBase(Data));
   end else
@@ -4786,7 +4786,7 @@ class function TCefv8HandlerRef.UnWrap(data: Pointer): ICefv8Handler;
 begin
   if data <> nil then
   begin
-    Result := Create(data);
+    Result := Create(data) as ICefv8Handler;
     if Assigned(PCefBase(Data)^.release) then
       PCefBase(Data)^.release(PCefBase(Data));
   end else
