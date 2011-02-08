@@ -99,11 +99,6 @@ uses ceffilescheme;
 
 {$R *.dfm}
 
-procedure notimplemented;
-begin
-  MessageDlg('you really should try a newest Delphi version', mtInformation, mbOKCancel, 0);
-end;
-
 procedure TMainForm.actCloseDevToolsExecute(Sender: TObject);
 begin
    crm.Browser.CloseDevTools;
@@ -120,9 +115,26 @@ begin
   crm.Browser.MainFrame.LoadUrl('file://c:');
 end;
 
+{$IFNDEF DELPHI12_UP}
+procedure CallBackGetSource(const browser: ICefBrowser);
+var
+  source: ustring;
+  frame: ICefFrame;
+begin
+  frame := browser.MainFrame;
+  source := frame.Source;
+  source := StringReplace(source, '<', '&lt;', [rfReplaceAll]);
+  source := StringReplace(source, '>', '&gt;', [rfReplaceAll]);
+  source := '<html><body>Source:<pre>' + source + '</pre></body></html>';
+  frame.LoadString(source, 'http://tests/getsource');
+end;
+{$ENDIF}
+
 procedure TMainForm.actGetSourceExecute(Sender: TObject);
+{$IFDEF DELPHI12_UP}
 var
   frame: ICefFrame;
+{$ENDIF}
 begin
 {$IFDEF DELPHI12_UP}
   frame := crm.Browser.MainFrame;
@@ -134,16 +146,33 @@ begin
       source := StringReplace(source, '<', '&lt;', [rfReplaceAll]);
       source := StringReplace(source, '>', '&gt;', [rfReplaceAll]);
       source := '<html><body>Source:<pre>' + source + '</pre></body></html>';
-      frame.LoadString(source, 'http://tests/gettext');
+      frame.LoadString(source, 'http://tests/getsource');
     end);
 {$ELSE}
-  notimplemented;
+   TCefFastTask.Post(TID_UI, @CallBackGetSource, crm.Browser);
 {$ENDIF}
 end;
 
+{$IFNDEF DELPHI12_UP}
+procedure CallBackGetText(const browser: ICefBrowser);
+var
+  source: ustring;
+  frame: ICefFrame;
+begin
+  frame := browser.MainFrame;
+  source := frame.Text;
+  source := StringReplace(source, '<', '&lt;', [rfReplaceAll]);
+  source := StringReplace(source, '>', '&gt;', [rfReplaceAll]);
+  source := '<html><body>Text:<pre>' + source + '</pre></body></html>';
+  frame.LoadString(source, 'http://tests/gettext');
+end;
+{$ENDIF}
+
 procedure TMainForm.actGetTextExecute(Sender: TObject);
+{$IFDEF DELPHI12_UP}
 var
   frame: ICefFrame;
+{$ENDIF}
 begin
 {$IFDEF DELPHI12_UP}
   frame := crm.Browser.MainFrame;
@@ -155,10 +184,10 @@ begin
       source := StringReplace(source, '<', '&lt;', [rfReplaceAll]);
       source := StringReplace(source, '>', '&gt;', [rfReplaceAll]);
       source := '<html><body>Text:<pre>' + source + '</pre></body></html>';
-      frame.LoadString(source, 'http://tests/getsource');
+      frame.LoadString(source, 'http://tests/gettext');
     end);
 {$ELSE}
-    notimplemented;
+    TCefFastTask.Post(TID_UI, @CallBackGetText, crm.Browser);
 {$ENDIF}
 end;
 

@@ -2298,18 +2298,39 @@ type
     constructor Create(const stream: ICefStreamReader); reintroduce; virtual;
   end;
 
+
+
 {$IFDEF DELPHI12_UP}
+  TTaskMethod = TProc;
+{$ELSE}
+  TTaskMethod = procedure(const Browser: ICefBrowser);
+{$ENDIF}
+
   TCefFastTask = class(TCefTaskOwn)
   private
-    FMethod: TProc;
+    FMethod: TTaskMethod;
+{$IFNDEF DELPHI12_UP}
+    FBrowser: ICefBrowser;
+{$ENDIF}
   protected
     procedure Execute(threadId: TCefThreadId); override;
   public
-    class procedure Post(threadId: TCefThreadId; const method: TProc);
-    class procedure PostDelayed(threadId: TCefThreadId; Delay: Integer; const method: TProc);
-    constructor Create(const method: TProc); reintroduce;
-  end;
+    class procedure Post(threadId: TCefThreadId; const method: TTaskMethod
+{$IFNDEF DELPHI12_UP}
+    ; const Browser: ICefBrowser
 {$ENDIF}
+    );
+    class procedure PostDelayed(threadId: TCefThreadId; Delay: Integer; const method: TTaskMethod
+{$IFNDEF DELPHI12_UP}
+    ; const Browser: ICefBrowser
+{$ENDIF}
+    );
+    constructor Create(const method: TTaskMethod
+{$IFNDEF DELPHI12_UP}
+    ; const Browser: ICefBrowser
+{$ENDIF}
+    ); reintroduce;
+  end;
 
 procedure CefLoadLibDefault;
 procedure CefLoadLib(const Cache: ustring = ''; const UserAgent: ustring = '';
@@ -5120,32 +5141,56 @@ begin
   Result := PCefZipReader(FData).tell(FData);
 end;
 
-{$IFDEF DELPHI12_UP}
-
 { TCefFastTask }
 
-constructor TCefFastTask.Create(const method: TProc);
+constructor TCefFastTask.Create(const method: TTaskMethod
+{$IFNDEF DELPHI12_UP}
+    ; const Browser: ICefBrowser
+{$ENDIF}
+);
 begin
   inherited Create;
+{$IFNDEF DELPHI12_UP}
+  FBrowser := Browser;
+{$ENDIF}
   FMethod := method;
 end;
 
 procedure TCefFastTask.Execute(threadId: TCefThreadId);
 begin
+{$IFDEF DELPHI12_UP}
   FMethod();
+{$ELSE}
+  FMethod(FBrowser);
+{$ENDIF}
 end;
 
-class procedure TCefFastTask.Post(threadId: TCefThreadId; const method: TProc);
+class procedure TCefFastTask.Post(threadId: TCefThreadId; const method: TTaskMethod
+{$IFNDEF DELPHI12_UP}
+    ; const Browser: ICefBrowser
+{$ENDIF}
+);
 begin
-  CefPostTask(threadId, Create(method));
+  CefPostTask(threadId, Create(method
+{$IFNDEF DELPHI12_UP}
+    , Browser
+{$ENDIF}
+  ));
 end;
 
 class procedure TCefFastTask.PostDelayed(threadId: TCefThreadId;
-  Delay: Integer; const method: TProc);
-begin
-  CefPostDelayedTask(threadId, Create(method), Delay);
-end;
+  Delay: Integer; const method: TTaskMethod
+{$IFNDEF DELPHI12_UP}
+    ; const Browser: ICefBrowser
 {$ENDIF}
+  );
+begin
+  CefPostDelayedTask(threadId, Create(method
+{$IFNDEF DELPHI12_UP}
+    , Browser
+{$ENDIF}
+  ), Delay);
+end;
 
 initialization
   IsMultiThread := True;

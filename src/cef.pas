@@ -339,6 +339,7 @@ begin
       _url,
       popupFeatures);
 
+    Assert(settings.size = SizeOf(settings^));
     settings.standard_font_family := CefString(FFontOptions.FStandardFontFamily);
     settings.fixed_font_family := CefString(FFontOptions.FFixedFontFamily);
     settings.serif_font_family := CefString(FFontOptions.FSerifFontFamily);
