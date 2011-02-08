@@ -61,9 +61,9 @@ object MainForm: TMainForm
     Left = 0
     Top = 27
     Width = 784
-    Height = 399
+    Height = 380
     Anchors = [akLeft, akTop, akRight, akBottom]
-    DefaultUrl = 'http://www.google.com'
+    DefaultUrl = 'https://www.google.com'
     OnAddressChange = crmAddressChange
     OnTitleChange = crmTitleChange
     OnLoadStart = crmLoadStart
