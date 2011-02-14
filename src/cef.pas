@@ -317,8 +317,8 @@ end;
 function cef_handler_handle_before_created(
       self: PCefHandler; parentBrowser: PCefBrowser;
       var windowInfo: TCefWindowInfo; popup: Integer;
-      var popupFeatures: TCefPopupFeatures;
-      var handler: PCefHandler; var url: TCefString;
+      const popupFeatures: PCefPopupFeatures;
+      var handler: PCefHandler; url: PCefString;
       settings: PCefBrowserSettings): TCefRetval; stdcall;
 var
   _handler: ICefBase;
@@ -329,7 +329,7 @@ begin
     if handler <> nil then
       _handler := TCefBaseRef.UnWrap(handler) else
       _handler := nil;
-    _url := CefString(@url);
+    _url := CefString(url);
 
     Result := doOnBeforeCreated(
       TCefBrowserRef.UnWrap(parentBrowser),
@@ -337,7 +337,7 @@ begin
       popup <> 0,
       _handler,
       _url,
-      popupFeatures);
+      popupFeatures^);
 
     Assert(settings.size = SizeOf(settings^));
     settings.standard_font_family := CefString(FFontOptions.FStandardFontFamily);
@@ -387,7 +387,7 @@ begin
     settings.developer_tools_disabled := coDeveloperToolsDisabled in FOptions;
 
     handler := CefGetData(_handler);
-    CefStringSet(@url, _url);
+    CefStringSet(url, _url);
   end;
 
 end;
@@ -513,7 +513,7 @@ begin
 end;
 
 function cef_handler_handle_protocol_execution(self: PCefHandler; abrowser: PCefBrowser;
-  const url: TCefString; var allow_os_execution: Integer): TCefRetval; stdcall;
+  const url: PCefString; var allow_os_execution: Integer): TCefRetval; stdcall;
 var
   allow: Boolean;
 begin
@@ -521,7 +521,7 @@ begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnProtocolExecution(
       TCefBrowserRef.UnWrap(abrowser),
-      CefString(@url), allow);
+      CefString(url), allow);
   if allow then
     allow_os_execution := 1 else
     allow_os_execution := 0;
@@ -725,15 +725,15 @@ begin
 end;
 
 function cef_handler_handle_tooltip(self: PCefHandler;
-        abrowser: PCefBrowser; var text: TCefString): TCefRetval; stdcall;
+        abrowser: PCefBrowser; text: PCefString): TCefRetval; stdcall;
 var
   t: ustring;
 begin
-  t := CefStringClearAndGet(text);
+  t := CefStringClearAndGet(text^);
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnTooltip(
       TCefBrowserRef.UnWrap(abrowser), t);
-  text := CefStringAlloc(t);
+  text^ := CefStringAlloc(t);
 end;
 
 function cef_handler_handle_download_response(self: PCefHandler;
