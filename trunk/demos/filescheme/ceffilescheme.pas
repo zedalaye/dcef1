@@ -1,3 +1,7 @@
+{$IFDEF FPC}
+   {$MODE DELPHI}{$H+}
+{$ENDIF}
+
 unit ceffilescheme;
 {$R 'ceffilescheme.res'}
 {$WARN SYMBOL_PLATFORM OFF}
