@@ -1839,7 +1839,7 @@ type
     function SetValueByKey(const key: ustring; const value: ICefv8Value): Boolean;
     function SetValueByIndex(index: Integer; const value: ICefv8Value): Boolean;
     function GetKeys(const keys: TStrings): Integer;
-    function GetUserData: ICefBase;
+    function GetUserData: ICefv8Value;
     function GetArrayLength: Integer;
     function GetFunctionName: ustring;
     function GetFunctionHandler: ICefv8Handler;
@@ -2049,7 +2049,7 @@ type
     function SetValueByKey(const key: ustring; const value: ICefv8Value): Boolean;
     function SetValueByIndex(index: Integer; const value: ICefv8Value): Boolean;
     function GetKeys(const keys: TStrings): Integer;
-    function GetUserData: ICefBase;
+    function GetUserData: ICefv8Value;
     function GetArrayLength: Integer;
     function GetFunctionName: ustring;
     function GetFunctionHandler: ICefv8Handler;
@@ -2064,7 +2064,7 @@ type
     constructor CreateInt(value: Integer);
     constructor CreateDouble(value: Double);
     constructor CreateString(const str: ustring);
-    constructor CreateObject(const UserData: ICefBase);
+    constructor CreateObject(const UserData: ICefv8Value);
     constructor CreateArray;
     constructor CreateFunction(const name: ustring; const handler: ICefv8Handler);
   end;
@@ -4657,7 +4657,7 @@ begin
   Create(cef_v8value_create_null);
 end;
 
-constructor TCefv8ValueRef.CreateObject(const UserData: ICefBase);
+constructor TCefv8ValueRef.CreateObject(const UserData: ICefv8Value);
 begin
   Create(cef_v8value_create_object(CefGetData(UserData)));
 end;
@@ -4692,20 +4692,24 @@ function TCefv8ValueRef.ExecuteFunction(const obj: ICefv8Value;
   const arguments: TCefv8ValueArray; var retval: ICefv8Value;
   var exception: ustring): Boolean;
 var
-  args: array of PCefV8Value;
+  args: PPCefV8Value;
   i: Integer;
   ret: PCefV8Value;
   exc: TCefString;
 begin
-  SetLength(args, Length(arguments));
-  for i := 0 to Length(arguments) - 1 do
-    args[i] := CefGetData(arguments[i]);
-  ret := nil;
-  FillChar(exc, SizeOf(exc), 0);
-  Result := PCefV8Value(FData)^.execute_function(PCefV8Value(FData),
-    CefGetData(obj), Length(arguments), @args, ret, exc) <> 0;
-  retval := TCefv8ValueRef.UnWrap(ret);
-  exception := CefStringClearAndGet(exc);
+  GetMem(args, SizeOf(PCefV8Value) * Length(arguments));
+  try
+    for i := 0 to Length(arguments) - 1 do
+      args[i] := CefGetData(arguments[i]);
+    ret := nil;
+    FillChar(exc, SizeOf(exc), 0);
+    Result := PCefV8Value(FData)^.execute_function(PCefV8Value(FData),
+      CefGetData(obj), Length(arguments), args, ret, exc) <> 0;
+    retval := TCefv8ValueRef.UnWrap(ret);
+    exception := CefStringClearAndGet(exc);
+  finally
+    FreeMem(args);
+  end;
 end;
 
 function TCefv8ValueRef.GetArrayLength: Integer;
@@ -4763,9 +4767,9 @@ begin
   Result := CefStringFreeAndGet(PCefV8Value(FData)^.get_string_value(PCefV8Value(FData)));
 end;
 
-function TCefv8ValueRef.GetUserData: ICefBase;
+function TCefv8ValueRef.GetUserData: ICefv8Value;
 begin
-  Result := TCefBaseRef.UnWrap(PCefV8Value(FData)^.get_user_data(PCefV8Value(FData)));
+  Result := TCefv8ValueRef.UnWrap(PCefV8Value(FData)^.get_user_data(PCefV8Value(FData)));
 end;
 
 function TCefv8ValueRef.GetValueByIndex(index: Integer): ICefv8Value;
