@@ -5563,7 +5563,9 @@ function TCefRTTIExtension.GetValue(pi: PTypeInfo; const v: ICefv8Value; var ret
 
   function ProcessRecord: Boolean;
   begin
-    // todo
+   // TValue.Make(@sv, pi, ret);
+
+
     Result := False;
   end;
 
@@ -5768,23 +5770,25 @@ function TCefRTTIExtension.SetValue(const v: TValue; var ret: ICefv8Value): Bool
     _r, _g, _s, ud: ICefv8Value;
     _e: ustring;
     _a: TCefv8ValueArray;
+    proto: ICefv8Value;
   begin
     ud := TCefv8ValueRef.CreateArray;
     ud.SetValueByIndex(0, TCefv8ValueRef.CreateInt(Integer(v.TypeInfo)));
     ud.SetValueByIndex(1, TCefv8ValueRef.CreateInt(Integer(v.AsObject)));
     ret := TCefv8ValueRef.CreateObject(ud);
+    proto := ret.GetValueByKey('__proto__');
 
     for m in FCtx.GetType(v.TypeInfo).GetMethods do
       if m.Visibility > mvProtected then
       begin
         f := TCefv8ValueRef.CreateFunction(m.Name, Self);
-        ret.SetValueByKey(m.Name, f);
+        proto.SetValueByKey(m.Name, f);
       end;
     for p in FCtx.GetType(v.TypeInfo).GetProperties do
       if (p.Visibility > mvProtected) then
       begin
-        if _g = nil then _g := ret.GetValueByKey('__defineGetter__');
-        if _s = nil then _s := ret.GetValueByKey('__defineSetter__');
+        if _g = nil then _g := proto.GetValueByKey('__defineGetter__');
+        if _s = nil then _s := proto.GetValueByKey('__defineSetter__');
         SetLength(_a, 2);
         _a[0] := TCefv8ValueRef.CreateString(p.Name);
         if p.IsReadable then
@@ -5798,6 +5802,10 @@ function TCefRTTIExtension.SetValue(const v: TValue; var ret: ICefv8Value): Bool
           _s.ExecuteFunction(ret, _a, _r, _e);
         end;
       end;
+
+    proto.SetValueByKey('constructor', TCefv8ValueRef.CreateFunction(GetTypeData(v.TypeInfo).ClassType.ClassName, nil));
+
+
     Result := True;
   end;
 
@@ -5806,6 +5814,7 @@ function TCefRTTIExtension.SetValue(const v: TValue; var ret: ICefv8Value): Bool
     m: TRttiMethod;
     f, ud: ICefv8Value;
     c: TClass;
+    proto: ICefv8Value;
   begin
     ud := TCefv8ValueRef.CreateArray;
     c := v.AsClass;
@@ -5814,12 +5823,14 @@ function TCefRTTIExtension.SetValue(const v: TValue; var ret: ICefv8Value): Bool
     ret := TCefv8ValueRef.CreateObject(ud);
     if c <> nil then
     begin
+      proto := ret.GetValueByKey('__proto__');
       for m in FCtx.GetType(c).GetMethods do
         if (m.Visibility > mvProtected) and (m.MethodKind in [mkClassProcedure, mkClassFunction]) then
         begin
           f := TCefv8ValueRef.CreateFunction(m.Name, Self);
-          ret.SetValueByKey(m.Name, f);
+          proto.SetValueByKey(m.Name, f);
         end;
+
     end;
     Result := True;
   end;
