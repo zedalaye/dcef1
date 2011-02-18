@@ -5562,11 +5562,28 @@ function TCefRTTIExtension.GetValue(pi: PTypeInfo; const v: ICefv8Value; var ret
   end;
 
   function ProcessRecord: Boolean;
+  var
+    r: TRttiField;
+    f: TValue;
+    rec: Pointer;
   begin
-   // TValue.Make(@sv, pi, ret);
-
-
-    Result := False;
+    if v.IsObject then
+    begin
+      TValue.Make(nil, pi, ret);
+{$IFDEF DELPHI15_UP}
+      rec := TValueData(ret).FValueData.GetReferenceToRawData;
+{$ELSE}
+      rec := IValueData(TValueData(ret).FHeapData).GetReferenceToRawData;
+{$ENDIF}
+      for r in FCtx.GetType(pi).GetFields do
+      begin
+        if not GetValue(r.FieldType.Handle, v.GetValueByKey(r.Name), f) then
+          Exit(False);
+        r.SetValue(rec, f);
+      end;
+      Result := True;
+    end else
+      Result := False;
   end;
 
 begin
@@ -5729,11 +5746,10 @@ function TCefRTTIExtension.SetValue(const v: TValue; var ret: ICefv8Value): Bool
     ud.SetValueByIndex(0, TCefv8ValueRef.CreateInt(Integer(v.TypeInfo)));
     Ret := TCefv8ValueRef.CreateObject(ud);
 
-
-{$IFDEF VER210}
-    rec := IValueData(TValueData(v).FHeapData).GetReferenceToRawData;
-{$ELSE}
+{$IFDEF DELPHI15_UP}
     rec := TValueData(v).FValueData.GetReferenceToRawData;
+{$ELSE}
+    rec := IValueData(TValueData(v).FHeapData).GetReferenceToRawData;
 {$ENDIF}
     if FSyncMainThread then
     begin
@@ -5784,6 +5800,7 @@ function TCefRTTIExtension.SetValue(const v: TValue; var ret: ICefv8Value): Bool
         f := TCefv8ValueRef.CreateFunction(m.Name, Self);
         proto.SetValueByKey(m.Name, f);
       end;
+
     for p in FCtx.GetType(v.TypeInfo).GetProperties do
       if (p.Visibility > mvProtected) then
       begin

@@ -1,5 +1,5 @@
 (*
- *                         Super Object Toolkit
+ *                       Delphi Chromium Embedded
  *
  * Usage allowed under the restrictions of the Lesser GNU General Public License
  * or alternatively the restrictions of the Mozilla Public License 1.1
