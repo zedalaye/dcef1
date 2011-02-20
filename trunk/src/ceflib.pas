@@ -5390,7 +5390,7 @@ function TCefRTTIExtension.GetValue(pi: PTypeInfo; const v: ICefv8Value; var ret
   var
     i: Int64;
   begin
-    i := v.GetIntValue;
+    i := StrToInt64(v.GetStringValue); // hack
     TValue.Make(@i, pi, ret);
     Result := True;
   end;
