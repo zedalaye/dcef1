@@ -25,7 +25,7 @@ unit ceflib;
 interface
 uses
 {$IFDEF DELPHI14_UP}
-  Rtti, TypInfo, Variants,
+  Rtti, TypInfo, Variants, Generics.Collections,
 {$ENDIF}
   Classes, Windows, SysUtils;
 
@@ -3251,7 +3251,7 @@ begin
   for i := 0 to argumentCount - 1 do
     args[i] := TCefv8ValueRef.UnWrap(arguments[i]);
 
-  Result := Ord(TCefv8HandlerOwn(CefGetObject(self)).Execute(
+  Result := -Ord(TCefv8HandlerOwn(CefGetObject(self)).Execute(
     CefString(name), TCefv8ValueRef.UnWrap(obj), args, ret, exc));
   retval := CefGetData(ret);
   ret := nil;
@@ -5520,15 +5520,16 @@ function TCefRTTIExtension.GetValue(pi: PTypeInfo; const v: ICefv8Value; var ret
     ud: ICefv8Value;
     i: Integer;// Pointer
     td: PTypeData;
-    ti: PTypeInfo;
+    rt: TRttiType;
   begin
     if v.IsObject then
     begin
       ud := v.GetUserData;
       if (ud = nil) then Exit(False);
-      ti := PTypeInfo(ud.GetValueByIndex(0).GetIntValue);
-      td := GetTypeData(ti);
-      if (ti.Kind = tkClass) and td.ClassType.InheritsFrom(GetTypeData(pi).ClassType) then
+      rt := TRttiType(ud.GetValueByIndex(0).GetIntValue);
+      td := GetTypeData(rt.Handle);
+
+      if (rt.TypeKind = tkClass) and td.ClassType.InheritsFrom(GetTypeData(pi).ClassType) then
       begin
         i := ud.GetValueByIndex(1).GetIntValue;
         TValue.Make(@i, pi, ret);
@@ -5543,14 +5544,14 @@ function TCefRTTIExtension.GetValue(pi: PTypeInfo; const v: ICefv8Value; var ret
   var
     ud: ICefv8Value;
     i: Integer;// Pointer
-    ti: PTypeInfo;
+    rt: TRttiType;
   begin
     if v.IsObject then
     begin
       ud := v.GetUserData;
       if (ud = nil) then Exit(False);
-      ti := PTypeInfo(ud.GetValueByIndex(0).GetIntValue);
-      if (ti.Kind = tkClassRef) then
+      rt := TRttiType(ud.GetValueByIndex(0).GetIntValue);
+      if (rt.TypeKind = tkClassRef) then
       begin
         i := ud.GetValueByIndex(1).GetIntValue;
         TValue.Make(@i, pi, ret);
@@ -5586,6 +5587,16 @@ function TCefRTTIExtension.GetValue(pi: PTypeInfo; const v: ICefv8Value; var ret
       Result := False;
   end;
 
+  function ProcessInterface: Boolean;
+  begin
+    if pi = TypeInfo(ICefV8Value) then
+    begin
+      TValue.Make(@v, pi, ret);
+      Result := True;
+    end else
+      Result := False; // todo
+  end;
+
 begin
   case pi.Kind of
     tkInteger, tkEnumeration: Result := ProcessInt;
@@ -5599,9 +5610,231 @@ begin
     tkClass: Result := ProcessObject;
     tkClassRef: Result := ProcessClass;
     tkRecord: Result := ProcessRecord;
+    tkInterface: Result := ProcessInterface;
   else
     Result := False;
   end;
+end;
+
+function TCefRTTIExtension.SetValue(const v: TValue; var ret: ICefv8Value): Boolean;
+
+  function ProcessRecord: Boolean;
+  var
+    rf: TRttiField;
+    vl: TValue;
+    ud, v8: ICefv8Value;
+    rec: Pointer;
+    rt: TRttiType;
+  begin
+    ud := TCefv8ValueRef.CreateArray;
+    rt := FCtx.GetType(v.TypeInfo);
+    ud.SetValueByIndex(0, TCefv8ValueRef.CreateInt(Integer(rt)));
+    ret := TCefv8ValueRef.CreateObject(ud);
+
+{$IFDEF DELPHI15_UP}
+    rec := TValueData(v).FValueData.GetReferenceToRawData;
+{$ELSE}
+    rec := IValueData(TValueData(v).FHeapData).GetReferenceToRawData;
+{$ENDIF}
+    if FSyncMainThread then
+    begin
+      v8 := ret;
+      TThread.Synchronize(nil, procedure
+      var
+        rf: TRttiField;
+        o: ICefv8Value;
+      begin
+        for rf in rt.GetFields do
+        begin
+          vl := rf.GetValue(rec);
+          SetValue(vl, o);
+          v8.SetValueByKey(rf.Name, o);
+        end;
+      end)
+    end else
+      for rf in FCtx.GetType(v.TypeInfo).GetFields do
+      begin
+        vl := rf.GetValue(rec);
+        if not SetValue(vl, v8) then
+          Exit(False);
+        ret.SetValueByKey(rf.Name, v8);
+      end;
+    Result := True;
+  end;
+
+  function ProcessObject: Boolean;
+  var
+    m: TRttiMethod;
+    p: TRttiProperty;
+    fl: TRttiField;
+    f: ICefv8Value;
+    _r, _g, _s, ud: ICefv8Value;
+    _e: ustring;
+    _a: TCefv8ValueArray;
+    proto: ICefv8Value;
+    rt: TRttiType;
+  begin
+    rt := FCtx.GetType(v.TypeInfo);
+
+    ud := TCefv8ValueRef.CreateArray;
+    ud.SetValueByIndex(0, TCefv8ValueRef.CreateInt(Integer(rt)));
+    ud.SetValueByIndex(1, TCefv8ValueRef.CreateInt(Integer(v.AsObject)));
+    ret := TCefv8ValueRef.CreateObject(ud);
+    proto := ret.GetValueByKey('__proto__');
+
+    for m in rt.GetMethods do
+      if m.Visibility > mvProtected then
+      begin
+        f := TCefv8ValueRef.CreateFunction(m.Name, Self);
+        proto.SetValueByKey(m.Name, f);
+      end;
+
+    for p in rt.GetProperties do
+      if (p.Visibility > mvProtected) then
+      begin
+        if _g = nil then _g := proto.GetValueByKey('__defineGetter__');
+        if _s = nil then _s := proto.GetValueByKey('__defineSetter__');
+        SetLength(_a, 2);
+        _a[0] := TCefv8ValueRef.CreateString(p.Name);
+        if p.IsReadable then
+        begin
+          _a[1] := TCefv8ValueRef.CreateFunction('$pg' + p.Name, Self);
+          _g.ExecuteFunction(ret, _a, _r, _e);
+        end;
+        if p.IsWritable then
+        begin
+          _a[1] := TCefv8ValueRef.CreateFunction('$ps' + p.Name, Self);
+          _s.ExecuteFunction(ret, _a, _r, _e);
+        end;
+      end;
+
+    for fl in rt.GetFields do
+      if (fl.Visibility > mvProtected) then
+      begin
+        if _g = nil then _g := proto.GetValueByKey('__defineGetter__');
+        if _s = nil then _s := proto.GetValueByKey('__defineSetter__');
+
+        SetLength(_a, 2);
+        _a[0] := TCefv8ValueRef.CreateString(fl.Name);
+        _a[1] := TCefv8ValueRef.CreateFunction('$vg' + fl.Name, Self);
+        _g.ExecuteFunction(ret, _a, _r, _e);
+        _a[1] := TCefv8ValueRef.CreateFunction('$vs' + fl.Name, Self);
+        _s.ExecuteFunction(ret, _a, _r, _e);
+      end;
+
+    Result := True;
+  end;
+
+  function ProcessClass: Boolean;
+  var
+    m: TRttiMethod;
+    f, ud: ICefv8Value;
+    c: TClass;
+    proto: ICefv8Value;
+    rt: TRttiType;
+  begin
+    c := v.AsClass;
+    rt := FCtx.GetType(c);
+
+    ud := TCefv8ValueRef.CreateArray;
+    ud.SetValueByIndex(0, TCefv8ValueRef.CreateInt(Integer(rt)));
+    ud.SetValueByIndex(1, TCefv8ValueRef.CreateInt(Integer(c)));
+    ret := TCefv8ValueRef.CreateObject(ud);
+    if c <> nil then
+    begin
+      proto := ret.GetValueByKey('__proto__');
+      for m in rt.GetMethods do
+        if (m.Visibility > mvProtected) and (m.MethodKind in [mkClassProcedure, mkClassFunction]) then
+        begin
+          f := TCefv8ValueRef.CreateFunction(m.Name, Self);
+          proto.SetValueByKey(m.Name, f);
+        end;
+    end;
+
+    Result := True;
+  end;
+
+  function ProcessVariant: Boolean;
+  var
+    vr: Variant;
+  begin
+    vr := v.AsVariant;
+    case TVarData(vr).VType of
+      varSmallint, varInteger, varShortInt, varByte, varWord, varLongWord, varInt64, varUInt64:
+        ret := TCefv8ValueRef.CreateInt(vr);
+      varUString, varOleStr, varString:
+        ret := TCefv8ValueRef.CreateString(vr);
+      varSingle, varDouble, varCurrency:
+        ret := TCefv8ValueRef.CreateDouble(vr);
+      varBoolean:
+        ret := TCefv8ValueRef.CreateBool(vr);
+      varNull:
+        ret := TCefv8ValueRef.CreateNull;
+      varEmpty:
+        ret := TCefv8ValueRef.CreateUndefined;
+    else
+      ret := nil;
+      Exit(False)
+    end;
+    Result := True;
+  end;
+
+  function ProcessInterface: Boolean;
+  var
+    m: TRttiMethod;
+    f: ICefv8Value;
+    ud: ICefv8Value;
+    proto: ICefv8Value;
+    rt: TRttiType;
+  begin
+    rt := FCtx.GetType(v.TypeInfo);
+
+    ud := TCefv8ValueRef.CreateArray;
+    ud.SetValueByIndex(0, TCefv8ValueRef.CreateInt(Integer(rt)));
+    ud.SetValueByIndex(1, TCefv8ValueRef.CreateInt(Integer(v.AsInterface)));
+    ret := TCefv8ValueRef.CreateObject(ud);
+    proto := ret.GetValueByKey('__proto__');
+
+
+    for m in rt.GetMethods do
+      if m.Visibility > mvProtected then
+      begin
+        f := TCefv8ValueRef.CreateFunction(m.Name, Self);
+        proto.SetValueByKey(m.Name, f);
+      end;
+
+    Result := True;
+  end;
+
+begin
+  case v.TypeInfo.Kind of
+    tkUString, tkLString, tkWString, tkChar, tkWChar:
+      ret := TCefv8ValueRef.CreateString(v.AsString);
+    tkInteger: ret := TCefv8ValueRef.CreateInt(v.AsInteger);
+    tkEnumeration:
+      if v.TypeInfo = TypeInfo(Boolean) then
+        ret := TCefv8ValueRef.CreateBool(v.AsBoolean) else
+        ret := TCefv8ValueRef.CreateInt(TValueData(v).FAsSLong);
+    tkFloat: ret := TCefv8ValueRef.CreateDouble(v.AsExtended);
+    tkInt64: ret := TCefv8ValueRef.CreateInt(v.AsInt64);
+    tkClass: if not ProcessObject then Exit(False);
+    tkClassRef: if not ProcessClass then Exit(False);
+    tkRecord: if not ProcessRecord then Exit(False);
+    tkVariant: if not ProcessVariant then Exit(False);
+    tkInterface: if not ProcessInterface then Exit(False);
+
+  else
+    Exit(False)
+  end;
+  Result := True;
+end;
+
+class procedure TCefRTTIExtension.Register(const name: string;
+  const value: TValue; SyncMainThread: Boolean);
+begin
+  CefRegisterExtension(name,
+    format('__defineSetter__(''%s'', function(v){native function $s();$s(v)});__defineGetter__(''%0:s'', function(){native function $g();return $g()});', [name]),
+    TCefRTTIExtension.Create(value, SyncMainThread) as ICefv8Handler);
 end;
 
 function TCefRTTIExtension.Execute(const name: ustring; const obj: ICefv8Value;
@@ -5610,11 +5843,12 @@ function TCefRTTIExtension.Execute(const name: ustring; const obj: ICefv8Value;
 var
   p: PChar;
   ud: ICefv8Value;
-  ti: PTypeInfo;
+  rt: TRttiType;
   val: TObject;
   cls: TClass;
   m: TRttiMethod;
   pr: TRttiProperty;
+  vl: TRttiField;
   args: array of TValue;
   prm: TArray<TRttiParameter>;
   i: Integer;
@@ -5627,47 +5861,86 @@ begin
     ud := obj.GetUserData;
     if ud <> nil then
     begin
-      ti := PTypeInfo(ud.GetValueByIndex(0).GetIntValue);
-      case ti.Kind of
+      rt := TRttiType(ud.GetValueByIndex(0).GetIntValue);
+      case rt.TypeKind of
         tkClass:
           begin
             val := TObject(ud.GetValueByIndex(1).GetIntValue);
-            cls := GetTypeData(ti).ClassType;
+            cls := GetTypeData(rt.Handle).ClassType;
 
             if p^ = '$' then
             begin
               inc(p);
               case p^ of
-                'g':
+                'p':
                   begin
                     inc(p);
-                    pr := FCtx.GetType(ti).GetProperty(p);
-                    if FSyncMainThread then
-                    begin
-                      TThread.Synchronize(nil, procedure begin
-                        ret := pr.GetValue(val);
-                      end);
-                      Exit(SetValue(ret, retval));
-                    end else
-                      Exit(SetValue(pr.GetValue(val), retval));
+                    case p^ of
+                    'g':
+                      begin
+                        inc(p);
+                        pr := rt.GetProperty(p);
+                        if FSyncMainThread then
+                        begin
+                          TThread.Synchronize(nil, procedure begin
+                            ret := pr.GetValue(val);
+                          end);
+                          Exit(SetValue(ret, retval));
+                        end else
+                          Exit(SetValue(pr.GetValue(val), retval));
+                      end;
+                    's':
+                      begin
+                        inc(p);
+                        pr := rt.GetProperty(p);
+                        if GetValue(pr.PropertyType.Handle, arguments[0], ret) then
+                        begin
+                          if FSyncMainThread then
+                            TThread.Synchronize(nil, procedure begin
+                              pr.SetValue(val, ret) end) else
+                            pr.SetValue(val, ret);
+                          Exit(True);
+                        end else
+                          Exit(False);
+                      end;
+                    end;
                   end;
-                's':
+                'v':
                   begin
                     inc(p);
-                    pr := FCtx.GetType(ti).GetProperty(p);
-                    if GetValue(pr.PropertyType.Handle, arguments[0], ret) then
-                    begin
-                      if FSyncMainThread then
-                        TThread.Synchronize(nil, procedure begin
-                          pr.SetValue(val, ret) end) else
-                        pr.SetValue(val, ret);
-                      Exit(True);
-                    end else
-                      Exit(False);
+                    case p^ of
+                    'g':
+                      begin
+                        inc(p);
+                        vl := rt.GetField(p);
+                        if FSyncMainThread then
+                        begin
+                          TThread.Synchronize(nil, procedure begin
+                            ret := vl.GetValue(val);
+                          end);
+                          Exit(SetValue(ret, retval));
+                        end else
+                          Exit(SetValue(vl.GetValue(val), retval));
+                      end;
+                    's':
+                      begin
+                        inc(p);
+                        vl := rt.GetField(p);
+                        if GetValue(vl.FieldType.Handle, arguments[0], ret) then
+                        begin
+                          if FSyncMainThread then
+                            TThread.Synchronize(nil, procedure begin
+                              vl.SetValue(val, ret) end) else
+                            vl.SetValue(val, ret);
+                          Exit(True);
+                        end else
+                          Exit(False);
+                      end;
+                    end;
                   end;
               end;
             end else
-              m := FCtx.GetType(ti).GetMethod(name);
+              m := rt.GetMethod(name);
           end;
         tkClassRef:
           begin
@@ -5728,183 +6001,8 @@ begin
       Exit(False);
   end else
     Exit(False);
-
 end;
 
-function TCefRTTIExtension.SetValue(const v: TValue; var ret: ICefv8Value): Boolean;
-
-  function ProcessRecord: Boolean;
-  var
-    rf: TRttiField;
-    vl: TValue;
-    ud, v8: ICefv8Value;
-    rec: Pointer;
-    ti: PTypeInfo;
-  begin
-
-    ud := TCefv8ValueRef.CreateArray;
-    ud.SetValueByIndex(0, TCefv8ValueRef.CreateInt(Integer(v.TypeInfo)));
-    Ret := TCefv8ValueRef.CreateObject(ud);
-
-{$IFDEF DELPHI15_UP}
-    rec := TValueData(v).FValueData.GetReferenceToRawData;
-{$ELSE}
-    rec := IValueData(TValueData(v).FHeapData).GetReferenceToRawData;
-{$ENDIF}
-    if FSyncMainThread then
-    begin
-      ti := v.TypeInfo;
-      v8 := ret;
-      TThread.Synchronize(nil, procedure
-      var
-        rf: TRttiField;
-        o: ICefv8Value;
-      begin
-        for rf in FCtx.GetType(ti).GetFields do
-        begin
-          vl := rf.GetValue(rec);
-          SetValue(vl, o);
-          v8.SetValueByKey(rf.Name, o);
-        end;
-      end)
-    end else
-      for rf in FCtx.GetType(v.TypeInfo).GetFields do
-      begin
-        vl := rf.GetValue(rec);
-        if not SetValue(vl, v8) then
-          Exit(False);
-        ret.SetValueByKey(rf.Name, v8);
-      end;
-    Result := True;
-  end;
-
-  function ProcessObject: Boolean;
-  var
-    m: TRttiMethod;
-    p: TRttiProperty;
-    f: ICefv8Value;
-    _r, _g, _s, ud: ICefv8Value;
-    _e: ustring;
-    _a: TCefv8ValueArray;
-    proto: ICefv8Value;
-  begin
-    ud := TCefv8ValueRef.CreateArray;
-    ud.SetValueByIndex(0, TCefv8ValueRef.CreateInt(Integer(v.TypeInfo)));
-    ud.SetValueByIndex(1, TCefv8ValueRef.CreateInt(Integer(v.AsObject)));
-    ret := TCefv8ValueRef.CreateObject(ud);
-    proto := ret.GetValueByKey('__proto__');
-
-    for m in FCtx.GetType(v.TypeInfo).GetMethods do
-      if m.Visibility > mvProtected then
-      begin
-        f := TCefv8ValueRef.CreateFunction(m.Name, Self);
-        proto.SetValueByKey(m.Name, f);
-      end;
-
-    for p in FCtx.GetType(v.TypeInfo).GetProperties do
-      if (p.Visibility > mvProtected) then
-      begin
-        if _g = nil then _g := proto.GetValueByKey('__defineGetter__');
-        if _s = nil then _s := proto.GetValueByKey('__defineSetter__');
-        SetLength(_a, 2);
-        _a[0] := TCefv8ValueRef.CreateString(p.Name);
-        if p.IsReadable then
-        begin
-          _a[1] := TCefv8ValueRef.CreateFunction('$g' + p.Name, Self);
-          _g.ExecuteFunction(ret, _a, _r, _e);
-        end;
-        if p.IsWritable then
-        begin
-          _a[1] := TCefv8ValueRef.CreateFunction('$s' + p.Name, Self);
-          _s.ExecuteFunction(ret, _a, _r, _e);
-        end;
-      end;
-
-    proto.SetValueByKey('constructor', TCefv8ValueRef.CreateFunction(GetTypeData(v.TypeInfo).ClassType.ClassName, nil));
-
-
-    Result := True;
-  end;
-
-  function ProcessClass: Boolean;
-  var
-    m: TRttiMethod;
-    f, ud: ICefv8Value;
-    c: TClass;
-    proto: ICefv8Value;
-  begin
-    ud := TCefv8ValueRef.CreateArray;
-    c := v.AsClass;
-    ud.SetValueByIndex(0, TCefv8ValueRef.CreateInt(Integer(v.TypeInfo)));
-    ud.SetValueByIndex(1, TCefv8ValueRef.CreateInt(Integer(c)));
-    ret := TCefv8ValueRef.CreateObject(ud);
-    if c <> nil then
-    begin
-      proto := ret.GetValueByKey('__proto__');
-      for m in FCtx.GetType(c).GetMethods do
-        if (m.Visibility > mvProtected) and (m.MethodKind in [mkClassProcedure, mkClassFunction]) then
-        begin
-          f := TCefv8ValueRef.CreateFunction(m.Name, Self);
-          proto.SetValueByKey(m.Name, f);
-        end;
-
-    end;
-    Result := True;
-  end;
-
-  function ProcessVariant: Boolean;
-  var
-    vr: Variant;
-  begin
-    vr := v.AsVariant;
-    case TVarData(vr).VType of
-      varSmallint, varInteger, varShortInt, varByte, varWord, varLongWord, varInt64, varUInt64:
-        ret := TCefv8ValueRef.CreateInt(vr);
-      varUString, varOleStr, varString:
-        ret := TCefv8ValueRef.CreateString(vr);
-      varSingle, varDouble, varCurrency:
-        ret := TCefv8ValueRef.CreateDouble(vr);
-      varBoolean:
-        ret := TCefv8ValueRef.CreateBool(vr);
-      varNull:
-        ret := TCefv8ValueRef.CreateNull;
-      varEmpty:
-        ret := TCefv8ValueRef.CreateUndefined;
-    else
-      ret := nil;
-      Exit(False)
-    end;
-    Result := True;
-  end;
-
-begin
-  case v.TypeInfo.Kind of
-    tkUString, tkLString, tkWString, tkChar, tkWChar:
-      ret := TCefv8ValueRef.CreateString(v.AsString);
-    tkInteger: ret := TCefv8ValueRef.CreateInt(v.AsInteger);
-    tkEnumeration:
-      if v.TypeInfo = TypeInfo(Boolean) then
-        ret := TCefv8ValueRef.CreateBool(v.AsBoolean) else
-        ret := TCefv8ValueRef.CreateInt(TValueData(v).FAsSLong);
-    tkFloat: ret := TCefv8ValueRef.CreateDouble(v.AsExtended);
-    tkInt64: ret := TCefv8ValueRef.CreateInt(v.AsInt64);
-    tkClass: if not ProcessObject then Exit(False);
-    tkClassRef: if not ProcessClass then Exit(False);
-    tkRecord: if not ProcessRecord then Exit(False);
-    tkVariant: if not ProcessVariant then Exit(False);
-  else
-    Exit(False)
-  end;
-  Result := True;
-end;
-
-class procedure TCefRTTIExtension.Register(const name: string;
-  const value: TValue; SyncMainThread: Boolean);
-begin
-  CefRegisterExtension(name,
-    format('__defineSetter__(''%s'', function(v){native function $s();$s(v)});__defineGetter__(''%0:s'', function(){native function $g();return $g()});', [name]),
-    TCefRTTIExtension.Create(value, SyncMainThread) as ICefv8Handler);
-end;
 {$ENDIF}
 
 
