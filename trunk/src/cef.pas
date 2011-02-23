@@ -166,6 +166,7 @@ type
     FFontOptions: TChromiumFontOptions;
   protected
     procedure WndProc(var Message: TMessage); override;
+
     function doOnBeforeCreated(const parentBrowser: ICefBrowser;
       var windowInfo: TCefWindowInfo; popup: Boolean;
       var handler: ICefBase; var url: ustring; var popupFeatures: TCefPopupFeatures): TCefRetval; virtual;
@@ -283,6 +284,9 @@ type
     property Anchors;
     property Constraints;
     property DefaultUrl;
+    property TabOrder;
+    property TabStop;
+    property Visible;
 
     property OnBeforeCreated;
     property OnAfterCreated;
@@ -856,7 +860,7 @@ end;
 
 function TCustomChromium.doOnAfterCreated(const browser: ICefBrowser): TCefRetval;
 begin
-  if not browser.IsPopup then
+  if (browser <> nil) and not browser.IsPopup then
   begin
     FBrowser := browser;
     FBrowserHandle := browser.GetWindowHandle;
@@ -1128,6 +1132,7 @@ begin
         info.y := rect.top;
         info.Width := rect.right - rect.left;
         info.Height := rect.bottom - rect.top;
+        info.ExStyle := 0;
         CefBrowserCreate(@info, False, @FHandler, FDefaultUrl);
       end;
       inherited WndProc(Message);
@@ -1135,7 +1140,6 @@ begin
     WM_SIZE:
       begin
         if not (csDesigning in ComponentState) then
-        begin
           if (FBrowser <> nil) and (FBrowser.GetWindowHandle <> INVALID_HANDLE_VALUE) then
           begin
             rect := GetClientRect;
@@ -1144,10 +1148,13 @@ begin
               rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
               SWP_NOZORDER);
             EndDeferWindowPos(hdwp);
-          end else
-            inherited WndProc(Message);
-        end else
-          inherited WndProc(Message);
+          end;
+        inherited WndProc(Message);
+      end;
+    WM_SETFOCUS:
+      begin
+        if (Browser <> nil) and (Browser.GetWindowHandle <> 0) then
+          PostMessage(Browser.GetWindowHandle, WM_SETFOCUS, Message.WParam, 0);
       end;
     WM_ERASEBKGND:
       if (csDesigning in ComponentState) then
