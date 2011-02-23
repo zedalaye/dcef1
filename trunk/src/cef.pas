@@ -1155,6 +1155,7 @@ begin
       begin
         if (Browser <> nil) and (Browser.GetWindowHandle <> 0) then
           PostMessage(Browser.GetWindowHandle, WM_SETFOCUS, Message.WParam, 0);
+        inherited WndProc(Message);
       end;
     WM_ERASEBKGND:
       if (csDesigning in ComponentState) then
