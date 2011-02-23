@@ -2005,6 +2005,7 @@ type
     procedure RemoveElements;
   public
     class function UnWrap(data: Pointer): ICefPostData;
+    constructor Create(data: Pointer = nil); override;
   end;
 
   TCefPostDataElementRef = class(TCefBaseRef, ICefPostDataElement)
@@ -2018,6 +2019,7 @@ type
     function GetBytes(size: Cardinal; bytes: Pointer): Cardinal;
   public
     class function UnWrap(data: Pointer): ICefPostDataElement;
+    constructor Create(data: Pointer = nil); override;
   end;
 
   TCefRequestRef = class(TCefBaseRef, ICefRequest)
@@ -2032,6 +2034,7 @@ type
     procedure SetHeaderMap(const HeaderMap: ICefStringMap);
   public
     class function UnWrap(data: Pointer): ICefRequest;
+    constructor Create(data: Pointer = nil); override;
   end;
 
   TCefStreamReaderRef = class(TCefBaseRef, ICefStreamReader)
@@ -2384,6 +2387,7 @@ procedure CefPostTask(ThreadId: TCefThreadId; const task: ICefTask);
 procedure CefPostDelayedTask(ThreadId: TCefThreadId; const task: ICefTask; delayMs: Integer);
 function CefGetData(const i: ICefBase): Pointer;
 function CefParseUrl(const url: ustring; var parts: TCefUrlParts): Boolean;
+
 
 var
   CefCache: ustring = '';
@@ -3933,6 +3937,13 @@ begin
   Result := PCefPostData(FData)^.add_element(PCefPostData(FData), element.Wrap);
 end;
 
+constructor TCefPostDataRef.Create(data: Pointer);
+begin
+  if data <> nil then
+    inherited Create(data) else
+    inherited Create(cef_post_data_create);
+end;
+
 function TCefPostDataRef.GetCount: Cardinal;
 begin
   Result := PCefPostData(FData)^.get_element_count(PCefPostData(FData))
@@ -3966,6 +3977,13 @@ begin
 end;
 
 { TCefPostDataElementRef }
+
+constructor TCefPostDataElementRef.Create(data: Pointer);
+begin
+  if data <> nil then
+    inherited Create(data) else
+    inherited Create(cef_post_data_element_create);
+end;
 
 function TCefPostDataElementRef.GetBytes(size: Cardinal;
   bytes: Pointer): Cardinal;
@@ -4141,6 +4159,13 @@ begin
 end;
 
 { TCefRequestRef }
+
+constructor TCefRequestRef.Create(data: Pointer);
+begin
+  if data <> nil then
+    inherited Create(data) else
+    inherited Create(cef_request_create);
+end;
 
 procedure TCefRequestRef.GetHeaderMap(const HeaderMap: ICefStringMap);
 begin
