@@ -1779,7 +1779,7 @@ type
     procedure LoadRequest(const request: ICefRequest);
     procedure LoadUrl(const url: ustring);
     procedure LoadString(const str, url: ustring);
-    procedure LoadStream(const stream: TStream; const url: ustring);
+    procedure LoadStream(const stream: TStream; Owned: Boolean; const url: ustring);
     procedure LoadFile(const filename, url: ustring);
     procedure ExecuteJavaScript(const jsCode, scriptUrl: ustring; startLine: Integer);
     function IsMain: Boolean;
@@ -1790,6 +1790,14 @@ type
     property Url: ustring read GetUrl;
     property Source: ustring read GetSource;
     property Text: ustring read getText;
+  end;
+
+  ICefCustomStreamReader = interface(ICefBase)
+    ['{BBCFF23A-6FE7-4C28-B13E-6D2ACA5C83B7}']
+    function Read(ptr: Pointer; size, n: Cardinal): Cardinal;
+    function Seek(offset: LongInt; whence: Integer): Integer;
+    function Tell: LongInt;
+    function Eof: Boolean;
   end;
 
   ICefStreamReader = interface(ICefBase)
@@ -1985,7 +1993,7 @@ type
     procedure LoadRequest(const request: ICefRequest);
     procedure LoadUrl(const url: ustring);
     procedure LoadString(const str, url: ustring);
-    procedure LoadStream(const stream: TStream; const url: ustring);
+    procedure LoadStream(const stream: TStream; Owned: Boolean; const url: ustring);
     procedure LoadFile(const filename, url: ustring);
     procedure ExecuteJavaScript(const jsCode, scriptUrl: ustring; startLine: Integer);
     function IsMain: Boolean;
@@ -2045,6 +2053,9 @@ type
     function Eof: Boolean;
   public
     class function UnWrap(data: Pointer): ICefStreamReader;
+    constructor CreateForFile(const filename: ustring);
+    constructor CreateForStream(const stream: TSTream; owned: Boolean);
+    constructor CreateForData(data: Pointer; size: Cardinal);
   end;
 
   TCefv8ValueRef = class(TCefBaseRef, ICefv8Value)
@@ -2168,7 +2179,7 @@ type
     constructor Create; virtual;
   end;
 
-  TCefStreamReaderOwn = class(TCefBaseOwn, ICefStreamReader)
+  TCefCustomStreamReader = class(TCefBaseOwn, ICefCustomStreamReader)
   private
     FStream: TStream;
     FOwned: Boolean;
@@ -3136,27 +3147,27 @@ end;
 
 {  cef_stream_reader }
 
-function cef_stream_reader_read(self: PCefStreamReader; ptr: Pointer; size, n: Cardinal): Cardinal; stdcall;
+function cef_read_handler_read(self: PCefReadHandler; ptr: Pointer; size, n: Cardinal): Cardinal; stdcall;
 begin
-  with TCefStreamReaderOwn(CefGetObject(self)) do
+  with TCefCustomStreamReader(CefGetObject(self)) do
     Result := Read(ptr, size, n);
 end;
 
-function cef_stream_reader_seek(self: PCefStreamReader; offset: LongInt; whence: Integer): Integer; stdcall;
+function cef_read_handler_seek(self: PCefReadHandler; offset: LongInt; whence: Integer): Integer; stdcall;
 begin
-  with TCefStreamReaderOwn(CefGetObject(self)) do
+  with TCefCustomStreamReader(CefGetObject(self)) do
     Result := Seek(offset, whence);
 end;
 
-function cef_stream_reader_tell(self: PCefStreamReader): LongInt; stdcall;
+function cef_read_handler_tell(self: PCefReadHandler): LongInt; stdcall;
 begin
-  with TCefStreamReaderOwn(CefGetObject(self)) do
+  with TCefCustomStreamReader(CefGetObject(self)) do
     Result := Tell;
 end;
 
-function cef_stream_reader_eof(self: PCefStreamReader): Integer; stdcall;
+function cef_read_handler_eof(self: PCefReadHandler): Integer; stdcall;
 begin
-  with TCefStreamReaderOwn(CefGetObject(self)) do
+  with TCefCustomStreamReader(CefGetObject(self)) do
     Result := Ord(eof);
 end;
 
@@ -3793,12 +3804,12 @@ begin
   PCefFrame(FData)^.load_request(PCefFrame(FData), request.Wrap);
 end;
 
-procedure TCefFrameRef.LoadStream(const stream: TStream; const url: ustring);
+procedure TCefFrameRef.LoadStream(const stream: TStream; Owned: Boolean; const url: ustring);
 var
   strm: ICefStreamReader;
   u: TCefString;
 begin
-  strm := TCefStreamReaderOwn.Create(stream, False) as ICefStreamReader;
+  strm := TCefStreamReaderRef.CreateForStream(stream, Owned) as ICefStreamReader;
   u := CefString(url);
   PCefFrame(FData)^.load_stream(PCefFrame(FData), strm.Wrap, @u);
 end;
@@ -3863,33 +3874,33 @@ end;
 
 { TCefStreamReaderOwn }
 
-constructor TCefStreamReaderOwn.Create(Stream: TStream; Owned: Boolean);
+constructor TCefCustomStreamReader.Create(Stream: TStream; Owned: Boolean);
 begin
-  inherited CreateData(SizeOf(TCefStreamReader));
+  inherited CreateData(SizeOf(TCefReadHandler));
   FStream := stream;
   FOwned := Owned;
-  with PCefStreamReader(FData)^ do
+  with PCefReadHandler(FData)^ do
   begin
-    read := @cef_stream_reader_read;
-    seek := @cef_stream_reader_seek;
-    tell := @cef_stream_reader_tell;
-    eof := @cef_stream_reader_eof;
+    read := cef_read_handler_read;
+    seek := cef_read_handler_seek;
+    tell := cef_read_handler_tell;
+    eof := cef_read_handler_eof;
   end;
 end;
 
-constructor TCefStreamReaderOwn.Create(const filename: string);
+constructor TCefCustomStreamReader.Create(const filename: string);
 begin
   Create(TFileStream.Create(filename, fmOpenRead or fmShareDenyWrite), True);
 end;
 
-destructor TCefStreamReaderOwn.Destroy;
+destructor TCefCustomStreamReader.Destroy;
 begin
   if FOwned then
     FStream.Free;
   inherited;
 end;
 
-function TCefStreamReaderOwn.Eof: Boolean;
+function TCefCustomStreamReader.Eof: Boolean;
 begin
   Lock;
   try
@@ -3899,7 +3910,7 @@ begin
   end;
 end;
 
-function TCefStreamReaderOwn.Read(ptr: Pointer; size, n: Cardinal): Cardinal;
+function TCefCustomStreamReader.Read(ptr: Pointer; size, n: Cardinal): Cardinal;
 begin
   Lock;
   try
@@ -3909,7 +3920,7 @@ begin
   end;
 end;
 
-function TCefStreamReaderOwn.Seek(offset, whence: Integer): Integer;
+function TCefCustomStreamReader.Seek(offset, whence: Integer): Integer;
 begin
   Lock;
   try
@@ -3919,7 +3930,7 @@ begin
   end;
 end;
 
-function TCefStreamReaderOwn.Tell: LongInt;
+function TCefCustomStreamReader.Tell: LongInt;
 begin
   Lock;
   try
@@ -4226,6 +4237,28 @@ begin
 end;
 
 { TCefStreamReaderRef }
+
+constructor TCefStreamReaderRef.CreateForData(data: Pointer; size: Cardinal);
+begin
+  inherited Create(cef_stream_reader_create_for_data(data, size))
+end;
+
+constructor TCefStreamReaderRef.CreateForFile(const filename: ustring);
+var
+  f: TCefString;
+begin
+  f := CefString(filename);
+  inherited Create(cef_stream_reader_create_for_file(@f))
+end;
+
+constructor TCefStreamReaderRef.CreateForStream(const stream: TSTream;
+  owned: Boolean);
+var
+  reader: ICefCustomStreamReader;
+begin
+  reader := TCefCustomStreamReader.Create(stream, owned);
+  inherited Create(cef_stream_reader_create_for_handler(reader.Wrap));
+end;
 
 function TCefStreamReaderRef.Eof: Boolean;
 begin
