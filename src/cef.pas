@@ -1118,6 +1118,7 @@ var
   info: TCefWindowInfo;
   rect: TRect;
   hdwp: THandle;
+  brws: ICefBrowser;
 begin
   case Message.Msg of
     WM_CREATE:
@@ -1140,15 +1141,18 @@ begin
     WM_SIZE:
       begin
         if not (csDesigning in ComponentState) then
-          if (FBrowser <> nil) and (FBrowser.GetWindowHandle <> INVALID_HANDLE_VALUE) then
+        begin
+          brws := FBrowser;
+          if (brws <> nil) and (brws.GetWindowHandle <> INVALID_HANDLE_VALUE) then
           begin
             rect := GetClientRect;
             hdwp := BeginDeferWindowPos(1);
-            hdwp := DeferWindowPos(hdwp, FBrowser.GetWindowHandle, 0,
+            hdwp := DeferWindowPos(hdwp, brws.GetWindowHandle, 0,
               rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
               SWP_NOZORDER);
             EndDeferWindowPos(hdwp);
           end;
+        end;
         inherited WndProc(Message);
       end;
     WM_SETFOCUS:
