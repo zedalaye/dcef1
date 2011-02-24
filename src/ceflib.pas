@@ -2054,6 +2054,7 @@ type
   public
     class function UnWrap(data: Pointer): ICefStreamReader;
     constructor CreateForFile(const filename: ustring);
+    constructor CreateForCustomStream(const stream: ICefCustomStreamReader);
     constructor CreateForStream(const stream: TSTream; owned: Boolean);
     constructor CreateForData(data: Pointer; size: Cardinal);
   end;
@@ -4238,6 +4239,12 @@ end;
 
 { TCefStreamReaderRef }
 
+constructor TCefStreamReaderRef.CreateForCustomStream(
+  const stream: ICefCustomStreamReader);
+begin
+  inherited Create(cef_stream_reader_create_for_handler(stream.Wrap))
+end;
+
 constructor TCefStreamReaderRef.CreateForData(data: Pointer; size: Cardinal);
 begin
   inherited Create(cef_stream_reader_create_for_data(data, size))
@@ -4253,11 +4260,8 @@ end;
 
 constructor TCefStreamReaderRef.CreateForStream(const stream: TSTream;
   owned: Boolean);
-var
-  reader: ICefCustomStreamReader;
 begin
-  reader := TCefCustomStreamReader.Create(stream, owned);
-  inherited Create(cef_stream_reader_create_for_handler(reader.Wrap));
+  CreateForCustomStream(TCefCustomStreamReader.Create(stream, owned) as ICefCustomStreamReader);
 end;
 
 function TCefStreamReaderRef.Eof: Boolean;
