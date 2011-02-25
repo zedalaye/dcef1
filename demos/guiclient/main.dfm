@@ -65,6 +65,7 @@ object MainForm: TMainForm
     Align = alBottom
     Anchors = [akLeft, akTop, akRight, akBottom]
     DefaultUrl = 'http://www.google.com'
+    TabOrder = 0
     OnAddressChange = crmAddressChange
     OnTitleChange = crmTitleChange
     OnLoadStart = crmLoadStart

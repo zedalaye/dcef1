@@ -2390,6 +2390,9 @@ function CefStringFreeAndGet(const str: PCefStringUserFree): ustring;
 procedure CefStringSet(const str: PCefString; const value: ustring);
 function CefBrowserCreate(windowInfo: PCefWindowInfo; popup: Boolean;
   handler: PCefHandler; const url: ustring): Boolean;
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+procedure CefDoMessageLoopWork;
+{$ENDIF}
 function CefRegisterScheme(const SchemeName, HostName: ustring;
   const handler: TCefSchemeHandlerClass): Boolean;
 function CefRegisterExtension(const name, code: ustring;
@@ -4509,7 +4512,11 @@ begin
 
     FillChar(settings, SizeOf(settings), 0);
     settings.size := SizeOf(settings);
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+    settings.multi_threaded_message_loop := False;
+{$ELSE}
     settings.multi_threaded_message_loop := True;
+{$ENDIF}
     settings.cache_path := CefString(Cache);
     settings.user_agent := cefstring(UserAgent);
     settings.product_version := CefString(ProductVersion);
@@ -4552,6 +4559,14 @@ begin
       handler,
       @u) <> 0;
 end;
+
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+procedure CefDoMessageLoopWork;
+begin
+  if LibHandle > 0 then
+    cef_do_message_loop_work;
+end;
+{$ENDIF}
 
 function CefString(const str: ustring): TCefString;
 begin

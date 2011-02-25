@@ -2,6 +2,8 @@
    {$MODE DELPHI}{$H+}
    {$APPTYPE GUI}
 {$ENDIF}
+{$I cef.inc}
+
 program cefclient;
 
 uses
@@ -161,7 +163,6 @@ begin
 
           FillChar(info, SizeOf(info), 0);
           Inc(rect.top, URLBAR_HEIGHT);
-
           info.Style := WS_CHILD or WS_VISIBLE or WS_CLIPCHILDREN or WS_CLIPSIBLINGS or WS_TABSTOP;
           info.WndParent := Wnd;
           info.x := rect.left;
@@ -444,11 +445,8 @@ const
 var
   Msg      : TMsg;
   wndClass : TWndClass;
-
-{ TExtension }
-
 begin
-  CefLoadLib;
+  CefLoadLibDefault;
   CefRegisterScheme('client', 'test', TScheme);
   CefRegisterScheme('file', '', TFileScheme);
   CefRegisterExtension('v8/test', code, TExtension.Create as ICefV8Handler);
@@ -486,6 +484,9 @@ begin
 
     while(GetMessageW(msg, 0, 0, 0)) do
     begin
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+      CefDoMessageLoopWork;
+{$ENDIF}
       TranslateMessage(msg);
       DispatchMessageW(msg);
     end;
