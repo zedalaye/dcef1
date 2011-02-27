@@ -230,10 +230,7 @@ type
       StatusType: TCefHandlerStatusType): TCefRetval; virtual;
 
 
-    property Browser: ICefBrowser read FBrowser;
-    property BrowserHandle: HWND read FBrowserHandle;
     property DefaultUrl: ustring read FDefaultUrl write FDefaultUrl;
-
     property OnBeforeCreated: TOnBeforeCreated read FOnBeforeCreated write FOnBeforeCreated;
     property OnAfterCreated: TOnAfterCreated read FOnAfterCreated write FOnAfterCreated;
     property OnAddressChange: TOnAddressChange read FOnAddressChange write FOnAddressChange;
@@ -268,17 +265,16 @@ type
     property FontOptions: TChromiumFontOptions read FFontOptions;
     property DefaultEncoding: ustring read FDefaultEncoding write FDefaultEncoding;
     property UserStyleSheetLocation: ustring read FUserStyleSheetLocation write FUserStyleSheetLocation;
+    property BrowserHandle: HWND read FBrowserHandle;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure Lock;
     procedure UnLock;
+
   end;
 
   TChromium = class(TCustomChromium)
-  public
-    property BrowserHandle;
-    property Browser;
   published
     property Align;
     property Anchors;
@@ -287,6 +283,7 @@ type
     property TabOrder;
     property TabStop;
     property Visible;
+    property BrowserHandle;
 
     property OnBeforeCreated;
     property OnAfterCreated;
@@ -1157,8 +1154,8 @@ begin
       end;
     WM_SETFOCUS:
       begin
-        if (Browser <> nil) and (Browser.GetWindowHandle <> 0) then
-          PostMessage(Browser.GetWindowHandle, WM_SETFOCUS, Message.WParam, 0);
+        if (FBrowser <> nil) and (FBrowser.GetWindowHandle <> 0) then
+          PostMessage(FBrowser.GetWindowHandle, WM_SETFOCUS, Message.WParam, 0);
         inherited WndProc(Message);
       end;
     WM_ERASEBKGND:

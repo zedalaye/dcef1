@@ -81,11 +81,14 @@ type
       out Result: TCefRetval);
     procedure actPrintExecute(Sender: TObject);
     procedure actFileSchemeExecute(Sender: TObject);
+    procedure crmAfterCreated(Sender: TCustomChromium;
+      const browser: ICefBrowser; out Result: TCefRetval);
   private
     { Déclarations privées }
     FCanGoBack: Boolean;
     FCanGoForward: Boolean;
     FLoading: Boolean;
+    FBrowser: ICefBrowser;
   end;
 
 var
@@ -100,7 +103,7 @@ procedure TMainForm.actCloseDevToolsExecute(Sender: TObject);
 var
   brws: ICefBrowser;
 begin
-  brws := crm.Browser;
+  brws := FBrowser;
   if brws <> nil then
      brws.CloseDevTools;
 end;
@@ -109,7 +112,7 @@ procedure TMainForm.actExecuteJSExecute(Sender: TObject);
 var
   brws: ICefBrowser;
 begin
-  brws := crm.Browser;
+  brws := FBrowser;
   if brws <> nil then
     brws.MainFrame.ExecuteJavaScript(
       'alert(''JavaScript execute works!'');', 'about:blank', 0);
@@ -119,7 +122,7 @@ procedure TMainForm.actFileSchemeExecute(Sender: TObject);
 var
   brws: ICefBrowser;
 begin
-  brws := crm.Browser;
+  brws := FBrowser;
   if brws <> nil then
     brws.MainFrame.LoadUrl('file://c:');
 end;
@@ -147,7 +150,7 @@ var
 {$ENDIF}
 begin
 {$IFDEF DELPHI12_UP}
-  brws := crm.Browser;
+  brws := FBrowser;
   if brws = nil then Exit;
   frame := brws.MainFrame;
   TCefFastTask.Post(TID_UI, procedure
@@ -161,7 +164,7 @@ begin
       frame.LoadString(source, 'http://tests/getsource');
     end);
 {$ELSE}
-   TCefFastTask.Post(TID_UI, @CallBackGetSource, crm.Browser);
+   TCefFastTask.Post(TID_UI, @CallBackGetSource, FBrowser);
 {$ENDIF}
 end;
 
@@ -188,7 +191,7 @@ var
 {$ENDIF}
 begin
 {$IFDEF DELPHI12_UP}
-  brws := crm.Browser;
+  brws := FBrowser;
   if brws = nil then Exit;
   frame := brws.MainFrame;
   TCefFastTask.Post(TID_UI, procedure
@@ -202,7 +205,7 @@ begin
       frame.LoadString(source, 'http://tests/gettext');
     end);
 {$ELSE}
-  TCefFastTask.Post(TID_UI, @CallBackGetText, crm.Browser);
+  TCefFastTask.Post(TID_UI, @CallBackGetText, FBrowser);
 {$ENDIF}
 end;
 
@@ -210,7 +213,7 @@ procedure TMainForm.actGoToExecute(Sender: TObject);
 var
   brws: ICefBrowser;
 begin
-  brws := crm.Browser;
+  brws := FBrowser;
   if brws <> nil then
     brws.MainFrame.LoadUrl(edAddress.Text);
 end;
@@ -219,21 +222,21 @@ procedure TMainForm.actHomeExecute(Sender: TObject);
 var
   brws: ICefBrowser;
 begin
-  brws := crm.Browser;
+  brws := FBrowser;
   if brws <> nil then
     brws.MainFrame.LoadUrl(crm.DefaultUrl);
 end;
 
 procedure TMainForm.actHomeUpdate(Sender: TObject);
 begin
-  TAction(Sender).Enabled := crm.Browser <> nil;
+  TAction(Sender).Enabled := FBrowser <> nil;
 end;
 
 procedure TMainForm.actNextExecute(Sender: TObject);
 var
   brws: ICefBrowser;
 begin
-  brws := crm.Browser;
+  brws := FBrowser;
   if brws <> nil then
     brws.GoForward;
 end;
@@ -247,7 +250,7 @@ procedure TMainForm.actPrevExecute(Sender: TObject);
 var
   brws: ICefBrowser;
 begin
-  brws := crm.Browser;
+  brws := FBrowser;
   if brws <> nil then
     brws.GoBack;
 end;
@@ -261,7 +264,7 @@ procedure TMainForm.actPrintExecute(Sender: TObject);
 var
   brws: ICefBrowser;
 begin
-  brws := crm.Browser;
+  brws := FBrowser;
   if brws <> nil then
     brws.MainFrame.Print;
 end;
@@ -270,7 +273,7 @@ procedure TMainForm.actReloadExecute(Sender: TObject);
 var
   brws: ICefBrowser;
 begin
-  brws := crm.Browser;
+  brws := FBrowser;
   if brws <> nil then
     if FLoading then
       brws.StopLoad else
@@ -282,14 +285,14 @@ begin
   if FLoading then
     TAction(sender).Caption := 'X' else
     TAction(sender).Caption := 'R';
-  TAction(Sender).Enabled := crm.Browser <> nil;
+  TAction(Sender).Enabled := FBrowser <> nil;
 end;
 
 procedure TMainForm.actShowDevToolsExecute(Sender: TObject);
 var
   brws: ICefBrowser;
 begin
-  brws := crm.Browser;
+  brws := FBrowser;
   if brws <> nil then
     brws.ShowDevTools;
 end;
@@ -298,25 +301,25 @@ procedure TMainForm.actZoomInExecute(Sender: TObject);
 var
   brws: ICefBrowser;
 begin
-  brws := crm.Browser;
+  brws := FBrowser;
   if brws <> nil then
-    brws.ZoomLevel := crm.Browser.ZoomLevel + 0.5;
+    brws.ZoomLevel := brws.ZoomLevel + 0.5;
 end;
 
 procedure TMainForm.actZoomOutExecute(Sender: TObject);
 var
   brws: ICefBrowser;
 begin
-  brws := crm.Browser;
+  brws := FBrowser;
   if brws <> nil then
-    brws.ZoomLevel := crm.Browser.ZoomLevel - 0.5;
+    brws.ZoomLevel := FBrowser.ZoomLevel - 0.5;
 end;
 
 procedure TMainForm.actZoomResetExecute(Sender: TObject);
 var
   brws: ICefBrowser;
 begin
-  brws := crm.Browser;
+  brws := FBrowser;
   if brws <> nil then
     brws.ZoomLevel := 0;
 end;
@@ -331,6 +334,13 @@ begin
 {$ELSE}
     SetWindowTextW(edAddress.Handle, PWideChar(url))
 {$ENDIF}
+end;
+
+procedure TMainForm.crmAfterCreated(Sender: TCustomChromium;
+  const browser: ICefBrowser; out Result: TCefRetval);
+begin
+  if (browser <> nil) and not browser.IsPopup then
+    FBrowser := browser;
 end;
 
 procedure TMainForm.crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
@@ -383,7 +393,7 @@ var
 begin
   if Key = #13 then
   begin
-    brws := crm.Browser;
+    brws := FBrowser;
     if brws <> nil then
     begin
       brws.MainFrame.LoadUrl(edAddress.Text);
