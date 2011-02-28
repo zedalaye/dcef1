@@ -2359,7 +2359,9 @@ type
   private
     FValue: TValue;
     FCtx: TRttiContext;
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
     FSyncMainThread: Boolean;
+{$ENDIF}
     function GetValue(pi: PTypeInfo; const v: ICefv8Value; var ret: TValue): Boolean;
     function SetValue(const v: TValue; var ret: ICefv8Value): Boolean;
   protected
@@ -2367,9 +2369,14 @@ type
       const arguments: TCefv8ValueArray; var retval: ICefv8Value;
       var exception: ustring): Boolean; override;
   public
-    constructor Create(const value: TValue; SyncMainThread: Boolean); reintroduce;
+    constructor Create(const value: TValue
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+    ; SyncMainThread: Boolean
+{$ENDIF}
+); reintroduce;
     destructor Destroy; override;
-    class procedure Register(const name: string; const value: TValue; SyncMainThread: Boolean);
+    class procedure Register(const name: string; const value: TValue
+      {$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}; SyncMainThread: Boolean{$ENDIF});
   end;
 {$ENDIF}
 
@@ -5427,11 +5434,17 @@ end;
 
 {$IFDEF DELPHI14_UP}
 
-constructor TCefRTTIExtension.Create(const value: TValue; SyncMainThread: Boolean);
+constructor TCefRTTIExtension.Create(const value: TValue
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+; SyncMainThread: Boolean
+{$ENDIF}
+);
 begin
   inherited Create;
   FCtx := TRttiContext.Create;
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   FSyncMainThread := SyncMainThread;
+{$ENDIF}
   FValue := value;
 end;
 
@@ -5723,6 +5736,7 @@ function TCefRTTIExtension.SetValue(const v: TValue; var ret: ICefv8Value): Bool
 {$ELSE}
     rec := IValueData(TValueData(v).FHeapData).GetReferenceToRawData;
 {$ENDIF}
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
     if FSyncMainThread then
     begin
       v8 := ret;
@@ -5739,6 +5753,7 @@ function TCefRTTIExtension.SetValue(const v: TValue; var ret: ICefv8Value): Bool
         end;
       end)
     end else
+{$ENDIF}
       for rf in FCtx.GetType(v.TypeInfo).GetFields do
       begin
         vl := rf.GetValue(rec);
@@ -5917,11 +5932,15 @@ begin
 end;
 
 class procedure TCefRTTIExtension.Register(const name: string;
-  const value: TValue; SyncMainThread: Boolean);
+  const value: TValue{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}; SyncMainThread: Boolean{$ENDIF});
 begin
   CefRegisterExtension(name,
     format('__defineSetter__(''%s'', function(v){native function $s();$s(v)});__defineGetter__(''%0:s'', function(){native function $g();return $g()});', [name]),
-    TCefRTTIExtension.Create(value, SyncMainThread) as ICefv8Handler);
+    TCefRTTIExtension.Create(value
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+    , SyncMainThread
+{$ENDIF}
+    ) as ICefv8Handler);
 end;
 
 function TCefRTTIExtension.Execute(const name: ustring; const obj: ICefv8Value;
@@ -5943,6 +5962,7 @@ var
 begin
   Result := True;
   p := PChar(name);
+  m := nil;
   if obj <> nil then
   begin
     ud := obj.GetUserData;
@@ -5967,6 +5987,7 @@ begin
                       begin
                         inc(p);
                         pr := rt.GetProperty(p);
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
                         if FSyncMainThread then
                         begin
                           TThread.Synchronize(nil, procedure begin
@@ -5974,6 +5995,7 @@ begin
                           end);
                           Exit(SetValue(ret, retval));
                         end else
+{$ENDIF}
                           Exit(SetValue(pr.GetValue(val), retval));
                       end;
                     's':
@@ -5982,9 +6004,11 @@ begin
                         pr := rt.GetProperty(p);
                         if GetValue(pr.PropertyType.Handle, arguments[0], ret) then
                         begin
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
                           if FSyncMainThread then
                             TThread.Synchronize(nil, procedure begin
                               pr.SetValue(val, ret) end) else
+{$ENDIF}
                             pr.SetValue(val, ret);
                           Exit(True);
                         end else
@@ -6000,6 +6024,7 @@ begin
                       begin
                         inc(p);
                         vl := rt.GetField(p);
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
                         if FSyncMainThread then
                         begin
                           TThread.Synchronize(nil, procedure begin
@@ -6007,6 +6032,7 @@ begin
                           end);
                           Exit(SetValue(ret, retval));
                         end else
+{$ENDIF}
                           Exit(SetValue(vl.GetValue(val), retval));
                       end;
                     's':
@@ -6015,9 +6041,11 @@ begin
                         vl := rt.GetField(p);
                         if GetValue(vl.FieldType.Handle, arguments[0], ret) then
                         begin
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
                           if FSyncMainThread then
                             TThread.Synchronize(nil, procedure begin
                               vl.SetValue(val, ret) end) else
+{$ENDIF}
                             vl.SetValue(val, ret);
                           Exit(True);
                         end else
@@ -6052,16 +6080,20 @@ begin
 
         case m.MethodKind of
           mkClassProcedure, mkClassFunction:
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
             if FSyncMainThread then
               TThread.Synchronize(nil, procedure begin
                 ret := m.Invoke(cls, args) end) else
+{$ENDIF}
               ret := m.Invoke(cls, args);
           mkProcedure, mkFunction:
             if (val <> nil) then
             begin
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
               if FSyncMainThread then
                 TThread.Synchronize(nil, procedure begin
                   ret := m.Invoke(val, args) end) else
+{$ENDIF}
                 ret := m.Invoke(val, args);
             end else
               Exit(False)
