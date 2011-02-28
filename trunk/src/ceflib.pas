@@ -4324,231 +4324,238 @@ var
   i: Integer;
   paths: TStringList;
   p: TCefString;
+  cw: Word;
 begin
   if LibHandle = 0 then
   begin
-    LibHandle := LoadLibrary(LIBCEF);
-    if LibHandle = 0 then
-      RaiseLastOSError;
+    cw := Get8087CW;
+    Set8087CW($27F);
+    try
+      LibHandle := LoadLibrary(LIBCEF);
+      if LibHandle = 0 then
+        RaiseLastOSError;
 
-    cef_string_wide_set := GetProcAddress(LibHandle, 'cef_string_wide_set');
-    cef_string_utf8_set := GetProcAddress(LibHandle, 'cef_string_utf8_set');
-    cef_string_utf16_set := GetProcAddress(LibHandle, 'cef_string_utf16_set');
-    cef_string_wide_clear := GetProcAddress(LibHandle, 'cef_string_wide_clear');
-    cef_string_utf8_clear := GetProcAddress(LibHandle, 'cef_string_utf8_clear');
-    cef_string_utf16_clear := GetProcAddress(LibHandle, 'cef_string_utf16_clear');
-    cef_string_wide_cmp := GetProcAddress(LibHandle, 'cef_string_wide_cmp');
-    cef_string_utf8_cmp := GetProcAddress(LibHandle, 'cef_string_utf8_cmp');
-    cef_string_utf16_cmp := GetProcAddress(LibHandle, 'cef_string_utf16_cmp');
-    cef_string_wide_to_utf8 := GetProcAddress(LibHandle, 'cef_string_wide_to_utf8');
-    cef_string_utf8_to_wide := GetProcAddress(LibHandle, 'cef_string_utf8_to_wide');
-    cef_string_wide_to_utf16 := GetProcAddress(LibHandle, 'cef_string_wide_to_utf16');
-    cef_string_utf16_to_wide := GetProcAddress(LibHandle, 'cef_string_utf16_to_wide');
-    cef_string_utf8_to_utf16 := GetProcAddress(LibHandle, 'cef_string_utf8_to_utf16');
-    cef_string_utf16_to_utf8 := GetProcAddress(LibHandle, 'cef_string_utf16_to_utf8');
-    cef_string_ascii_to_wide := GetProcAddress(LibHandle, 'cef_string_ascii_to_wide');
-    cef_string_ascii_to_utf16 := GetProcAddress(LibHandle, 'cef_string_ascii_to_utf16');
-    cef_string_userfree_wide_alloc := GetProcAddress(LibHandle, 'cef_string_userfree_wide_alloc');
-    cef_string_userfree_utf8_alloc := GetProcAddress(LibHandle, 'cef_string_userfree_utf8_alloc');
-    cef_string_userfree_utf16_alloc := GetProcAddress(LibHandle, 'cef_string_userfree_utf16_alloc');
-    cef_string_userfree_wide_free := GetProcAddress(LibHandle, 'cef_string_userfree_wide_free');
-    cef_string_userfree_utf8_free := GetProcAddress(LibHandle, 'cef_string_userfree_utf8_free');
-    cef_string_userfree_utf16_free := GetProcAddress(LibHandle, 'cef_string_userfree_utf16_free');
+      cef_string_wide_set := GetProcAddress(LibHandle, 'cef_string_wide_set');
+      cef_string_utf8_set := GetProcAddress(LibHandle, 'cef_string_utf8_set');
+      cef_string_utf16_set := GetProcAddress(LibHandle, 'cef_string_utf16_set');
+      cef_string_wide_clear := GetProcAddress(LibHandle, 'cef_string_wide_clear');
+      cef_string_utf8_clear := GetProcAddress(LibHandle, 'cef_string_utf8_clear');
+      cef_string_utf16_clear := GetProcAddress(LibHandle, 'cef_string_utf16_clear');
+      cef_string_wide_cmp := GetProcAddress(LibHandle, 'cef_string_wide_cmp');
+      cef_string_utf8_cmp := GetProcAddress(LibHandle, 'cef_string_utf8_cmp');
+      cef_string_utf16_cmp := GetProcAddress(LibHandle, 'cef_string_utf16_cmp');
+      cef_string_wide_to_utf8 := GetProcAddress(LibHandle, 'cef_string_wide_to_utf8');
+      cef_string_utf8_to_wide := GetProcAddress(LibHandle, 'cef_string_utf8_to_wide');
+      cef_string_wide_to_utf16 := GetProcAddress(LibHandle, 'cef_string_wide_to_utf16');
+      cef_string_utf16_to_wide := GetProcAddress(LibHandle, 'cef_string_utf16_to_wide');
+      cef_string_utf8_to_utf16 := GetProcAddress(LibHandle, 'cef_string_utf8_to_utf16');
+      cef_string_utf16_to_utf8 := GetProcAddress(LibHandle, 'cef_string_utf16_to_utf8');
+      cef_string_ascii_to_wide := GetProcAddress(LibHandle, 'cef_string_ascii_to_wide');
+      cef_string_ascii_to_utf16 := GetProcAddress(LibHandle, 'cef_string_ascii_to_utf16');
+      cef_string_userfree_wide_alloc := GetProcAddress(LibHandle, 'cef_string_userfree_wide_alloc');
+      cef_string_userfree_utf8_alloc := GetProcAddress(LibHandle, 'cef_string_userfree_utf8_alloc');
+      cef_string_userfree_utf16_alloc := GetProcAddress(LibHandle, 'cef_string_userfree_utf16_alloc');
+      cef_string_userfree_wide_free := GetProcAddress(LibHandle, 'cef_string_userfree_wide_free');
+      cef_string_userfree_utf8_free := GetProcAddress(LibHandle, 'cef_string_userfree_utf8_free');
+      cef_string_userfree_utf16_free := GetProcAddress(LibHandle, 'cef_string_userfree_utf16_free');
 
-{$IFDEF CEF_STRING_TYPE_UTF8}
-  cef_string_set := cef_string_utf8_set;
-  cef_string_clear := cef_string_utf8_clear;
-  cef_string_userfree_alloc := cef_string_userfree_utf8_alloc;
-  cef_string_userfree_free := cef_string_userfree_utf8_free;
-  cef_string_from_ascii := cef_string_utf8_copy;
-  cef_string_to_utf8 := cef_string_utf8_copy;
-  cef_string_from_utf8 := cef_string_utf8_copy;
-  cef_string_to_utf16 := cef_string_utf8_to_utf16;
-  cef_string_from_utf16 := cef_string_utf16_to_utf8;
-  cef_string_to_wide := cef_string_utf8_to_wide;
-  cef_string_from_wide := cef_string_wide_to_utf8;
-{$ENDIF}
+  {$IFDEF CEF_STRING_TYPE_UTF8}
+    cef_string_set := cef_string_utf8_set;
+    cef_string_clear := cef_string_utf8_clear;
+    cef_string_userfree_alloc := cef_string_userfree_utf8_alloc;
+    cef_string_userfree_free := cef_string_userfree_utf8_free;
+    cef_string_from_ascii := cef_string_utf8_copy;
+    cef_string_to_utf8 := cef_string_utf8_copy;
+    cef_string_from_utf8 := cef_string_utf8_copy;
+    cef_string_to_utf16 := cef_string_utf8_to_utf16;
+    cef_string_from_utf16 := cef_string_utf16_to_utf8;
+    cef_string_to_wide := cef_string_utf8_to_wide;
+    cef_string_from_wide := cef_string_wide_to_utf8;
+  {$ENDIF}
 
-{$IFDEF CEF_STRING_TYPE_UTF16}
-    cef_string_set := cef_string_utf16_set;
-    cef_string_clear := cef_string_utf16_clear;
-    cef_string_userfree_alloc := cef_string_userfree_utf16_alloc;
-    cef_string_userfree_free := cef_string_userfree_utf16_free;
-    cef_string_from_ascii := cef_string_ascii_to_utf16;
-    cef_string_to_utf8 := cef_string_utf16_to_utf8;
-    cef_string_from_utf8 := cef_string_utf8_to_utf16;
-    cef_string_to_utf16 := cef_string_utf16_copy;
-    cef_string_from_utf16 := cef_string_utf16_copy;
-    cef_string_to_wide := cef_string_utf16_to_wide;
-    cef_string_from_wide := cef_string_wide_to_utf16;
-{$ENDIF}
+  {$IFDEF CEF_STRING_TYPE_UTF16}
+      cef_string_set := cef_string_utf16_set;
+      cef_string_clear := cef_string_utf16_clear;
+      cef_string_userfree_alloc := cef_string_userfree_utf16_alloc;
+      cef_string_userfree_free := cef_string_userfree_utf16_free;
+      cef_string_from_ascii := cef_string_ascii_to_utf16;
+      cef_string_to_utf8 := cef_string_utf16_to_utf8;
+      cef_string_from_utf8 := cef_string_utf8_to_utf16;
+      cef_string_to_utf16 := cef_string_utf16_copy;
+      cef_string_from_utf16 := cef_string_utf16_copy;
+      cef_string_to_wide := cef_string_utf16_to_wide;
+      cef_string_from_wide := cef_string_wide_to_utf16;
+  {$ENDIF}
 
-{$IFDEF CEF_STRING_TYPE_WIDE}
-    cef_string_set := cef_string_wide_set;
-    cef_string_clear := cef_string_wide_clear;
-    cef_string_userfree_alloc := cef_string_userfree_wide_alloc;
-    cef_string_userfree_free := cef_string_userfree_wide_free;
-    cef_string_from_ascii := cef_string_ascii_to_wide;
-    cef_string_to_utf8 := cef_string_wide_to_utf8;
-    cef_string_from_utf8 := cef_string_utf8_to_wide;
-    cef_string_to_utf16 := cef_string_wide_to_utf16;
-    cef_string_from_utf16 := cef_string_utf16_to_wide;
-    cef_string_to_wide := cef_string_wide_copy;
-    cef_string_from_wide := cef_string_wide_copy;
-{$ENDIF}
+  {$IFDEF CEF_STRING_TYPE_WIDE}
+      cef_string_set := cef_string_wide_set;
+      cef_string_clear := cef_string_wide_clear;
+      cef_string_userfree_alloc := cef_string_userfree_wide_alloc;
+      cef_string_userfree_free := cef_string_userfree_wide_free;
+      cef_string_from_ascii := cef_string_ascii_to_wide;
+      cef_string_to_utf8 := cef_string_wide_to_utf8;
+      cef_string_from_utf8 := cef_string_utf8_to_wide;
+      cef_string_to_utf16 := cef_string_wide_to_utf16;
+      cef_string_from_utf16 := cef_string_utf16_to_wide;
+      cef_string_to_wide := cef_string_wide_copy;
+      cef_string_from_wide := cef_string_wide_copy;
+  {$ENDIF}
 
-    cef_string_map_alloc := GetProcAddress(LibHandle, 'cef_string_map_alloc');
-    cef_string_map_size := GetProcAddress(LibHandle, 'cef_string_map_size');
-    cef_string_map_find := GetProcAddress(LibHandle, 'cef_string_map_find');
-    cef_string_map_key := GetProcAddress(LibHandle, 'cef_string_map_key');
-    cef_string_map_value := GetProcAddress(LibHandle, 'cef_string_map_value');
-    cef_string_map_append := GetProcAddress(LibHandle, 'cef_string_map_append');
-    cef_string_map_clear := GetProcAddress(LibHandle, 'cef_string_map_clear');
-    cef_string_map_free := GetProcAddress(LibHandle, 'cef_string_map_free');
-    cef_string_list_alloc := GetProcAddress(LibHandle, 'cef_string_list_alloc');
-    cef_string_list_size := GetProcAddress(LibHandle, 'cef_string_list_size');
-    cef_string_list_value := GetProcAddress(LibHandle, 'cef_string_list_value');
-    cef_string_list_append := GetProcAddress(LibHandle, 'cef_string_list_append');
-    cef_string_list_clear := GetProcAddress(LibHandle, 'cef_string_list_clear');
-    cef_string_list_free := GetProcAddress(LibHandle, 'cef_string_list_free');
-    cef_string_list_copy := GetProcAddress(LibHandle, 'cef_string_list_copy');
-    cef_initialize := GetProcAddress(LibHandle, 'cef_initialize');
-    cef_shutdown := GetProcAddress(LibHandle, 'cef_shutdown');
-    cef_do_message_loop_work := GetProcAddress(LibHandle, 'cef_do_message_loop_work');
-    cef_register_extension := GetProcAddress(LibHandle, 'cef_register_extension');
-    cef_register_scheme := GetProcAddress(LibHandle, 'cef_register_scheme');
-    cef_currently_on := GetProcAddress(LibHandle, 'cef_currently_on');
-    cef_post_task := GetProcAddress(LibHandle, 'cef_post_task');
-    cef_post_delayed_task := GetProcAddress(LibHandle, 'cef_post_delayed_task');
-    cef_parse_url := GetProcAddress(LibHandle, 'cef_parse_url');
-    cef_create_url := GetProcAddress(LibHandle, 'cef_create_url');
-    cef_browser_create := GetProcAddress(LibHandle, 'cef_browser_create');
-    cef_browser_create_sync := GetProcAddress(LibHandle, 'cef_browser_create_sync');
-    cef_request_create := GetProcAddress(LibHandle, 'cef_request_create');
-    cef_post_data_create := GetProcAddress(LibHandle, 'cef_post_data_create');
-    cef_post_data_element_create := GetProcAddress(LibHandle, 'cef_post_data_element_create');
-    cef_stream_reader_create_for_file := GetProcAddress(LibHandle, 'cef_stream_reader_create_for_file');
-    cef_stream_reader_create_for_data := GetProcAddress(LibHandle, 'cef_stream_reader_create_for_data');
-    cef_stream_reader_create_for_handler := GetProcAddress(LibHandle, 'cef_stream_reader_create_for_handler');
-    cef_stream_writer_create_for_file := GetProcAddress(LibHandle, 'cef_stream_writer_create_for_file');
-    cef_stream_writer_create_for_handler := GetProcAddress(LibHandle, 'cef_stream_writer_create_for_handler');
-    cef_v8value_create_undefined := GetProcAddress(LibHandle, 'cef_v8value_create_undefined');
-    cef_v8value_create_null := GetProcAddress(LibHandle, 'cef_v8value_create_null');
-    cef_v8value_create_bool := GetProcAddress(LibHandle, 'cef_v8value_create_bool');
-    cef_v8value_create_int := GetProcAddress(LibHandle, 'cef_v8value_create_int');
-    cef_v8value_create_double := GetProcAddress(LibHandle, 'cef_v8value_create_double');
-    cef_v8value_create_string := GetProcAddress(LibHandle, 'cef_v8value_create_string');
-    cef_v8value_create_object := GetProcAddress(LibHandle, 'cef_v8value_create_object');
-    cef_v8value_create_array := GetProcAddress(LibHandle, 'cef_v8value_create_array');
-    cef_v8value_create_function := GetProcAddress(LibHandle, 'cef_v8value_create_function');
-    cef_xml_reader_create := GetProcAddress(LibHandle, 'cef_xml_reader_create');
-    cef_zip_reader_create := GetProcAddress(LibHandle, 'cef_zip_reader_create');
+      cef_string_map_alloc := GetProcAddress(LibHandle, 'cef_string_map_alloc');
+      cef_string_map_size := GetProcAddress(LibHandle, 'cef_string_map_size');
+      cef_string_map_find := GetProcAddress(LibHandle, 'cef_string_map_find');
+      cef_string_map_key := GetProcAddress(LibHandle, 'cef_string_map_key');
+      cef_string_map_value := GetProcAddress(LibHandle, 'cef_string_map_value');
+      cef_string_map_append := GetProcAddress(LibHandle, 'cef_string_map_append');
+      cef_string_map_clear := GetProcAddress(LibHandle, 'cef_string_map_clear');
+      cef_string_map_free := GetProcAddress(LibHandle, 'cef_string_map_free');
+      cef_string_list_alloc := GetProcAddress(LibHandle, 'cef_string_list_alloc');
+      cef_string_list_size := GetProcAddress(LibHandle, 'cef_string_list_size');
+      cef_string_list_value := GetProcAddress(LibHandle, 'cef_string_list_value');
+      cef_string_list_append := GetProcAddress(LibHandle, 'cef_string_list_append');
+      cef_string_list_clear := GetProcAddress(LibHandle, 'cef_string_list_clear');
+      cef_string_list_free := GetProcAddress(LibHandle, 'cef_string_list_free');
+      cef_string_list_copy := GetProcAddress(LibHandle, 'cef_string_list_copy');
+      cef_initialize := GetProcAddress(LibHandle, 'cef_initialize');
+      cef_shutdown := GetProcAddress(LibHandle, 'cef_shutdown');
+      cef_do_message_loop_work := GetProcAddress(LibHandle, 'cef_do_message_loop_work');
+      cef_register_extension := GetProcAddress(LibHandle, 'cef_register_extension');
+      cef_register_scheme := GetProcAddress(LibHandle, 'cef_register_scheme');
+      cef_currently_on := GetProcAddress(LibHandle, 'cef_currently_on');
+      cef_post_task := GetProcAddress(LibHandle, 'cef_post_task');
+      cef_post_delayed_task := GetProcAddress(LibHandle, 'cef_post_delayed_task');
+      cef_parse_url := GetProcAddress(LibHandle, 'cef_parse_url');
+      cef_create_url := GetProcAddress(LibHandle, 'cef_create_url');
+      cef_browser_create := GetProcAddress(LibHandle, 'cef_browser_create');
+      cef_browser_create_sync := GetProcAddress(LibHandle, 'cef_browser_create_sync');
+      cef_request_create := GetProcAddress(LibHandle, 'cef_request_create');
+      cef_post_data_create := GetProcAddress(LibHandle, 'cef_post_data_create');
+      cef_post_data_element_create := GetProcAddress(LibHandle, 'cef_post_data_element_create');
+      cef_stream_reader_create_for_file := GetProcAddress(LibHandle, 'cef_stream_reader_create_for_file');
+      cef_stream_reader_create_for_data := GetProcAddress(LibHandle, 'cef_stream_reader_create_for_data');
+      cef_stream_reader_create_for_handler := GetProcAddress(LibHandle, 'cef_stream_reader_create_for_handler');
+      cef_stream_writer_create_for_file := GetProcAddress(LibHandle, 'cef_stream_writer_create_for_file');
+      cef_stream_writer_create_for_handler := GetProcAddress(LibHandle, 'cef_stream_writer_create_for_handler');
+      cef_v8value_create_undefined := GetProcAddress(LibHandle, 'cef_v8value_create_undefined');
+      cef_v8value_create_null := GetProcAddress(LibHandle, 'cef_v8value_create_null');
+      cef_v8value_create_bool := GetProcAddress(LibHandle, 'cef_v8value_create_bool');
+      cef_v8value_create_int := GetProcAddress(LibHandle, 'cef_v8value_create_int');
+      cef_v8value_create_double := GetProcAddress(LibHandle, 'cef_v8value_create_double');
+      cef_v8value_create_string := GetProcAddress(LibHandle, 'cef_v8value_create_string');
+      cef_v8value_create_object := GetProcAddress(LibHandle, 'cef_v8value_create_object');
+      cef_v8value_create_array := GetProcAddress(LibHandle, 'cef_v8value_create_array');
+      cef_v8value_create_function := GetProcAddress(LibHandle, 'cef_v8value_create_function');
+      cef_xml_reader_create := GetProcAddress(LibHandle, 'cef_xml_reader_create');
+      cef_zip_reader_create := GetProcAddress(LibHandle, 'cef_zip_reader_create');
 
-    if not (
-      Assigned(cef_string_wide_set) and
-      Assigned(cef_string_utf8_set) and
-      Assigned(cef_string_utf16_set) and
-      Assigned(cef_string_wide_clear) and
-      Assigned(cef_string_utf8_clear) and
-      Assigned(cef_string_utf16_clear) and
-      Assigned(cef_string_wide_cmp) and
-      Assigned(cef_string_utf8_cmp) and
-      Assigned(cef_string_utf16_cmp) and
-      Assigned(cef_string_wide_to_utf8) and
-      Assigned(cef_string_utf8_to_wide) and
-      Assigned(cef_string_wide_to_utf16) and
-      Assigned(cef_string_utf16_to_wide) and
-      Assigned(cef_string_utf8_to_utf16) and
-      Assigned(cef_string_utf16_to_utf8) and
-      Assigned(cef_string_ascii_to_wide) and
-      Assigned(cef_string_ascii_to_utf16) and
-      Assigned(cef_string_userfree_wide_alloc) and
-      Assigned(cef_string_userfree_utf8_alloc) and
-      Assigned(cef_string_userfree_utf16_alloc) and
-      Assigned(cef_string_userfree_wide_free) and
-      Assigned(cef_string_userfree_utf8_free) and
-      Assigned(cef_string_userfree_utf16_free) and
+      if not (
+        Assigned(cef_string_wide_set) and
+        Assigned(cef_string_utf8_set) and
+        Assigned(cef_string_utf16_set) and
+        Assigned(cef_string_wide_clear) and
+        Assigned(cef_string_utf8_clear) and
+        Assigned(cef_string_utf16_clear) and
+        Assigned(cef_string_wide_cmp) and
+        Assigned(cef_string_utf8_cmp) and
+        Assigned(cef_string_utf16_cmp) and
+        Assigned(cef_string_wide_to_utf8) and
+        Assigned(cef_string_utf8_to_wide) and
+        Assigned(cef_string_wide_to_utf16) and
+        Assigned(cef_string_utf16_to_wide) and
+        Assigned(cef_string_utf8_to_utf16) and
+        Assigned(cef_string_utf16_to_utf8) and
+        Assigned(cef_string_ascii_to_wide) and
+        Assigned(cef_string_ascii_to_utf16) and
+        Assigned(cef_string_userfree_wide_alloc) and
+        Assigned(cef_string_userfree_utf8_alloc) and
+        Assigned(cef_string_userfree_utf16_alloc) and
+        Assigned(cef_string_userfree_wide_free) and
+        Assigned(cef_string_userfree_utf8_free) and
+        Assigned(cef_string_userfree_utf16_free) and
 
-      Assigned(cef_string_map_alloc) and
-      Assigned(cef_string_map_size) and
-      Assigned(cef_string_map_find) and
-      Assigned(cef_string_map_key) and
-      Assigned(cef_string_map_value) and
-      Assigned(cef_string_map_append) and
-      Assigned(cef_string_map_clear) and
-      Assigned(cef_string_map_free) and
-      Assigned(cef_string_list_alloc) and
-      Assigned(cef_string_list_size) and
-      Assigned(cef_string_list_value) and
-      Assigned(cef_string_list_append) and
-      Assigned(cef_string_list_clear) and
-      Assigned(cef_string_list_free) and
-      Assigned(cef_string_list_copy) and
-      Assigned(cef_initialize) and
-      Assigned(cef_shutdown) and
-      Assigned(cef_do_message_loop_work) and
-      Assigned(cef_register_extension) and
-      Assigned(cef_register_scheme) and
-      Assigned(cef_currently_on) and
-      Assigned(cef_post_task) and
-      Assigned(cef_post_delayed_task) and
-      Assigned(cef_parse_url) and
-      Assigned(cef_create_url) and
-      Assigned(cef_browser_create) and
-      Assigned(cef_browser_create_sync) and
-      Assigned(cef_request_create) and
-      Assigned(cef_post_data_create) and
-      Assigned(cef_post_data_element_create) and
-      Assigned(cef_stream_reader_create_for_file) and
-      Assigned(cef_stream_reader_create_for_data) and
-      Assigned(cef_stream_reader_create_for_handler) and
-      Assigned(cef_stream_writer_create_for_file) and
-      Assigned(cef_stream_writer_create_for_handler) and
-      Assigned(cef_v8value_create_undefined) and
-      Assigned(cef_v8value_create_null) and
-      Assigned(cef_v8value_create_bool) and
-      Assigned(cef_v8value_create_int) and
-      Assigned(cef_v8value_create_double) and
-      Assigned(cef_v8value_create_string) and
-      Assigned(cef_v8value_create_object) and
-      Assigned(cef_v8value_create_array) and
-      Assigned(cef_v8value_create_function) and
-      Assigned(cef_xml_reader_create) and
-      Assigned(cef_zip_reader_create)
-    ) then raise Exception.Create('Invalid CEF Library version');
+        Assigned(cef_string_map_alloc) and
+        Assigned(cef_string_map_size) and
+        Assigned(cef_string_map_find) and
+        Assigned(cef_string_map_key) and
+        Assigned(cef_string_map_value) and
+        Assigned(cef_string_map_append) and
+        Assigned(cef_string_map_clear) and
+        Assigned(cef_string_map_free) and
+        Assigned(cef_string_list_alloc) and
+        Assigned(cef_string_list_size) and
+        Assigned(cef_string_list_value) and
+        Assigned(cef_string_list_append) and
+        Assigned(cef_string_list_clear) and
+        Assigned(cef_string_list_free) and
+        Assigned(cef_string_list_copy) and
+        Assigned(cef_initialize) and
+        Assigned(cef_shutdown) and
+        Assigned(cef_do_message_loop_work) and
+        Assigned(cef_register_extension) and
+        Assigned(cef_register_scheme) and
+        Assigned(cef_currently_on) and
+        Assigned(cef_post_task) and
+        Assigned(cef_post_delayed_task) and
+        Assigned(cef_parse_url) and
+        Assigned(cef_create_url) and
+        Assigned(cef_browser_create) and
+        Assigned(cef_browser_create_sync) and
+        Assigned(cef_request_create) and
+        Assigned(cef_post_data_create) and
+        Assigned(cef_post_data_element_create) and
+        Assigned(cef_stream_reader_create_for_file) and
+        Assigned(cef_stream_reader_create_for_data) and
+        Assigned(cef_stream_reader_create_for_handler) and
+        Assigned(cef_stream_writer_create_for_file) and
+        Assigned(cef_stream_writer_create_for_handler) and
+        Assigned(cef_v8value_create_undefined) and
+        Assigned(cef_v8value_create_null) and
+        Assigned(cef_v8value_create_bool) and
+        Assigned(cef_v8value_create_int) and
+        Assigned(cef_v8value_create_double) and
+        Assigned(cef_v8value_create_string) and
+        Assigned(cef_v8value_create_object) and
+        Assigned(cef_v8value_create_array) and
+        Assigned(cef_v8value_create_function) and
+        Assigned(cef_xml_reader_create) and
+        Assigned(cef_zip_reader_create)
+      ) then raise Exception.Create('Invalid CEF Library version');
 
-    FillChar(settings, SizeOf(settings), 0);
-    settings.size := SizeOf(settings);
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-    settings.multi_threaded_message_loop := False;
-{$ELSE}
-    settings.multi_threaded_message_loop := True;
-{$ENDIF}
-    settings.cache_path := CefString(Cache);
-    settings.user_agent := cefstring(UserAgent);
-    settings.product_version := CefString(ProductVersion);
-    settings.locale := CefString(Locale);
-    if (ExtraPluginPaths <> '') then
-    begin
-      settings.extra_plugin_paths := cef_string_list_alloc;
-      paths := TStringList.Create;
-      try
-        paths.Delimiter := ';';
-        paths.DelimitedText := ExtraPluginPaths;
-        for i := 0 to paths.Count - 1 do
-        begin
-          p := cefString(paths[i]);
-          cef_string_list_append(settings.extra_plugin_paths, @p);
+      FillChar(settings, SizeOf(settings), 0);
+      settings.size := SizeOf(settings);
+  {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+      settings.multi_threaded_message_loop := False;
+  {$ELSE}
+      settings.multi_threaded_message_loop := True;
+  {$ENDIF}
+      settings.cache_path := CefString(Cache);
+      settings.user_agent := cefstring(UserAgent);
+      settings.product_version := CefString(ProductVersion);
+      settings.locale := CefString(Locale);
+      if (ExtraPluginPaths <> '') then
+      begin
+        settings.extra_plugin_paths := cef_string_list_alloc;
+        paths := TStringList.Create;
+        try
+          paths.Delimiter := ';';
+          paths.DelimitedText := ExtraPluginPaths;
+          for i := 0 to paths.Count - 1 do
+          begin
+            p := cefString(paths[i]);
+            cef_string_list_append(settings.extra_plugin_paths, @p);
+          end;
+        finally
+          paths.free;
         end;
-      finally
-        paths.free;
       end;
+      settings.log_file := CefString(LogFile);
+      settings.log_severity := LogSeverity;
+      cef_initialize(@settings, nil);
+      if settings.extra_plugin_paths <> nil then
+        cef_string_list_free(settings.extra_plugin_paths);
+    finally
+      Set8087CW(cw);
     end;
-    settings.log_file := CefString(LogFile);
-    settings.log_severity := LogSeverity;
-    cef_initialize(@settings, nil);
-    if settings.extra_plugin_paths <> nil then
-      cef_string_list_free(settings.extra_plugin_paths);
   end;
 end;
 
@@ -4556,15 +4563,22 @@ function CefBrowserCreate(windowInfo: PCefWindowInfo; popup: Boolean;
   handler: PCefHandler; const url: ustring): Boolean;
 var
   u: TCefString;
+  cw: Word;
 begin
   CefLoadLibDefault;
   u := CefString(url);
-  Result :=
-    cef_browser_create(
-      windowInfo,
-      Ord(popup),
-      handler,
-      @u) <> 0;
+  cw := Get8087CW;
+  Set8087CW($27F);
+  try
+    Result :=
+      cef_browser_create(
+        windowInfo,
+        Ord(popup),
+        handler,
+        @u) <> 0;
+  finally
+    Set8087CW(cw);
+  end;
 end;
 
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
