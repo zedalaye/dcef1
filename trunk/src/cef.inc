@@ -5,7 +5,7 @@
 {.$DEFINE CEF_MULTI_THREADED_MESSAGE_LOOP}
 
 {$IFDEF FPC}
-  // for multithreading message loop on FPC, still not work
+  // force multithreading message loop on FPC, still not work
   {$DEFINE CEF_MULTI_THREADED_MESSAGE_LOOP}
 {$ENDIF}
 
