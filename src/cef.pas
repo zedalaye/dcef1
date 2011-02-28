@@ -15,9 +15,13 @@
  *)
 
 unit cef;
-
+{$I cef.inc}
 interface
-uses Classes, Controls, Messages, Windows, ceflib;
+uses
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+  AppEvnts,
+{$ENDIF}
+Classes, Controls, Messages, Windows, ceflib;
 
 type
   TCustomChromium = class;
@@ -164,6 +168,10 @@ type
     FUserStyleSheetLocation: ustring;
     FDefaultEncoding: ustring;
     FFontOptions: TChromiumFontOptions;
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+    FAppEvents: TApplicationEvents;
+    procedure doIdle(Sender: TObject; var Done: Boolean);
+{$ENDIF}
   protected
     procedure WndProc(var Message: TMessage); override;
 
@@ -795,6 +803,10 @@ end;
 constructor TCustomChromium.Create(AOwner: TComponent);
 begin
   inherited;
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+  FAppEvents := TApplicationEvents.Create(Self);
+  FAppEvents.OnIdle := doIdle;
+{$ENDIF}
   InitializeCriticalSection(FCriticalSection);
   FSelf := Self;
   FillChar(FHandler, SizeOf(FHandler), 0);
@@ -844,8 +856,18 @@ begin
   FBrowser := nil;
   DeleteCriticalSection(FCriticalSection);
   FFontOptions.Free;
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+  FAppEvents.Free;
+{$ENDIF}
   inherited;
 end;
+
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+procedure TCustomChromium.doIdle(Sender: TObject; var Done: Boolean);
+begin
+  CefDoMessageLoopWork;
+end;
+{$ENDIF}
 
 function TCustomChromium.doOnAddressChange(const browser: ICefBrowser;
   const frame: ICefFrame; const url: ustring): TCefRetval;

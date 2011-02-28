@@ -4562,9 +4562,19 @@ end;
 
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 procedure CefDoMessageLoopWork;
+var
+  cw: Word;
 begin
   if LibHandle > 0 then
-    cef_do_message_loop_work;
+  begin
+     cw := Get8087CW;
+     Set8087CW($27F);
+     try
+       cef_do_message_loop_work;
+     finally
+       Set8087CW(cw);
+     end;
+  end;
 end;
 {$ENDIF}
 
