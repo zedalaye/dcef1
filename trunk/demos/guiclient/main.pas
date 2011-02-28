@@ -329,10 +329,14 @@ procedure TMainForm.crmAddressChange(Sender: TCustomChromium;
   out Result: TCefRetval);
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and frame.IsMain then
-{$IFDEF DELPHI12_UP}
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+  {$IFDEF DELPHI12_UP}
     TThread.Queue(nil, procedure begin edAddress.Text := url end);
-{$ELSE}
+  {$ELSE}
     SetWindowTextW(edAddress.Handle, PWideChar(url))
+  {$ENDIF}
+{$ELSE}
+  edAddress.Text := url;
 {$ENDIF}
 end;
 
@@ -366,13 +370,17 @@ procedure TMainForm.crmStatus(Sender: TCustomChromium;
   const browser: ICefBrowser; const value: ustring;
   StatusType: TCefHandlerStatusType; out Result: TCefRetval);
 begin
-{$IFDEF DELPHI12_UP}
-  case StatusType of
-    STATUSTYPE_MOUSEOVER_URL, STATUSTYPE_KEYBOARD_FOCUS_URL:
-      TThread.Queue(nil, procedure begin
-        StatusBar.SimpleText := value
-      end);
-  end;
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+  {$IFDEF DELPHI12_UP}
+    case StatusType of
+      STATUSTYPE_MOUSEOVER_URL, STATUSTYPE_KEYBOARD_FOCUS_URL:
+        TThread.Queue(nil, procedure begin
+          StatusBar.SimpleText := value
+        end);
+    end;
+  {$ENDIF}
+{$ELSE}
+  StatusBar.SimpleText := value
 {$ENDIF}
 end;
 
@@ -380,10 +388,14 @@ procedure TMainForm.crmTitleChange(Sender: TCustomChromium;
   const browser: ICefBrowser; const title: ustring; out Result: TCefRetval);
 begin
   if browser.GetWindowHandle = crm.BrowserHandle then
-{$IFDEF DELPHI12_UP}
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+  {$IFDEF DELPHI12_UP}
     TThread.Queue(nil, procedure begin Caption := title end);
-{$ELSE}
+  {$ELSE}
     SetWindowTextW(MainForm.Handle, PWideChar(title))
+  {$ENDIF}
+{$ELSE}
+  Caption := title;
 {$ENDIF}
 end;
 

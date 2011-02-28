@@ -279,9 +279,14 @@ end;
 function THandler.doOnLoadEnd(const browser: ICefBrowser;
   const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer): TCefRetval;
 begin
-  if browser.GetWindowHandle = browsrHwnd then
-    isLoading := False;
-  Result := RV_CONTINUE;
+  Lock;
+  try
+    if browser.GetWindowHandle = browsrHwnd then
+      isLoading := False;
+    Result := RV_CONTINUE;
+  finally
+    Unlock;
+  end;
 end;
 
 function THandler.doOnLoadStart(const browser: ICefBrowser;
@@ -481,7 +486,6 @@ begin
 
     ShowWindow(Window, SW_SHOW);
     UpdateWindow(Window);
-
     while(GetMessageW(msg, 0, 0, 0)) do
     begin
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
