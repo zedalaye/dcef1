@@ -21,7 +21,7 @@ uses
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   AppEvnts,
 {$ENDIF}
-Classes, Controls, Messages, Windows, ceflib;
+  Classes, Controls, Messages, Windows, ceflib;
 
 type
   TCustomChromium = class;
@@ -129,6 +129,7 @@ type
   private
     FSelf: Pointer;
     FHandler: TCefHandler;
+    FInitialized: Boolean;
     FBrowser: ICefBrowser;
     FBrowserHandle: HWND;
     FDefaultUrl: ustring;
@@ -273,10 +274,12 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    procedure Load(const url: ustring);
   end;
 
   TChromium = class(TCustomChromium)
   published
+    property Color;
     property Align;
     property Anchors;
     property Constraints;
@@ -854,6 +857,7 @@ begin
 
   FBrowserHandle := INVALID_HANDLE_VALUE;
   FBrowser := nil;
+  FInitialized := False;
 end;
 
 destructor TCustomChromium.Destroy;
@@ -1124,13 +1128,13 @@ begin
     FOnTooltip(Self, browser, text, Result);
 end;
 
-procedure TCustomChromium.Loaded;
+procedure TCustomChromium.Load(const url: ustring);
 var
   info: TCefWindowInfo;
   rect: TRect;
+  frm: ICefFrame;
 begin
-  inherited;
-  if not (csDesigning in ComponentState) then
+  if not (csDesigning in ComponentState) and (not FInitialized)  then
   begin
     FillChar(info, SizeOf(info), 0);
     rect := GetClientRect;
@@ -1144,10 +1148,23 @@ begin
 {$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
     CefBrowserCreate(@info, False, @FHandler, FDefaultUrl);
 {$ELSE}
-    FBrowser := CefBrowserCreateSync(@info, False, @FHandler, FDefaultUrl);
+    FBrowser := CefBrowserCreateSync(@info, False, @FHandler, url);
     FBrowserHandle := FBrowser.GetWindowHandle;
 {$ENDIF}
-  end;
+    FInitialized := True;
+  end else
+    if FBrowser <> nil then
+    begin
+      frm := FBrowser.MainFrame;
+      if frm <> nil then
+        frm.LoadUrl(url);
+    end;
+end;
+
+procedure TCustomChromium.Loaded;
+begin
+  inherited;
+  Load(FDefaultUrl);
 end;
 
 procedure TCustomChromium.WndProc(var Message: TMessage);
@@ -1181,7 +1198,7 @@ begin
         inherited WndProc(Message);
       end;
     WM_ERASEBKGND:
-      if (csDesigning in ComponentState) then
+      if (csDesigning in ComponentState) or (FBrowser = nil) then
         inherited WndProc(Message);
   else
     inherited WndProc(Message);
