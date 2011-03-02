@@ -2733,6 +2733,19 @@ begin
   Result := cef_parse_url(@u, parts) <> 0;
 end;
 
+procedure CefShutdown;
+var
+  cw: Word;
+begin
+  cw := Get8087CW;
+  try
+    Set8087CW($7f);
+    cef_shutdown;
+  finally
+    Set8087CW(cw);
+  end;
+end;
+
 { cef_base }
 
 function cef_base_add_ref(self: PCefBase): Integer; stdcall;
@@ -6162,14 +6175,13 @@ end;
 
 {$ENDIF}
 
-
 initialization
   IsMultiThread := True;
 
 finalization
   if LibHandle <> 0 then
   begin
-    cef_shutdown;
+    CefShutdown;
     FreeLibrary(LibHandle);
   end;
 
