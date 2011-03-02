@@ -1172,7 +1172,9 @@ var
   rect: TRect;
   hdwp: THandle;
   brws: ICefBrowser;
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   cw:Word;
+{$ENDIF}
 begin
   case Message.Msg of
     WM_SIZE:
@@ -1183,16 +1185,22 @@ begin
           if (brws <> nil) and (brws.GetWindowHandle <> INVALID_HANDLE_VALUE) then
           begin
             rect := GetClientRect;
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
             cw := Get8087CW;
+{$ENDIF}
             hdwp := BeginDeferWindowPos(1);
             try
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
               Set8087CW($17f);
+{$ENDIF}
               hdwp := DeferWindowPos(hdwp, brws.GetWindowHandle, 0,
                 rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
                 SWP_NOZORDER);
             finally
               EndDeferWindowPos(hdwp);
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
               Set8087CW(cw);
+{$ENDIF}
             end;
 
           end;
