@@ -129,7 +129,6 @@ type
   private
     FSelf: Pointer;
     FHandler: TCefHandler;
-    FInitialized: Boolean;
     FBrowser: ICefBrowser;
     FBrowserHandle: HWND;
     FDefaultUrl: ustring;
@@ -171,6 +170,8 @@ type
   protected
     procedure WndProc(var Message: TMessage); override;
     procedure Loaded; override;
+    procedure CreateWindowHandle(const Params: TCreateParams); override;
+    procedure Resize; override;
 
     function doOnBeforeCreated(const parentBrowser: ICefBrowser;
       var windowInfo: TCefWindowInfo; popup: Boolean;
@@ -857,7 +858,32 @@ begin
 
   FBrowserHandle := INVALID_HANDLE_VALUE;
   FBrowser := nil;
-  FInitialized := False;
+end;
+
+procedure TCustomChromium.CreateWindowHandle(const Params: TCreateParams);
+var
+  info: TCefWindowInfo;
+  rect: TRect;
+begin
+  inherited;
+  if not (csDesigning in ComponentState) then
+  begin
+    FillChar(info, SizeOf(info), 0);
+    rect := GetClientRect;
+    info.Style := WS_CHILD or WS_VISIBLE or WS_CLIPCHILDREN or WS_CLIPSIBLINGS or WS_TABSTOP;
+    info.WndParent := Handle;
+    info.x := rect.left;
+    info.y := rect.top;
+    info.Width := rect.right - rect.left;
+    info.Height := rect.bottom - rect.top;
+    info.ExStyle := 0;
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+    CefBrowserCreate(@info, False, @FHandler, FDefaultUrl);
+{$ELSE}
+    FBrowser := CefBrowserCreateSync(@info, False, @FHandler, '');
+    FBrowserHandle := FBrowser.GetWindowHandle;
+{$ENDIF}
+  end;
 end;
 
 destructor TCustomChromium.Destroy;
@@ -1130,35 +1156,15 @@ end;
 
 procedure TCustomChromium.Load(const url: ustring);
 var
-  info: TCefWindowInfo;
-  rect: TRect;
   frm: ICefFrame;
 begin
-  if not (csDesigning in ComponentState) and (not FInitialized)  then
+  HandleNeeded;
+  if FBrowser <> nil then
   begin
-    FillChar(info, SizeOf(info), 0);
-    rect := GetClientRect;
-    info.Style := WS_CHILD or WS_VISIBLE or WS_CLIPCHILDREN or WS_CLIPSIBLINGS or WS_TABSTOP;
-    info.WndParent := Handle;
-    info.x := rect.left;
-    info.y := rect.top;
-    info.Width := rect.right - rect.left;
-    info.Height := rect.bottom - rect.top;
-    info.ExStyle := 0;
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-    CefBrowserCreate(@info, False, @FHandler, FDefaultUrl);
-{$ELSE}
-    FBrowser := CefBrowserCreateSync(@info, False, @FHandler, url);
-    FBrowserHandle := FBrowser.GetWindowHandle;
-{$ENDIF}
-    FInitialized := True;
-  end else
-    if FBrowser <> nil then
-    begin
-      frm := FBrowser.MainFrame;
-      if frm <> nil then
-        frm.LoadUrl(url);
-    end;
+    frm := FBrowser.MainFrame;
+    if frm <> nil then
+      frm.LoadUrl(url);
+  end;
 end;
 
 procedure TCustomChromium.Loaded;
@@ -1167,46 +1173,46 @@ begin
   Load(FDefaultUrl);
 end;
 
-procedure TCustomChromium.WndProc(var Message: TMessage);
+procedure TCustomChromium.Resize;
 var
+  brws: ICefBrowser;
   rect: TRect;
   hdwp: THandle;
-  brws: ICefBrowser;
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   cw:Word;
 {$ENDIF}
 begin
-  case Message.Msg of
-    WM_SIZE:
-      begin
-        if not (csDesigning in ComponentState) then
-        begin
-          brws := FBrowser;
-          if (brws <> nil) and (brws.GetWindowHandle <> INVALID_HANDLE_VALUE) then
-          begin
-            rect := GetClientRect;
+  inherited;
+  if not (csDesigning in ComponentState) then
+  begin
+    brws := FBrowser;
+    if (brws <> nil) and (brws.GetWindowHandle <> INVALID_HANDLE_VALUE) then
+    begin
+      rect := GetClientRect;
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-            cw := Get8087CW;
+      cw := Get8087CW;
 {$ENDIF}
-            hdwp := BeginDeferWindowPos(1);
-            try
+      hdwp := BeginDeferWindowPos(1);
+      try
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-              Set8087CW($17f);
+        Set8087CW($17f);
 {$ENDIF}
-              hdwp := DeferWindowPos(hdwp, brws.GetWindowHandle, 0,
-                rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
-                SWP_NOZORDER);
-            finally
-              EndDeferWindowPos(hdwp);
+        hdwp := DeferWindowPos(hdwp, brws.GetWindowHandle, 0,
+          rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
+          SWP_NOZORDER);
+      finally
+        EndDeferWindowPos(hdwp);
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-              Set8087CW(cw);
+        Set8087CW(cw);
 {$ENDIF}
-            end;
-
-          end;
-        end;
-        inherited WndProc(Message);
       end;
+    end;
+  end;
+end;
+
+procedure TCustomChromium.WndProc(var Message: TMessage);
+begin
+  case Message.Msg of
     WM_SETFOCUS:
       begin
         if (FBrowser <> nil) and (FBrowser.GetWindowHandle <> 0) then
