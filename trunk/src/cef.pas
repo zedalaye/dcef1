@@ -131,7 +131,6 @@ type
     FHandler: TCefHandler;
     FBrowser: ICefBrowser;
     FBrowserHandle: HWND;
-    FCriticalSection: TRTLCriticalSection;
     FDefaultUrl: ustring;
 
     FOnBeforeCreated: TOnBeforeCreated;
@@ -168,12 +167,9 @@ type
     FUserStyleSheetLocation: ustring;
     FDefaultEncoding: ustring;
     FFontOptions: TChromiumFontOptions;
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-    FAppEvents: TApplicationEvents;
-    procedure doIdle(Sender: TObject; var Done: Boolean);
-{$ENDIF}
   protected
     procedure WndProc(var Message: TMessage); override;
+    procedure Loaded; override;
 
     function doOnBeforeCreated(const parentBrowser: ICefBrowser;
       var windowInfo: TCefWindowInfo; popup: Boolean;
@@ -237,7 +233,6 @@ type
     function doOnStatus(const browser: ICefBrowser; const value: ustring;
       StatusType: TCefHandlerStatusType): TCefRetval; virtual;
 
-
     property DefaultUrl: ustring read FDefaultUrl write FDefaultUrl;
     property OnBeforeCreated: TOnBeforeCreated read FOnBeforeCreated write FOnBeforeCreated;
     property OnAfterCreated: TOnAfterCreated read FOnAfterCreated write FOnAfterCreated;
@@ -274,12 +269,10 @@ type
     property DefaultEncoding: ustring read FDefaultEncoding write FDefaultEncoding;
     property UserStyleSheetLocation: ustring read FUserStyleSheetLocation write FUserStyleSheetLocation;
     property BrowserHandle: HWND read FBrowserHandle;
+    property Browser: ICefBrowser read FBrowser;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
-    procedure Lock;
-    procedure UnLock;
-
   end;
 
   TChromium = class(TCustomChromium)
@@ -292,6 +285,7 @@ type
     property TabStop;
     property Visible;
     property BrowserHandle;
+    property Browser;
 
     property OnBeforeCreated;
     property OnAfterCreated;
@@ -332,6 +326,18 @@ type
 procedure Register;
 
 implementation
+
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+var
+  CefInstances: Integer = 0;
+
+type
+  TCefApplicationEvents = class(TApplicationEvents)
+  public
+    procedure doIdle(Sender: TObject; var Done: Boolean);
+    constructor Create(AOwner: TComponent); override;
+  end;
+{$ENDIF}
 
 procedure Register;
 begin
@@ -804,10 +810,9 @@ constructor TCustomChromium.Create(AOwner: TComponent);
 begin
   inherited;
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-  FAppEvents := TApplicationEvents.Create(Self);
-  FAppEvents.OnIdle := doIdle;
+  if not (csDesigning in ComponentState) then
+    InterlockedIncrement(CefInstances);
 {$ENDIF}
-  InitializeCriticalSection(FCriticalSection);
   FSelf := Self;
   FillChar(FHandler, SizeOf(FHandler), 0);
   FHandler.base.size := SizeOf(FHandler);
@@ -854,20 +859,13 @@ end;
 destructor TCustomChromium.Destroy;
 begin
   FBrowser := nil;
-  DeleteCriticalSection(FCriticalSection);
   FFontOptions.Free;
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-  FAppEvents.Free;
+  if not (csDesigning in ComponentState) then
+    InterlockedDecrement(CefInstances);
 {$ENDIF}
   inherited;
 end;
-
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-procedure TCustomChromium.doIdle(Sender: TObject; var Done: Boolean);
-begin
-  CefDoMessageLoopWork;
-end;
-{$ENDIF}
 
 function TCustomChromium.doOnAddressChange(const browser: ICefBrowser;
   const frame: ICefFrame; const url: ustring): TCefRetval;
@@ -879,11 +877,13 @@ end;
 
 function TCustomChromium.doOnAfterCreated(const browser: ICefBrowser): TCefRetval;
 begin
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   if (browser <> nil) and not browser.IsPopup then
   begin
     FBrowser := browser;
     FBrowserHandle := browser.GetWindowHandle;
   end;
+{$ENDIF}
   Result := RV_CONTINUE;
   if Assigned(FOnAfterCreated) then
     FOnAfterCreated(Self, browser, Result);
@@ -938,6 +938,8 @@ end;
 function TCustomChromium.doOnBeforeWindowClose(
   const browser: ICefBrowser): TCefRetval;
 begin
+  if browser.GetWindowHandle = FBrowserHandle then
+    FBrowser := nil;
   Result := RV_CONTINUE;
   if Assigned(FOnBeforeWindowClose) then
     FOnBeforeWindowClose(Self, browser, Result);
@@ -1122,41 +1124,39 @@ begin
     FOnTooltip(Self, browser, text, Result);
 end;
 
-procedure TCustomChromium.Lock;
+procedure TCustomChromium.Loaded;
+var
+  info: TCefWindowInfo;
+  rect: TRect;
 begin
-  EnterCriticalSection(FCriticalSection);
-end;
-
-procedure TCustomChromium.UnLock;
-begin
-  LeaveCriticalSection(FCriticalSection);
+  inherited;
+  if not (csDesigning in ComponentState) then
+  begin
+    FillChar(info, SizeOf(info), 0);
+    rect := GetClientRect;
+    info.Style := WS_CHILD or WS_VISIBLE or WS_CLIPCHILDREN or WS_CLIPSIBLINGS or WS_TABSTOP;
+    info.WndParent := Handle;
+    info.x := rect.left;
+    info.y := rect.top;
+    info.Width := rect.right - rect.left;
+    info.Height := rect.bottom - rect.top;
+    info.ExStyle := 0;
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+    CefBrowserCreate(@info, False, @FHandler, FDefaultUrl);
+{$ELSE}
+    FBrowser := CefBrowserCreateSync(@info, False, @FHandler, FDefaultUrl);
+    FBrowserHandle := FBrowser.GetWindowHandle;
+{$ENDIF}
+  end;
 end;
 
 procedure TCustomChromium.WndProc(var Message: TMessage);
 var
-  info: TCefWindowInfo;
   rect: TRect;
   hdwp: THandle;
   brws: ICefBrowser;
 begin
   case Message.Msg of
-    WM_CREATE:
-    begin
-      if not (csDesigning in ComponentState) then
-      begin
-        FillChar(info, SizeOf(info), 0);
-        rect := GetClientRect;
-        info.Style := WS_CHILD or WS_VISIBLE or WS_CLIPCHILDREN or WS_CLIPSIBLINGS or WS_TABSTOP;
-        info.WndParent := Handle;
-        info.x := rect.left;
-        info.y := rect.top;
-        info.Width := rect.right - rect.left;
-        info.Height := rect.bottom - rect.top;
-        info.ExStyle := 0;
-        CefBrowserCreate(@info, False, @FHandler, FDefaultUrl);
-      end;
-      inherited WndProc(Message);
-    end;
     WM_SIZE:
       begin
         if not (csDesigning in ComponentState) then
@@ -1204,5 +1204,34 @@ begin
   FFixedFontFamily := '';
   FMinimumFontSize := 0;
 end;
+
+{ TCefApplicationEvents }
+
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+constructor TCefApplicationEvents.Create(AOwner: TComponent);
+begin
+  inherited;
+  OnIdle := DoIdle;
+end;
+{$ENDIF}
+
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+procedure TCefApplicationEvents.doIdle(Sender: TObject; var Done: Boolean);
+begin
+  if CefInstances > 0 then
+    CefDoMessageLoopWork;
+end;
+{$ENDIF}
+
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+var
+  AppEvent: TCefApplicationEvents;
+
+initialization
+  AppEvent := TCefApplicationEvents.Create(nil);
+
+finalization
+  AppEvent.Free;
+{$ENDIF}
 
 end.
