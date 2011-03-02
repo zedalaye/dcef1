@@ -27,7 +27,7 @@ uses
 {$IFDEF DELPHI14_UP}
   Rtti, TypInfo, Variants, Generics.Collections,
 {$ENDIF}
-  Math, Classes, Windows, SysUtils;
+  Classes, Windows, SysUtils;
 
 type
 {$IFDEF UNICODE}
@@ -4335,7 +4335,7 @@ begin
   if LibHandle = 0 then
   begin
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-    Set8087CW(Get8087CW or 4); // deactivate zerodivide exception
+    Set8087CW(Get8087CW or $3F); // deactivate FPU exception
 {$ENDIF}
     LibHandle := LoadLibrary(LIBCEF);
     if LibHandle = 0 then
@@ -4594,8 +4594,6 @@ end;
 
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 procedure CefDoMessageLoopWork;
-var
-  cw: Word;
 begin
   if LibHandle > 0 then
     cef_do_message_loop_work;
