@@ -1172,6 +1172,7 @@ var
   rect: TRect;
   hdwp: THandle;
   brws: ICefBrowser;
+  cw:Word;
 begin
   case Message.Msg of
     WM_SIZE:
@@ -1182,11 +1183,18 @@ begin
           if (brws <> nil) and (brws.GetWindowHandle <> INVALID_HANDLE_VALUE) then
           begin
             rect := GetClientRect;
+            cw := Get8087CW;
             hdwp := BeginDeferWindowPos(1);
-            hdwp := DeferWindowPos(hdwp, brws.GetWindowHandle, 0,
-              rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
-              SWP_NOZORDER);
-            EndDeferWindowPos(hdwp);
+            try
+              Set8087CW($17f);
+              hdwp := DeferWindowPos(hdwp, brws.GetWindowHandle, 0,
+                rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
+                SWP_NOZORDER);
+            finally
+              EndDeferWindowPos(hdwp);
+              Set8087CW(cw);
+            end;
+
           end;
         end;
         inherited WndProc(Message);
