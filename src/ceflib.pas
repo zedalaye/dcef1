@@ -2397,6 +2397,8 @@ function CefStringFreeAndGet(const str: PCefStringUserFree): ustring;
 procedure CefStringSet(const str: PCefString; const value: ustring);
 function CefBrowserCreate(windowInfo: PCefWindowInfo; popup: Boolean;
   handler: PCefHandler; const url: ustring): Boolean;
+function CefBrowserCreateSync(windowInfo: PCefWindowInfo; popup: Boolean;
+  handler: PCefHandler; const url: ustring): ICefBrowser;
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 procedure CefDoMessageLoopWork;
 {$ENDIF}
@@ -4576,6 +4578,28 @@ begin
         Ord(popup),
         handler,
         @u) <> 0;
+  finally
+    Set8087CW(cw);
+  end;
+end;
+
+function CefBrowserCreateSync(windowInfo: PCefWindowInfo; popup: Boolean;
+  handler: PCefHandler; const url: ustring): ICefBrowser;
+var
+  u: TCefString;
+  cw: Word;
+begin
+  CefLoadLibDefault;
+  u := CefString(url);
+  cw := Get8087CW;
+  Set8087CW($27F);
+  try
+    Result := TCefBrowserRef.UnWrap(
+      cef_browser_create_sync(
+        windowInfo,
+        Ord(popup),
+        handler,
+        @u));
   finally
     Set8087CW(cw);
   end;
