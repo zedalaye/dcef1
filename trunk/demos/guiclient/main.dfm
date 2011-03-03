@@ -159,6 +159,10 @@ object MainForm: TMainForm
       Caption = 'File scheme'
       OnExecute = actFileSchemeExecute
     end
+    object actDom: TAction
+      Caption = 'Hook DOM'
+      OnExecute = actDomExecute
+    end
   end
   object MainMenu: TMainMenu
     Left = 624
@@ -201,6 +205,9 @@ object MainForm: TMainForm
       end
       object actFileScheme1: TMenuItem
         Action = actFileScheme
+      end
+      object VisitDOM1: TMenuItem
+        Action = actDom
       end
     end
   end
