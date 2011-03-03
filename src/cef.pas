@@ -337,6 +337,8 @@ var
 
 type
   TCefApplicationEvents = class(TApplicationEvents)
+  private
+    FTick: Cardinal;
   public
     procedure doIdle(Sender: TObject; var Done: Boolean);
     constructor Create(AOwner: TComponent); override;
@@ -1239,14 +1241,27 @@ constructor TCefApplicationEvents.Create(AOwner: TComponent);
 begin
   inherited;
   OnIdle := DoIdle;
+  FTick := GetTickCount;
 end;
 {$ENDIF}
 
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 procedure TCefApplicationEvents.doIdle(Sender: TObject; var Done: Boolean);
+var
+  c: Cardinal;
 begin
   if CefInstances > 0 then
+  begin
     CefDoMessageLoopWork;
+    c := GetTickCount;
+    if  c - FTick <= 32 then
+      // avoid flickering :p
+      Done := False else
+      begin
+        Done := True;
+        FTick := c;
+      end;
+  end;
 end;
 {$ENDIF}
 

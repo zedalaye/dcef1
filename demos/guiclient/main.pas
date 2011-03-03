@@ -47,6 +47,8 @@ type
     Print1: TMenuItem;
     actFileScheme: TAction;
     actFileScheme1: TMenuItem;
+    actDom: TAction;
+    VisitDOM1: TMenuItem;
     procedure edAddressKeyPress(Sender: TObject; var Key: Char);
     procedure actPrevExecute(Sender: TObject);
     procedure actNextExecute(Sender: TObject);
@@ -81,6 +83,7 @@ type
       out Result: TCefRetval);
     procedure actPrintExecute(Sender: TObject);
     procedure actFileSchemeExecute(Sender: TObject);
+    procedure actDomExecute(Sender: TObject);
   private
     { Déclarations privées }
     FCanGoBack: Boolean;
@@ -100,6 +103,28 @@ procedure TMainForm.actCloseDevToolsExecute(Sender: TObject);
 begin
   if crm.Browser <> nil then
      crm.Browser.CloseDevTools;
+end;
+
+{$IFDEF DELPHI12_UP}
+function getpath(const n: ICefDomNode): string;
+begin
+  Result := '<' + n.Name + '>';
+  if (n.Parent <> nil) then
+    Result := getpath(n.Parent) + Result;
+end;
+{$ENDIF}
+
+procedure TMainForm.actDomExecute(Sender: TObject);
+begin
+{$IFDEF DELPHI12_UP}
+  crm.Browser.MainFrame.VisitDom(
+  TCefFastDomVisitor.Create(procedure (const doc: ICefDomDocument) begin
+      doc.Body.AddEventListener('mouseover', TCefFastDomEventListener.Create(
+      procedure (const event: ICefDomEvent) begin
+        caption := getpath(event.Target);
+      end), True)
+  end));
+{$ENDIF}
 end;
 
 procedure TMainForm.actExecuteJSExecute(Sender: TObject);
@@ -232,7 +257,8 @@ procedure TMainForm.crmAddressChange(Sender: TCustomChromium;
   const browser: ICefBrowser; const frame: ICefFrame; const url: ustring;
   out Result: TCefRetval);
 begin
-  edAddress.Text := url;
+  if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
+    edAddress.Text := url;
 end;
 
 procedure TMainForm.crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
