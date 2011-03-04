@@ -1662,7 +1662,7 @@ type
     // Notifies the client of the response data.
     on_headers_received: procedure(self: PCefWebUrlRequestClient;
         requester: PCefWebUrlRequest;
-        response: PCefResponse);
+        response: PCefResponse); stdcall;
 
     // Notifies the client of the upload progress.
     on_progress: procedure(self: PCefWebUrlRequestClient;
@@ -2183,6 +2183,10 @@ type
     property FirstPartyForCookies: ustring read GetFirstPartyForCookies write SetFirstPartyForCookies;
   end;
 
+{$IFDEF DELPHI12_UP}
+  TCefFastDomVisitorProc = reference to procedure(const document: ICefDomDocument);
+{$ENDIF}
+
   ICefFrame = interface(ICefBase)
     ['{8FD3D3A6-EA3A-4A72-8501-0276BD5C3D1D}']
     procedure Undo;
@@ -2208,6 +2212,9 @@ type
     function GetUrl: ustring;
     function GetBrowser: ICefBrowser;
     procedure VisitDom(const visitor: ICefDomVisitor);
+{$IFDEF DELPHI12_UP}
+    procedure VisitDomProc(const proc: TCefFastDomVisitorProc);
+{$ENDIF}
     property Name: ustring read GetName;
     property Url: ustring read GetUrl;
     property Source: ustring read GetSource;
@@ -2386,6 +2393,10 @@ type
     procedure HandleEvent(const event: ICefDomEvent);
   end;
 
+{$IFDEF DELPHI12_UP}
+  TCefFastDomEventListenerProc = reference to procedure(const event: ICefDomEvent);
+{$ENDIF}
+
   ICefDomNode = interface(ICefBase)
   ['{96C03C9E-9C98-491A-8DAD-1947332232D6}']
     function GetType: TCefDomNodeType;
@@ -2402,14 +2413,17 @@ type
     function HasChildren: Boolean;
     function GetFirstChild: ICefDomNode;
     function GetLastChild: ICefDomNode;
-    procedure AddEventListener(const eventType: ustring;
-      const listener: ICefDomEventListener; useCapture: Boolean);
+    procedure AddEventListener(const eventType: ustring; useCapture: Boolean;
+      const listener: ICefDomEventListener);
+{$IFDEF DELPHI12_UP}
+    procedure AddEventListenerProc(const eventType: ustring; useCapture: Boolean;
+      const proc: TCefFastDomEventListenerProc);
+{$ENDIF}
     function GetElementTagName: ustring;
     function HasElementAttributes: Boolean;
     function HasElementAttribute(const attrName: ustring): Boolean;
     function GetElementAttribute(const attrName: ustring): ustring;
     procedure GetElementAttributes(const attrMap: ICefStringMap);
-    procedure GetElementAttributesString(attrMap: TStrings);
     function SetElementAttribute(const attrName, value: ustring): Boolean;
     function GetElementInnerText: ustring;
 
@@ -2462,6 +2476,30 @@ type
   ICefDomVisitor = interface(ICefBase)
   ['{30398428-3196-4531-B968-2DDBED36F6B0}']
     procedure visit(const document: ICefDomDocument);
+  end;
+
+  ICefWebUrlRequest = interface(ICefBase)
+  ['{6AF727C3-54E7-4F4B-9147-7308CD405C71}']
+    procedure Cancel;
+    function GetState: TCefWebUrlRequestState;
+  end;
+
+  ICefResponse = interface(ICefBase)
+  ['{E9C896E4-59A8-4B96-AB5E-6EA3A498B7F1}']
+    function GetStatus: Integer;
+    function GetStatusText: ustring;
+    function GetHeader(const name: ustring): ustring;
+    procedure GetHeaderMap(const headerMap: ICefStringMap);
+  end;
+
+  ICefWebUrlRequestClient = interface(ICefBase)
+  ['{7A89C098-9C7D-43AE-9A82-CF1D10D91D20}']
+    procedure OnStateChange(const requester: ICefWebUrlRequest; state: TCefWebUrlRequestState);
+    procedure OnRedirect(const requester: ICefWebUrlRequest; const request: ICefRequest; const response: ICefResponse);
+    procedure OnHeadersReceived(const requester: ICefWebUrlRequest; const response: ICefResponse);
+    procedure OnProgress(const requester: ICefWebUrlRequest; bytesSent, totalBytesToBeSent: uint64);
+    procedure OnData(const requester: ICefWebUrlRequest; const data: Pointer; dataLength: Integer);
+    procedure OnError(const requester: ICefWebUrlRequest; errorCode: TCefHandlerErrorcode);
   end;
 
   TCefBaseOwn = class(TInterfacedObject, ICefBase)
@@ -2542,6 +2580,9 @@ type
     function GetUrl: ustring;
     function GetBrowser: ICefBrowser;
     procedure VisitDom(const visitor: ICefDomVisitor);
+{$IFDEF DELPHI12_UP}
+    procedure VisitDomProc(const proc: TCefFastDomVisitorProc);
+{$ENDIF}
   public
     class function UnWrap(data: Pointer): ICefFrame;
   end;
@@ -2903,8 +2944,6 @@ type
   end;
 
 {$IFDEF DELPHI12_UP}
-  TCefFastDomVisitorProc = reference to procedure(const document: ICefDomDocument);
-
   TCefFastDomVisitor = class(TCefDomVisitorOwn)
   private
     FProc: TCefFastDomVisitorProc;
@@ -2954,13 +2993,16 @@ type
     function GetFirstChild: ICefDomNode;
     function GetLastChild: ICefDomNode;
     procedure AddEventListener(const eventType: ustring;
-      const listener: ICefDomEventListener; useCapture: Boolean);
+      useCapture: Boolean; const listener: ICefDomEventListener);
+{$IFDEF DELPHI12_UP}
+    procedure AddEventListenerProc(const eventType: ustring; useCapture: Boolean;
+      const proc: TCefFastDomEventListenerProc);
+{$ENDIF}
     function GetElementTagName: ustring;
     function HasElementAttributes: Boolean;
     function HasElementAttribute(const attrName: ustring): Boolean;
     function GetElementAttribute(const attrName: ustring): ustring;
     procedure GetElementAttributes(const attrMap: ICefStringMap);
-    procedure GetElementAttributesString(List: TStrings);
     function SetElementAttribute(const attrName, value: ustring): Boolean;
     function GetElementInnerText: ustring;
   public
@@ -2988,9 +3030,39 @@ type
     constructor Create; virtual;
   end;
 
-{$IFDEF DELPHI12_UP}
-  TCefFastDomEventListenerProc = reference to procedure(const event: ICefDomEvent);
+  TCefResponseRef = class(TCefBaseRef, ICefResponse)
+  protected
+    function GetStatus: Integer;
+    function GetStatusText: ustring;
+    function GetHeader(const name: ustring): ustring;
+    procedure GetHeaderMap(const headerMap: ICefStringMap);
+  public
+    class function UnWrap(data: Pointer): ICefResponse;
+  end;
 
+  TCefWebUrlRequestClientOwn = class(TCefBaseOwn, ICefWebUrlRequestClient)
+  protected
+    procedure OnStateChange(const requester: ICefWebUrlRequest; state: TCefWebUrlRequestState); virtual;
+    procedure OnRedirect(const requester: ICefWebUrlRequest; const request: ICefRequest; const response: ICefResponse); virtual;
+    procedure OnHeadersReceived(const requester: ICefWebUrlRequest; const response: ICefResponse); virtual;
+    procedure OnProgress(const requester: ICefWebUrlRequest; bytesSent, totalBytesToBeSent: uint64); virtual;
+    procedure OnData(const requester: ICefWebUrlRequest; const data: Pointer; dataLength: Integer); virtual;
+    procedure OnError(const requester: ICefWebUrlRequest; errorCode: TCefHandlerErrorcode); virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TCefWebUrlRequestRef = class(TCefBaseRef, ICefWebUrlRequest)
+  protected
+    procedure Cancel;
+    function GetState: TCefWebUrlRequestState;
+  public
+    class function UnWrap(data: Pointer): ICefWebUrlRequest;
+    class function New(const request: ICefRequest;
+      const client: ICefWebUrlRequestClient): ICefWebUrlRequest;
+  end;
+
+{$IFDEF DELPHI12_UP}
   TCefFastDomEventListener = class(TCefDomEventListenerOwn)
   private
     FProc: TCefFastDomEventListenerProc;
@@ -3020,6 +3092,7 @@ type
     class procedure PostDelayed(threadId: TCefThreadId; Delay: Integer; const method: TTaskMethod{$IFNDEF DELPHI12_UP}; const Browser: ICefBrowser{$ENDIF});
     constructor Create(const method: TTaskMethod{$IFNDEF DELPHI12_UP}; const Browser: ICefBrowser{$ENDIF}); reintroduce;
   end;
+
 
 {$IFDEF DELPHI14_UP}
   TCefRTTIExtension = class(TCefv8HandlerOwn)
@@ -3373,7 +3446,7 @@ var
   cef_v8value_create_function: function(const name: PCefString; handler: PCefv8Handler): PCefv8Value; cdecl;
 
 
-  // Create a new CefWebUrlReqeust object.
+  // Create a new CefWebUrlRequest object.
   cef_web_urlrequest_create: function(request: PCefRequest; client: PCefWebUrlRequestClient): PCefWebUrlRequest; cdecl;
 
   // Create a new cef_xml_reader_t object. The returned object's functions can
@@ -4014,6 +4087,60 @@ begin
   TCefDomEventListenerOwn(CefGetObject(self)).HandleEvent(TCefDomEventRef.UnWrap(event));
 end;
 
+{ cef_web_url_request_client }
+
+procedure cef_web_url_request_client_on_state_change(self: PCefWebUrlRequestClient;
+  requester: PCefWebUrlRequest; state: TCefWebUrlRequestState); stdcall;
+begin
+  TCefWebUrlRequestClientOwn(CefGetObject(self)).OnStateChange(
+    TCefWebUrlRequestRef.UnWrap(requester),
+    state);
+end;
+
+procedure cef_web_url_request_client_on_redirect(self: PCefWebUrlRequestClient;
+    requester: PCefWebUrlRequest; request: PCefRequest; response: PCefResponse); stdcall;
+begin
+  TCefWebUrlRequestClientOwn(CefGetObject(self)).OnRedirect(
+    TCefWebUrlRequestRef.UnWrap(requester),
+    TCefRequestRef.UnWrap(request),
+    TCefResponseRef.UnWrap(response));
+end;
+
+procedure cef_web_url_request_client_on_headers_received(self: PCefWebUrlRequestClient;
+    requester: PCefWebUrlRequest; response: PCefResponse); stdcall;
+begin
+  TCefWebUrlRequestClientOwn(CefGetObject(self)).OnHeadersReceived(
+    TCefWebUrlRequestRef.UnWrap(requester),
+    TCefResponseRef.UnWrap(response));
+end;
+
+procedure cef_web_url_request_client_on_progress(self: PCefWebUrlRequestClient;
+    requester: PCefWebUrlRequest; bytesSent,
+    totalBytesToBeSent: uint64); stdcall;
+begin
+  TCefWebUrlRequestClientOwn(CefGetObject(self)).OnProgress(
+    TCefWebUrlRequestRef.UnWrap(requester),
+    bytesSent,
+    totalBytesToBeSent);
+end;
+
+procedure cef_web_url_request_client_on_data(self: PCefWebUrlRequestClient;
+    requester: PCefWebUrlRequest; const data: Pointer; dataLength: Integer); stdcall;
+begin
+  TCefWebUrlRequestClientOwn(CefGetObject(self)).OnData(
+    TCefWebUrlRequestRef.UnWrap(requester),
+    data,
+    dataLength);
+end;
+
+procedure cef_web_url_request_client_on_error(self: PCefWebUrlRequestClient;
+    requester: PCefWebUrlRequest; errorCode: TCefHandlerErrorcode); stdcall;
+begin
+  TCefWebUrlRequestClientOwn(CefGetObject(self)).OnError(
+    TCefWebUrlRequestRef.UnWrap(requester),
+    errorCode);
+end;
+
 { TCefBaseOwn }
 
 constructor TCefBaseOwn.CreateData(size: Cardinal);
@@ -4592,6 +4719,14 @@ procedure TCefFrameRef.VisitDom(const visitor: ICefDomVisitor);
 begin
   PCefFrame(FData)^.visit_dom(PCefFrame(FData), CefGetData(visitor));
 end;
+
+{$IFDEF DELPHI12_UP}
+procedure TCefFrameRef.VisitDomProc(const proc: TCefFastDomVisitorProc);
+begin
+  VisitDom(TCefFastDomVisitor.Create(proc) as ICefDomVisitor);
+end;
+{$ENDIF}
+
 
 class function TCefFrameRef.UnWrap(data: Pointer): ICefFrame;
 begin
@@ -5190,6 +5325,7 @@ begin
     cef_v8value_create_object := GetProcAddress(LibHandle, 'cef_v8value_create_object');
     cef_v8value_create_array := GetProcAddress(LibHandle, 'cef_v8value_create_array');
     cef_v8value_create_function := GetProcAddress(LibHandle, 'cef_v8value_create_function');
+    cef_web_urlrequest_create := GetProcAddress(LibHandle, 'cef_web_urlrequest_create');
     cef_xml_reader_create := GetProcAddress(LibHandle, 'cef_xml_reader_create');
     cef_zip_reader_create := GetProcAddress(LibHandle, 'cef_zip_reader_create');
 
@@ -5264,6 +5400,7 @@ begin
       Assigned(cef_v8value_create_object) and
       Assigned(cef_v8value_create_array) and
       Assigned(cef_v8value_create_function) and
+      Assigned(cef_web_urlrequest_create) and
       Assigned(cef_xml_reader_create) and
       Assigned(cef_zip_reader_create)
     ) then raise Exception.Create('Invalid CEF Library version');
@@ -6387,13 +6524,21 @@ end;
 { TCefDomNodeRef }
 
 procedure TCefDomNodeRef.AddEventListener(const eventType: ustring;
-  const listener: ICefDomEventListener; useCapture: Boolean);
+  useCapture: Boolean; const listener: ICefDomEventListener);
 var
   et: TCefString;
 begin
   et := CefString(eventType);
   PCefDomNode(FData)^.add_event_listener(PCefDomNode(FData), @et, listener.Wrap, Ord(useCapture));
 end;
+
+{$IFDEF DELPHI12_UP}
+procedure TCefDomNodeRef.AddEventListenerProc(const eventType: ustring; useCapture: Boolean;
+  const proc: TCefFastDomEventListenerProc);
+begin
+  AddEventListener(eventType, useCapture, TCefFastDomEventListener.Create(proc) as ICefDomEventListener);
+end;
+{$ENDIF}
 
 function TCefDomNodeRef.GetAsMarkup: ustring;
 begin
@@ -6416,28 +6561,6 @@ end;
 procedure TCefDomNodeRef.GetElementAttributes(const attrMap: ICefStringMap);
 begin
   PCefDomNode(FData)^.get_element_attributes(PCefDomNode(FData), attrMap.Handle);
-end;
-
-procedure TCefDomNodeRef.GetElementAttributesString(list: TStrings);
-var
-  map: TCefStringMap;
-  i: Integer;
-  k, v: TCefString;
-begin
-  map := cef_string_map_alloc;
-  try
-    PCefDomNode(FData)^.get_element_attributes(PCefDomNode(FData), map);
-    for i := 0 to cef_string_map_size(map) - 1 do
-    begin
-      k.str := nil; k.length := 0; k.dtor := nil;
-      v.str := nil; v.length := 0; v.dtor := nil;
-      cef_string_map_key(map, i, k);
-      cef_string_map_value(map, i, v);
-      list.Values[CefString(@k)] := CefString(@v);
-     end;
-  finally
-    cef_string_map_free(map)
-  end;
 end;
 
 function TCefDomNodeRef.GetElementInnerText: ustring;
@@ -6615,6 +6738,7 @@ begin
 end;
 
 { TCefFastDomEventListener }
+
 {$IFDEF DELPHI12_UP}
 constructor TCefFastDomEventListener.Create(
   const proc: TCefFastDomEventListenerProc);
@@ -6629,6 +6753,121 @@ begin
   FProc(event);
 end;
 {$ENDIF}
+
+{ TCefResponseRef }
+
+function TCefResponseRef.GetHeader(const name: ustring): ustring;
+var
+  n: TCefString;
+begin
+  n := CefString(name);
+  Result := CefStringFreeAndGet(PCefResponse(FData)^.get_header(PCefResponse(FData), @n));
+end;
+
+procedure TCefResponseRef.GetHeaderMap(const headerMap: ICefStringMap);
+begin
+  PCefResponse(FData)^.get_header_map(PCefResponse(FData), headermap.gethandle);
+end;
+
+function TCefResponseRef.GetStatus: Integer;
+begin
+  Result := PCefResponse(FData)^.get_status(PCefResponse(FData));
+end;
+
+function TCefResponseRef.GetStatusText: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefResponse(FData)^.get_status_text(PCefResponse(FData)));
+end;
+
+class function TCefResponseRef.UnWrap(data: Pointer): ICefResponse;
+begin
+  if data <> nil then
+  begin
+    Result := Create(data) as ICefResponse;
+    if Assigned(PCefBase(Data)^.release) then
+      PCefBase(Data)^.release(PCefBase(Data));
+  end else
+    Result := nil;
+end;
+
+{ TCefWebUrlRequestClientOwn }
+
+constructor TCefWebUrlRequestClientOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefWebUrlRequestClient));
+  PCefWebUrlRequestClient(FData)^.on_state_change := @cef_web_url_request_client_on_state_change;
+  PCefWebUrlRequestClient(FData)^.on_redirect := @cef_web_url_request_client_on_redirect;
+  PCefWebUrlRequestClient(FData)^.on_headers_received := @cef_web_url_request_client_on_headers_received;
+  PCefWebUrlRequestClient(FData)^.on_progress := @cef_web_url_request_client_on_progress;
+  PCefWebUrlRequestClient(FData)^.on_data := @cef_web_url_request_client_on_data;
+  PCefWebUrlRequestClient(FData)^.on_error := @cef_web_url_request_client_on_error;
+end;
+
+procedure TCefWebUrlRequestClientOwn.OnData(const requester: ICefWebUrlRequest;
+  const data: Pointer; dataLength: Integer);
+begin
+
+end;
+
+procedure TCefWebUrlRequestClientOwn.OnError(const requester: ICefWebUrlRequest;
+  errorCode: TCefHandlerErrorcode);
+begin
+
+end;
+
+procedure TCefWebUrlRequestClientOwn.OnHeadersReceived(
+  const requester: ICefWebUrlRequest; const response: ICefResponse);
+begin
+
+end;
+
+procedure TCefWebUrlRequestClientOwn.OnProgress(
+  const requester: ICefWebUrlRequest; bytesSent, totalBytesToBeSent: uint64);
+begin
+
+end;
+
+procedure TCefWebUrlRequestClientOwn.OnRedirect(
+  const requester: ICefWebUrlRequest; const request: ICefRequest;
+  const response: ICefResponse);
+begin
+
+end;
+
+procedure TCefWebUrlRequestClientOwn.OnStateChange(
+  const requester: ICefWebUrlRequest; state: TCefWebUrlRequestState);
+begin
+
+end;
+
+{ TCefWebUrlRequestRef }
+
+procedure TCefWebUrlRequestRef.Cancel;
+begin
+  PCefWebUrlRequest(FData)^.cancel(PCefWebUrlRequest(FData));
+end;
+
+class function TCefWebUrlRequestRef.New(const request: ICefRequest;
+  const client: ICefWebUrlRequestClient): ICefWebUrlRequest;
+begin
+  Result := UnWrap(cef_web_urlrequest_create(request.Wrap, client.Wrap));
+end;
+
+function TCefWebUrlRequestRef.GetState: TCefWebUrlRequestState;
+begin
+  Result := PCefWebUrlRequest(FData)^.get_state(PCefWebUrlRequest(FData));
+end;
+
+class function TCefWebUrlRequestRef.UnWrap(data: Pointer): ICefWebUrlRequest;
+begin
+  if data <> nil then
+  begin
+    Result := Create(data) as ICefWebUrlRequest;
+    if Assigned(PCefBase(Data)^.release) then
+      PCefBase(Data)^.release(PCefBase(Data));
+  end else
+    Result := nil;
+end;
 
 { TCefRTTIExtension }
 
@@ -7321,7 +7560,6 @@ begin
   end else
     Exit(False);
 end;
-
 {$ENDIF}
 
 initialization
