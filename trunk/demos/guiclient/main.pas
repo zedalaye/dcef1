@@ -117,13 +117,13 @@ end;
 procedure TMainForm.actDomExecute(Sender: TObject);
 begin
 {$IFDEF DELPHI12_UP}
-  crm.Browser.MainFrame.VisitDom(
-  TCefFastDomVisitor.Create(procedure (const doc: ICefDomDocument) begin
-      doc.Body.AddEventListener('mouseover', TCefFastDomEventListener.Create(
-      procedure (const event: ICefDomEvent) begin
-        caption := getpath(event.Target);
-      end), True)
-  end));
+  crm.Browser.MainFrame.VisitDomProc(
+    procedure (const doc: ICefDomDocument) begin
+      doc.Body.AddEventListenerProc('mouseover', True,
+        procedure (const event: ICefDomEvent) begin
+          caption := getpath(event.Target);
+        end)
+  end);
 {$ENDIF}
 end;
 
