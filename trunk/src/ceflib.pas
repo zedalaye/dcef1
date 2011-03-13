@@ -820,6 +820,9 @@ type
     // Base structure.
     base: TCefBase;
 
+    // Closes this browser window.
+    close_browser: procedure(self: PCefBrowser); stdcall;
+
     // Returns true (1) if the browser can navigate backwards.
     can_go_back: function(self: PCefBrowser): Integer; stdcall;
 
@@ -1029,24 +1032,25 @@ type
         frame: PCefFrame; request: PCefRequest;
         navType: TCefHandlerNavtype; isRedirect: Integer): TCefRetval; stdcall;
 
-    // Called on the UI thread when the browser begins loading a page. The |frame|
-    // pointer will be NULL if the event represents the overall load status and
-    // not the load status for a particular frame. |isMainContent| will be true
-    // (1) if this load is for the main content area and not an iframe. This
-    // function may not be called if the load request fails. The return value is
-    // currently ignored.
+    // Called on the UI thread when the browser begins loading a frame. The
+    // |frame| value will never be NULL -- call the is_main() function to check if
+    // this frame is the main frame. Multiple frames may be loading at the same
+    // time. Sub-frames may start or continue loading after the main frame load
+    // has ended. This function may not be called for a particular frame if the
+    // load request for that frame fails. The return value is currently ignored.
     handle_load_start: function(
         self: PCefHandler; browser: PCefBrowser;
-        frame: PCefFrame; isMainContent: Integer): TCefRetval; stdcall;
+        frame: PCefFrame): TCefRetval; stdcall;
 
-    // Called on the UI thread when the browser is done loading a page. The
-    // |frame| pointer will be NULL if the event represents the overall load
-    // status and not the load status for a particular frame. |isMainContent| will
-    // be true (1) if this load is for the main content area and not an iframe.
-    // This function will be called irrespective of whether the request completes
-    // successfully. The return value is currently ignored.
+    // Called on the UI thread when the browser is done loading a frame. The
+    // |frame| value will never be NULL -- call the is_main() function to check if
+    // this frame is the main frame. Multiple frames may be loading at the same
+    // time. Sub-frames may start or continue loading after the main frame load
+    // has ended. This function will always be called for all frames irrespective
+    // of whether the request completes successfully. The return value is
+    // currently ignored.
     handle_load_end: function(self: PCefHandler; browser: PCefBrowser;
-      frame: PCefFrame; isMainContent, httpStatusCode: Integer): TCefRetval; stdcall;
+      frame: PCefFrame; httpStatusCode: Integer): TCefRetval; stdcall;
 
     // Called on the UI thread when the browser fails to load a resource.
     // |errorCode| is the error code number and |failedUrl| is the URL that failed
@@ -2099,6 +2103,7 @@ type
 
   ICefBrowser = interface(ICefBase)
     ['{BA003C2E-CF15-458F-9D4A-FE3CEFCF3EEF}']
+    procedure CloseBrowser;
     function CanGoBack: Boolean;
     procedure GoBack;
     function CanGoForward: Boolean;
@@ -2529,6 +2534,7 @@ type
 
   TCefBrowserRef = class(TCefBaseRef, ICefBrowser)
   protected
+    procedure CloseBrowser;
     function CanGoBack: Boolean;
     procedure GoBack;
     function CanGoForward: Boolean;
@@ -2727,8 +2733,9 @@ type
     function doOnBeforeBrowse(const browser: ICefBrowser; const frame: ICefFrame;
       const request: ICefRequest; navType: TCefHandlerNavtype;
       isRedirect: boolean): TCefRetval; virtual;
-    function doOnLoadStart(const browser: ICefBrowser; const frame: ICefFrame; isMainContent: Boolean): TCefRetval; virtual;
-    function doOnLoadEnd(const browser: ICefBrowser; const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer): TCefRetval; virtual;
+    function doOnLoadStart(const browser: ICefBrowser; const frame: ICefFrame): TCefRetval; virtual;
+    function doOnLoadEnd(const browser: ICefBrowser; const frame: ICefFrame;
+      httpStatusCode: Integer): TCefRetval; virtual;
     function doOnLoadError(const browser: ICefBrowser;
       const frame: ICefFrame; errorCode: TCefHandlerErrorcode;
       const failedUrl: ustring; var errorText: ustring): TCefRetval; virtual;
@@ -3143,7 +3150,7 @@ function CefBrowserCreateSync(windowInfo: PCefWindowInfo; popup: Boolean;
 procedure CefDoMessageLoopWork;
 {$ENDIF}
 function CefRegisterScheme(const SchemeName, HostName: ustring;
-  const handler: TCefSchemeHandlerClass): Boolean;
+  isStandard: Boolean; const handler: TCefSchemeHandlerClass): Boolean;
 function CefRegisterExtension(const name, code: ustring;
   const Handler: ICefv8Handler): Boolean;
 function CefCurrentlyOn(ThreadId: TCefThreadId): Boolean;
@@ -3374,13 +3381,36 @@ var
   //
   cef_register_extension: function(const extension_name, javascript_code: PCefString; handler: PCefv8Handler): Integer; cdecl;
 
+  // CEF supports two types of schemes, standard and non-standard.
+  //
+  // Standard schemes are subject to URL canonicalization and parsing rules as
+  // defined in the Common Internet Scheme Syntax RFC 1738 Section 3.1 available
+  // at http://www.ietf.org/rfc/rfc1738.txt
+  //
+  // In particular, the syntax for standard scheme URLs must be of the form:
+  //
+  //  <scheme>://<username>:<password>@<host>:<port>/<url-path>
+  //
+  // Standard scheme URLs must have a host component that is a fully qualified
+  // domain name as defined in Section 3.5 of RFC 1034 [13] and Section 2.1 of RFC
+  // 1123. These URLs will be canonicalized to "scheme://host/path" in the
+  // simplest case and "scheme://username:password@host:port/path" in the most
+  // explicit case. For example, "scheme:host/path" and "scheme:///host/path" will
+  // both be canonicalized to "scheme://host/path".
+  //
+  // For non-standard scheme URLs only the "scheme:" component is parsed and
+  // canonicalized. The remainder of the URL will be passed to the handler as-is.
+  // For example, "scheme:///some%20text" will remain the same. Non-standard
+  // scheme URLs cannot be used as a target for form submission.
+  //
   // Register a custom scheme handler factory for the specified |scheme_name| and
-  // |host_name|. All URLs beginning with scheme_name://host_name/ can be handled
-  // by TCefSchemeHandler instances returned by the factory. Specify an NULL
-  // |host_name| value to match all host names. This function may be called on any
-  // thread.
-  cef_register_scheme: function(const scheme_name, host_name: PCefString; factory: PCefSchemeHandlerFactory): Integer; cdecl;
-
+  // optional |host_name|. Specifying an NULL |host_name| value for standard
+  // schemes will match all host names. The |host_name| value will be ignored for
+  // non-standard schemes. Set |is_standard| to true (1) to register as a standard
+  // scheme or false (0) to register a non-standard scheme. This function may be
+  // called on any thread.
+  cef_register_scheme: function(const scheme_name, host_name: PCefString;
+    is_standard: Integer; factory: PCefSchemeHandlerFactory): Integer; cdecl;
 
   // CEF maintains multiple internal threads that are used for handling different
   // types of tasks. The UI thread creates the browser window and is used for all
@@ -3569,22 +3599,21 @@ end;
 
 function cef_handler_handle_load_start(
     self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame; isMainContent: Integer): TCefRetval; stdcall;
+    frame: PCefFrame): TCefRetval; stdcall;
 begin
   with TCefHandlerOwn(CefGetObject(self)) do
     Result := doOnLoadStart(
       TCefBrowserRef.UnWrap(browser),
-      TCefFrameRef.UnWrap(frame), isMainContent <> 0);
+      TCefFrameRef.UnWrap(frame));
 end;
 
 function cef_handler_handle_load_end(self: PCefHandler;
-    browser: PCefBrowser; frame: PCefFrame; isMainContent, httpStatusCode: Integer): TCefRetval; stdcall;
+    browser: PCefBrowser; frame: PCefFrame; httpStatusCode: Integer): TCefRetval; stdcall;
 begin
   with TCefHandlerOwn(CefGetObject(self)) do
     Result := doOnLoadEnd(
       TCefBrowserRef.UnWrap(browser),
       TCefFrameRef.UnWrap(frame),
-      isMainContent <> 0,
       httpStatusCode);
 end;
 
@@ -4331,7 +4360,7 @@ begin
 end;
 
 function TCefHandlerOwn.doOnLoadEnd(const browser: ICefBrowser;
-  const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer): TCefRetval;
+  const frame: ICefFrame; httpStatusCode: Integer): TCefRetval;
 begin
   Result := RV_CONTINUE;
 end;
@@ -4344,7 +4373,7 @@ begin
 end;
 
 function TCefHandlerOwn.doOnLoadStart(const browser: ICefBrowser;
-  const frame: ICefFrame; isMainContent: Boolean): TCefRetval;
+  const frame: ICefFrame): TCefRetval;
 begin
   Result := RV_CONTINUE;
 end;
@@ -4449,6 +4478,11 @@ end;
 function TCefBrowserRef.CanGoForward: Boolean;
 begin
   Result := PCefBrowser(FData)^.can_go_forward(PCefBrowser(FData)) <> 0;
+end;
+
+procedure TCefBrowserRef.CloseBrowser;
+begin
+  PCefBrowser(FData)^.close_browser(PCefBrowser(FData));
 end;
 
 procedure TCefBrowserRef.CloseDevTools;
@@ -5548,7 +5582,7 @@ begin
 end;
 
 function CefRegisterScheme(const SchemeName, HostName: ustring;
-  const handler: TCefSchemeHandlerClass): Boolean;
+  isStandard: Boolean; const handler: TCefSchemeHandlerClass): Boolean;
 var
   s, h: TCefString;
 begin
@@ -5558,6 +5592,7 @@ begin
   Result := cef_register_scheme(
     @s,
     @h,
+    Ord(isStandard),
     (TCefSchemeHandlerFactoryOwn.Create(handler) as ICefBase).Wrap) <> 0;
 end;
 

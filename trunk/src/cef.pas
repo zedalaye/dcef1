@@ -37,8 +37,8 @@ type
   TOnBeforeBrowse = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const frame: ICefFrame;
     const request: ICefRequest; navType: TCefHandlerNavtype;
     isRedirect: boolean; out Result: TCefRetval) of object;
-  TOnLoadStart = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const frame: ICefFrame; isMainContent: Boolean; out Result: TCefRetval) of object;
-  TOnLoadEnd = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer; out Result: TCefRetval) of object;
+  TOnLoadStart = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const frame: ICefFrame; out Result: TCefRetval) of object;
+  TOnLoadEnd = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const frame: ICefFrame; httpStatusCode: Integer; out Result: TCefRetval) of object;
   TOnLoadError = procedure(Sender: TCustomChromium; const browser: ICefBrowser;
     const frame: ICefFrame; errorCode: TCefHandlerErrorcode;
     const failedUrl: ustring; var errorText: ustring; out Result: TCefRetval) of object;
@@ -184,8 +184,8 @@ type
     function doOnBeforeBrowse(const browser: ICefBrowser; const frame: ICefFrame;
       const request: ICefRequest; navType: TCefHandlerNavtype;
       isRedirect: boolean): TCefRetval; virtual;
-    function doOnLoadStart(const browser: ICefBrowser; const frame: ICefFrame; isMainContent: Boolean): TCefRetval; virtual;
-    function doOnLoadEnd(const browser: ICefBrowser; const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer): TCefRetval; virtual;
+    function doOnLoadStart(const browser: ICefBrowser; const frame: ICefFrame): TCefRetval; virtual;
+    function doOnLoadEnd(const browser: ICefBrowser; const frame: ICefFrame; httpStatusCode: Integer): TCefRetval; virtual;
     function doOnLoadError(const browser: ICefBrowser;
       const frame: ICefFrame; errorCode: TCefHandlerErrorcode;
       const failedUrl: ustring; var errorText: ustring): TCefRetval; virtual;
@@ -471,24 +471,22 @@ end;
 
 function cef_handler_handle_load_start(
     self: PCefHandler; abrowser: PCefBrowser;
-    frame: PCefFrame; isMainContent: Integer): TCefRetval; stdcall;
+    frame: PCefFrame): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnLoadStart(
       TCefBrowserRef.UnWrap(abrowser),
-      TCefFrameRef.UnWrap(frame),
-      isMainContent <> 0);
+      TCefFrameRef.UnWrap(frame));
 end;
 
 function cef_handler_handle_load_end(self: PCefHandler;
-    abrowser: PCefBrowser; frame: PCefFrame; isMainContent,
+    abrowser: PCefBrowser; frame: PCefFrame;
     httpStatusCode: Integer): TCefRetval; stdcall;
 begin
   with TCustomChromium(CefGetObject(self)) do
     Result := doOnLoadEnd(
       TCefBrowserRef.UnWrap(abrowser),
       TCefFrameRef.UnWrap(frame),
-      isMainContent <> 0,
       httpStatusCode);
 end;
 
@@ -1056,11 +1054,11 @@ begin
 end;
 
 function TCustomChromium.doOnLoadEnd(const browser: ICefBrowser;
-  const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer): TCefRetval;
+  const frame: ICefFrame; httpStatusCode: Integer): TCefRetval;
 begin
   Result := RV_CONTINUE;
   if Assigned(FOnLoadEnd) then
-    FOnLoadEnd(Self, browser, frame, isMainContent, httpStatusCode, Result);
+    FOnLoadEnd(Self, browser, frame, httpStatusCode, Result);
 end;
 
 function TCustomChromium.doOnLoadError(const browser: ICefBrowser;
@@ -1073,11 +1071,11 @@ begin
 end;
 
 function TCustomChromium.doOnLoadStart(const browser: ICefBrowser;
-  const frame: ICefFrame; isMainContent: Boolean): TCefRetval;
+  const frame: ICefFrame): TCefRetval;
 begin
   Result := RV_CONTINUE;
   if Assigned(FOnLoadStart) then
-    FOnLoadStart(Self, browser, frame, isMainContent, Result);
+    FOnLoadStart(Self, browser, frame, Result);
 end;
 
 function TCustomChromium.doOnMenuAction(const browser: ICefBrowser;

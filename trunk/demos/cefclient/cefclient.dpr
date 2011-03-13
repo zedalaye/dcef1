@@ -23,9 +23,9 @@ type
     function doOnAddressChange(const browser: ICefBrowser;
       const frame: ICefFrame; const url: ustring): TCefRetval; override;
     function doOnLoadStart(const browser: ICefBrowser;
-      const frame: ICefFrame; isMainContent: Boolean): TCefRetval; override;
+      const frame: ICefFrame): TCefRetval; override;
     function doOnLoadEnd(const browser: ICefBrowser;
-      const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer): TCefRetval; override;
+      const frame: ICefFrame; httpStatusCode: Integer): TCefRetval; override;
   end;
 
   TScheme = class(TCefSchemeHandlerOwn)
@@ -287,7 +287,7 @@ begin
 end;
 
 function THandler.doOnLoadEnd(const browser: ICefBrowser;
-  const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer): TCefRetval;
+  const frame: ICefFrame; httpStatusCode: Integer): TCefRetval;
 begin
   Lock;
   try
@@ -300,7 +300,7 @@ begin
 end;
 
 function THandler.doOnLoadStart(const browser: ICefBrowser;
-  const frame: ICefFrame; isMainContent: Boolean): TCefRetval;
+  const frame: ICefFrame): TCefRetval;
 begin
   Lock;
   try
@@ -462,8 +462,8 @@ var
   wndClass : TWndClass;
 begin
   CefLoadLibDefault;
-  CefRegisterScheme('client', 'test', TScheme);
-  CefRegisterScheme('file', '', TFileScheme);
+  CefRegisterScheme('client', 'test', True, TScheme);
+  CefRegisterScheme('file', '', True, TFileScheme);
   CefRegisterExtension('v8/test', code, TExtension.Create as ICefV8Handler);
   //navigateto := 'client://test/';
   //navigateto := 'file://c:\';

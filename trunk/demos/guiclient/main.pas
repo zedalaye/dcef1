@@ -64,9 +64,9 @@ type
       const browser: ICefBrowser; const frame: ICefFrame; const url: ustring;
       out Result: TCefRetval);
     procedure crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
-      const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer; out Result: TCefRetval);
+      const frame: ICefFrame; httpStatusCode: Integer; out Result: TCefRetval);
     procedure crmLoadStart(Sender: TCustomChromium; const browser: ICefBrowser;
-      const frame: ICefFrame; isMainContent: Boolean; out Result: TCefRetval);
+      const frame: ICefFrame; out Result: TCefRetval);
     procedure crmTitleChange(Sender: TCustomChromium;
       const browser: ICefBrowser; const title: ustring; out Result: TCefRetval);
     procedure actGetSourceExecute(Sender: TObject);
@@ -262,8 +262,7 @@ begin
 end;
 
 procedure TMainForm.crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
-  const frame: ICefFrame; isMainContent: Boolean; httpStatusCode: Integer;
-  out Result: TCefRetval);
+  const frame: ICefFrame; httpStatusCode: Integer; out Result: TCefRetval);
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
   begin
@@ -274,7 +273,7 @@ begin
 end;
 
 procedure TMainForm.crmLoadStart(Sender: TCustomChromium;
-  const browser: ICefBrowser; const frame: ICefFrame; isMainContent: Boolean; out Result: TCefRetval);
+  const browser: ICefBrowser; const frame: ICefFrame; out Result: TCefRetval);
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
     FLoading := True;
@@ -320,6 +319,6 @@ begin
 end;
 
 initialization
-  CefRegisterScheme('file', '', TFileScheme);
+  CefRegisterScheme('file', '', True, TFileScheme);
 
 end.
