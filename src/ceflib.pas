@@ -2723,8 +2723,8 @@ type
   protected
     function doOnBeforeCreated(const parentBrowser: ICefBrowser;
       var windowInfo: TCefWindowInfo; popup: Boolean;
-      var handler: ICefBase; var url: ustring;
-      var settings: TCefBrowserSettings): TCefRetval; virtual;
+      var popupFeatures: TCefPopupFeatures; var handler: ICefBase;
+      var url: ustring; var settings: TCefBrowserSettings): TCefRetval; virtual;
     function doOnAfterCreated(const browser: ICefBrowser): TCefRetval; virtual;
     function doOnAddressChange(const browser: ICefBrowser;
       const frame: ICefFrame; const url: ustring): TCefRetval; virtual;
@@ -3542,18 +3542,21 @@ begin
   with TCefHandlerOwn(CefGetObject(self)) do
   begin
     _handler := TCefBaseRef.UnWrap(handler);
+    handler.base.release(@handler.base);
     _url := CefString(url);
 
     Result := doOnBeforeCreated(
       TCefBrowserRef.UnWrap(parentBrowser),
       windowInfo,
       popup <> 0,
+      popupFeatures^,
       _handler,
       _url,
       settings^);
 
     CefStringSet(url, _url);
     handler :=  CefGetData(_handler);
+    _handler := nil;
   end;
 end;
 
@@ -4275,8 +4278,8 @@ begin
 end;
 
 function TCefHandlerOwn.doOnBeforeCreated(const parentBrowser: ICefBrowser;
-  var windowInfo: TCefWindowInfo; popup: Boolean; var handler: ICefBase;
-  var url: ustring; var settings: TCefBrowserSettings): TCefRetval;
+  var windowInfo: TCefWindowInfo; popup: Boolean; var popupFeatures: TCefPopupFeatures;
+  var handler: ICefBase; var url: ustring; var settings: TCefBrowserSettings): TCefRetval;
 begin
   Result := RV_CONTINUE;
 end;

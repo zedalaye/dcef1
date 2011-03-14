@@ -127,8 +127,7 @@ type
 
   TCustomChromium = class(TWinControl)
   private
-    FSelf: Pointer;
-    FHandler: TCefHandler;
+    FHandler: ICefBase;
     FBrowser: ICefBrowser;
     FBrowserHandle: HWND;
     FDefaultUrl: ustring;
@@ -331,6 +330,12 @@ procedure Register;
 
 implementation
 
+procedure Register;
+begin
+  RegisterComponents('Google', [TChromium]);
+end;
+
+
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 var
   CefInstances: Integer = 0;
@@ -345,510 +350,91 @@ type
   end;
 {$ENDIF}
 
-procedure Register;
-begin
-  RegisterComponents('Google', [TChromium]);
-end;
-
-{ cef_handler }
-function cef_handler_handle_before_created(
-      self: PCefHandler; parentBrowser: PCefBrowser;
-      var windowInfo: TCefWindowInfo; popup: Integer;
-      const popupFeatures: PCefPopupFeatures;
-      var handler: PCefHandler; url: PCefString;
-      settings: PCefBrowserSettings): TCefRetval; stdcall;
-var
-  _handler: ICefBase;
-  _url: ustring;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-  begin
-    if handler <> nil then
-      _handler := TCefBaseRef.UnWrap(handler) else
-      _handler := nil;
-    _url := CefString(url);
-
-    Result := doOnBeforeCreated(
-      TCefBrowserRef.UnWrap(parentBrowser),
-      windowInfo,
-      popup <> 0,
-      _handler,
-      _url,
-      popupFeatures^);
-
-    Assert(settings.size = SizeOf(settings^));
-    settings.standard_font_family := CefString(FFontOptions.FStandardFontFamily);
-    settings.fixed_font_family := CefString(FFontOptions.FFixedFontFamily);
-    settings.serif_font_family := CefString(FFontOptions.FSerifFontFamily);
-    settings.sans_serif_font_family := CefString(FFontOptions.FSansSerifFontFamily);
-    settings.cursive_font_family := CefString(FFontOptions.FCursiveFontFamily);
-    settings.fantasy_font_family := CefString(FFontOptions.FFantasyFontFamily);
-    settings.default_font_size := FFontOptions.FDefaultFontSize;
-    settings.default_fixed_font_size := FFontOptions.FDefaultFixedFontSize;
-    settings.minimum_font_size := FFontOptions.FMinimumFontSize;
-    settings.minimum_logical_font_size := FFontOptions.FMinimumLogicalFontSize;
-    settings.remote_fonts_disabled := FFontOptions.FRemoteFontsDisabled;
-    settings.default_encoding := CefString(FDefaultEncoding);
-    settings.user_style_sheet_location := CefString(FUserStyleSheetLocation);
-
-    settings.drag_drop_disabled := coDragDropDisabled in FOptions;
-    settings.encoding_detector_enabled := coEncodingDetectorEnabled in FOptions;
-    settings.javascript_disabled := coJavascriptDisabled in FOptions;
-    settings.javascript_open_windows_disallowed := coJavascriptOpenWindowsDisallowed in FOptions;
-    settings.javascript_close_windows_disallowed := coJavascriptCloseWindowsDisallowed in FOptions;
-    settings.javascript_access_clipboard_disallowed := coJavascriptAccessClipboardDisallowed in FOptions;
-    settings.dom_paste_disabled := coDomPasteDisabled in FOptions;
-    settings.caret_browsing_enabled := coCaretBrowsingEnabled in FOptions;
-    settings.java_disabled := coJavaDisabled in FOptions;
-    settings.plugins_disabled := coPluginsDisabled in FOptions;
-    settings.universal_access_from_file_urls_allowed := coUniversalAccessFromFileUrlsAllowed in FOptions;
-    settings.file_access_from_file_urls_allowed := coFileAccessFromFileUrlsAllowed in FOptions;
-    settings.web_security_disabled := coWebSecurityDisabled in FOptions;
-    settings.xss_auditor_enabled := coXssAuditorEnabled in FOptions;
-    settings.image_load_disabled := coImageLoadDisabled in FOptions;
-    settings.shrink_standalone_images_to_fit := coShrinkStandaloneImagesToFit in FOptions;
-    settings.site_specific_quirks_disabled := coSiteSpecificQuirksDisabled in FOptions;
-    settings.text_area_resize_disabled := coTextAreaResizeDisabled in FOptions;
-    settings.page_cache_disabled := coPageCacheDisabled in FOptions;
-    settings.tab_to_links_disabled := coTabToLinksDisabled in FOptions;
-    settings.hyperlink_auditing_disabled := coHyperlinkAuditingDisabled in FOptions;
-    settings.user_style_sheet_enabled := coUserStyleSheetEnabled in FOptions;
-    settings.author_and_user_styles_disabled := coAuthorAndUserStylesDisabled in FOptions;
-    settings.local_storage_disabled := coLocalStorageDisabled in FOptions;
-    settings.databases_disabled := coDatabasesDisabled in FOptions;
-    settings.application_cache_disabled := coApplicationCacheDisabled in FOptions;
-    settings.webgl_disabled := coWebglDisabled in FOptions;
-    settings.accelerated_compositing_disabled := coAcceleratedCompositingDisabled in FOptions;
-    settings.accelerated_layers_disabled := coAcceleratedLayersDisabled in FOptions;
-    settings.accelerated_2d_canvas_disabled := coAccelerated2dCanvasDisabled in FOptions;
-    settings.developer_tools_disabled := coDeveloperToolsDisabled in FOptions;
-
-    handler := CefGetData(_handler);
-    CefStringSet(url, _url);
+  ICefCustomHandler = interface
+    ['{91D102A8-E68B-41F8-A323-F77F0C190BD9}']
+    procedure Disconnect;
   end;
 
-end;
-
-function cef_handler_handle_after_created(self: PCefHandler;
-  abrowser: PCefBrowser): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnAfterCreated(TCefBrowserRef.UnWrap(abrowser));
-end;
-
-function cef_handler_handle_address_change(
-    self: PCefHandler; abrowser: PCefBrowser;
-    frame: PCefFrame; const uri: PCefString): TCefRetval; stdcall;
-begin
-   with TCustomChromium(CefGetObject(self)) do
-    Result := doOnAddressChange(
-      TCefBrowserRef.UnWrap(abrowser),
-      TCefFrameRef.UnWrap(frame),
-      CefString(uri))
-end;
-
-function cef_handler_handle_title_change(
-    self: PCefHandler; abrowser: PCefBrowser;
-    const title: PCefString): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnTitleChange(TCefBrowserRef.UnWrap(abrowser), CefString(title));
-end;
-
-function cef_handler_handle_before_browse(
-    self: PCefHandler; abrowser: PCefBrowser;
-    frame: PCefFrame; request: PCefRequest;
-    navType: TCefHandlerNavtype; isRedirect: Integer): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnBeforeBrowse(
-      TCefBrowserRef.UnWrap(abrowser),
-      TCefFrameRef.UnWrap(frame),
-      TCefRequestRef.UnWrap(request),
-      navType,
-      isRedirect <> 0)
-end;
-
-function cef_handler_handle_load_start(
-    self: PCefHandler; abrowser: PCefBrowser;
-    frame: PCefFrame): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnLoadStart(
-      TCefBrowserRef.UnWrap(abrowser),
-      TCefFrameRef.UnWrap(frame));
-end;
-
-function cef_handler_handle_load_end(self: PCefHandler;
-    abrowser: PCefBrowser; frame: PCefFrame;
-    httpStatusCode: Integer): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnLoadEnd(
-      TCefBrowserRef.UnWrap(abrowser),
-      TCefFrameRef.UnWrap(frame),
-      httpStatusCode);
-end;
-
-function cef_handler_handle_load_error(
-    self: PCefHandler; abrowser: PCefBrowser;
-    frame: PCefFrame; errorCode: TCefHandlerErrorcode;
-    const failedUrl: PCefString; var errorText: TCefString): TCefRetval; stdcall;
-var
-  err: ustring;
-begin
-  err := CefString(@errorText);
-  with TCustomChromium(CefGetObject(self)) do
-  begin
-    Result := doOnLoadError(
-      TCefBrowserRef.UnWrap(abrowser),
-      TCefFrameRef.UnWrap(frame),
-      errorCode,
-      CefString(failedUrl),
-      err);
-    if Result = RV_HANDLED then
-      CefStringSet(@errorText, err);
+  TCefCustomHandler = class(TCefHandlerOwn, ICefCustomHandler)
+  private
+    FCrm: TCustomChromium;
+  protected
+    procedure Disconnect;
+    function doOnBeforeCreated(const parentBrowser: ICefBrowser;
+      var windowInfo: TCefWindowInfo; popup: Boolean; var popupFeatures: TCefPopupFeatures;
+      var handler: ICefBase; var url: ustring; var settings: TCefBrowserSettings): TCefRetval; override;
+    function doOnAfterCreated(const browser: ICefBrowser): TCefRetval; override;
+    function doOnAddressChange(const browser: ICefBrowser;
+      const frame: ICefFrame; const url: ustring): TCefRetval; override;
+    function doOnTitleChange(const browser: ICefBrowser;
+      const title: ustring): TCefRetval; override;
+    function doOnBeforeBrowse(const browser: ICefBrowser; const frame: ICefFrame;
+      const request: ICefRequest; navType: TCefHandlerNavtype;
+      isRedirect: boolean): TCefRetval; override;
+    function doOnLoadStart(const browser: ICefBrowser; const frame: ICefFrame): TCefRetval; override;
+    function doOnLoadEnd(const browser: ICefBrowser; const frame: ICefFrame;
+      httpStatusCode: Integer): TCefRetval; override;
+    function doOnLoadError(const browser: ICefBrowser;
+      const frame: ICefFrame; errorCode: TCefHandlerErrorcode;
+      const failedUrl: ustring; var errorText: ustring): TCefRetval; override;
+    function doOnBeforeResourceLoad(const browser: ICefBrowser;
+      const request: ICefRequest; var redirectUrl: ustring;
+      var resourceStream: ICefStreamReader; var mimeType: ustring;
+      loadFlags: Integer): TCefRetval; override;
+    function doOnProtocolExecution(const browser: ICefBrowser;
+      const url: ustring; var AllowOsExecution: Boolean): TCefRetval; override;
+    function doOnBeforeMenu(const browser: ICefBrowser;
+      const menuInfo: PCefHandlerMenuInfo): TCefRetval; override;
+    function doOnGetMenuLabel(const browser: ICefBrowser;
+      menuId: TCefHandlerMenuId; var caption: ustring): TCefRetval; override;
+    function doOnMenuAction(const browser: ICefBrowser;
+      menuId: TCefHandlerMenuId): TCefRetval; override;
+    function doOnPrintOptions(const browser: ICefBrowser;
+        printOptions: PCefPrintOptions): TCefRetval; override;
+    function doOnPrintHeaderFooter(const browser: ICefBrowser;
+      const frame: ICefFrame; printInfo: PCefPrintInfo;
+      const url, title: ustring; currentPage, maxPages: Integer;
+      var topLeft, topCenter, topRight, bottomLeft, bottomCenter,
+      bottomRight: ustring): TCefRetval; override;
+    function doOnJsAlert(const browser: ICefBrowser; const frame: ICefFrame;
+      const message: ustring): TCefRetval; override;
+    function doOnJsConfirm(const browser: ICefBrowser; const frame: ICefFrame;
+      const message: ustring; var retval: Boolean): TCefRetval; override;
+    function doOnJsPrompt(const browser: ICefBrowser; const frame: ICefFrame;
+      const message, defaultValue: ustring; var retval: Boolean;
+      var return: ustring): TCefRetval; override;
+    function doOnJsBinding(const browser: ICefBrowser;
+      const frame: ICefFrame; const obj: ICefv8Value): TCefRetval; override;
+    function doOnBeforeWindowClose(const browser: ICefBrowser): TCefRetval; override;
+    function doOnTakeFocus(const browser: ICefBrowser; reverse: Integer): TCefRetval; override;
+    function doOnSetFocus(const browser: ICefBrowser; isWidget: Boolean): TCefRetval; override;
+    function doOnKeyEvent(const browser: ICefBrowser; event: TCefHandlerKeyEventType;
+      code, modifiers: Integer; isSystemKey: Boolean): TCefRetval; override;
+    function doOnTooltip(const browser: ICefBrowser; var text: ustring): TCefRetval; override;
+    function doOnStatus(const browser: ICefBrowser; const value: ustring;
+      StatusType: TCefHandlerStatusType): TCefRetval; override;
+    function doOnConsoleMessage(const browser: ICefBrowser; const message,
+      source: ustring; line: Integer): TCefRetval; override;
+    function doOnFindResult(const browser: ICefBrowser; count: Integer;
+      selectionRect: PCefRect; identifier, activeMatchOrdinal,
+      finalUpdate: Boolean): TCefRetval; override;
+    function doOnDownloadResponse(const browser: ICefBrowser; const mimeType, fileName: ustring;
+      contentLength: int64; var handler: ICefDownloadHandler): TCefRetval; override;
+    function doOnAuthenticationRequest(const browser: ICefBrowser; isProxy: Boolean;
+      const host, realm, scheme: ustring; var username, password: ustring): TCefRetval; override;
+  public
+    constructor Create(crm: TCustomChromium); reintroduce;
+    destructor Destroy; override;
+    property Crm: TCustomChromium read FCrm write FCrm;
   end;
-end;
-
-function cef_handler_handle_before_resource_load(
-    self: PCefHandler; abrowser: PCefBrowser;
-    request: PCefRequest; var redirectUrl: TCefString;
-    var resourceStream: PCefStreamReader; var mimeType: TCefString;
-    loadFlags: Integer): TCefRetval; stdcall;
-var
-  _redirectUrl: ustring;
-  _resourceStream: ICefStreamReader;
-  _mimeType: ustring;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-  begin
-    _redirectUrl := CefString(@redirectUrl);
-    _resourceStream := TCefStreamReaderRef.UnWrap(resourceStream);
-    _mimeType := CefString(@mimeType);
-
-    Result := doOnBeforeResourceLoad(
-      TCefBrowserRef.UnWrap(abrowser),
-      TCefRequestRef.UnWrap(request),
-      _redirectUrl,
-      _resourceStream,
-      _mimeType,
-      loadFlags
-      );
-
-    if _redirectUrl <> '' then
-      redirectUrl := CefStringAlloc(_redirectUrl);
-
-    if _resourceStream <> nil then
-      resourceStream := _resourceStream.Wrap;
-
-    if _mimeType <> '' then
-      mimeType := CefStringAlloc(_mimeType);
-  end;
-end;
-
-function cef_handler_handle_protocol_execution(self: PCefHandler; abrowser: PCefBrowser;
-  const url: PCefString; var allow_os_execution: Integer): TCefRetval; stdcall;
-var
-  allow: Boolean;
-begin
-  allow := allow_os_execution <> 0;
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnProtocolExecution(
-      TCefBrowserRef.UnWrap(abrowser),
-      CefString(url), allow);
-  if allow then
-    allow_os_execution := 1 else
-    allow_os_execution := 0;
-end;
-
-function cef_handler_handle_before_menu(
-    self: PCefHandler; abrowser: PCefBrowser;
-    const menuInfo: PCefHandlerMenuInfo): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnBeforeMenu(
-      TCefBrowserRef.UnWrap(abrowser),
-      menuInfo);
-end;
-
-function cef_handler_handle_get_menu_label(
-    self: PCefHandler; abrowser: PCefBrowser;
-    menuId: TCefHandlerMenuId; var label_: TCefString): TCefRetval; stdcall;
-var
-  str: ustring;
-begin
-  str := CefString(@label_);
-  with TCustomChromium(CefGetObject(self)) do
-  begin
-    Result := doOnGetMenuLabel(
-      TCefBrowserRef.UnWrap(abrowser),
-      menuId,
-      str);
-    CefStringSet(@label_, str);
-  end;
-end;
-
-function cef_handler_handle_menu_action(
-    self: PCefHandler; abrowser: PCefBrowser;
-    menuId: TCefHandlerMenuId): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnMenuAction(
-      TCefBrowserRef.UnWrap(abrowser),
-      menuId);
-end;
-
-function cef_handler_handle_print_header_footer(
-    self: PCefHandler; abrowser: PCefBrowser;
-    frame: PCefFrame; printInfo: PCefPrintInfo;
-    url, title: PCefString; currentPage, maxPages: Integer;
-    var topLeft, topCenter, topRight, bottomLeft, bottomCenter,
-    bottomRight: TCefString): TCefRetval; stdcall;
-var
-  _topLeft, _topCenter, _topRight, _bottomLeft, _bottomCenter, _bottomRight: ustring;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-  begin
-    Result := doOnPrintHeaderFooter(
-      TCefBrowserRef.UnWrap(abrowser),
-      TCefFrameRef.UnWrap(frame),
-      printInfo, CefString(url), CefString(title), currentPage, maxPages,
-      _topLeft, _topCenter, _topRight, _bottomLeft, _bottomCenter, _bottomRight
-    );
-    topLeft := CefStringAlloc(_topLeft);
-    topCenter := CefStringAlloc(_topCenter);
-    topRight := CefStringAlloc(_topRight);
-    bottomLeft := CefStringAlloc(_bottomLeft);
-    bottomCenter := CefStringAlloc(_bottomCenter);
-    bottomRight := CefStringAlloc(_bottomRight);
-  end;
-end;
-
-function cef_handler_handle_jsalert(self: PCefHandler;
-    abrowser: PCefBrowser; frame: PCefFrame;
-    const message: PCefString): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnJsAlert(
-      TCefBrowserRef.UnWrap(abrowser),
-      TCefFrameRef.UnWrap(frame),
-      CefString(message));
-end;
-
-function cef_handler_handle_jsconfirm(
-    self: PCefHandler; abrowser: PCefBrowser;
-    frame: PCefFrame; const message: PCefString;
-    var retval: Integer): TCefRetval; stdcall;
-var
-  ret: Boolean;
-begin
-  ret := retval <> 0;
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnJsConfirm(
-      TCefBrowserRef.UnWrap(abrowser),
-      TCefFrameRef.UnWrap(frame),
-      CefString(message), ret);
-  if Result = RV_HANDLED then
-    retval := Ord(ret);
-
-end;
-
-function cef_handler_handle_jsprompt(self: PCefHandler;
-    abrowser: PCefBrowser; frame: PCefFrame;
-    const message, defaultValue: PCefString; var retval: Integer;
-    var return: TCefString): TCefRetval; stdcall;
-var
-  ret: Boolean;
-  str: ustring;
-begin
-  ret := retval <> 0;
-  with TCustomChromium(CefGetObject(self)) do
-  begin
-    Result := doOnJsPrompt(
-      TCefBrowserRef.UnWrap(abrowser),
-      TCefFrameRef.UnWrap(frame),
-      CefString(message), CefString(defaultValue), ret, str);
-    if Result = RV_HANDLED then
-    begin
-      retval := Ord(ret);
-      return := CefStringAlloc(str)
-    end;
-  end;
-end;
-
-function cef_handler_handle_before_window_close(
-    self: PCefHandler; abrowser: PCefBrowser): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnBeforeWindowClose(
-      TCefBrowserRef.UnWrap(abrowser))
-end;
-
-function cef_handler_handle_take_focus(
-    self: PCefHandler; abrowser: PCefBrowser;
-    reverse: Integer): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnTakeFocus(
-      TCefBrowserRef.UnWrap(abrowser), reverse);
-end;
-
-function cef_handler_handle_set_focus(
-    self: PCefHandler; abrowser: PCefBrowser;
-    isWidget: Integer): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnSetFocus(
-      TCefBrowserRef.UnWrap(abrowser), isWidget <> 0);
-end;
-
-function cef_handler_handle_key_event(
-    self: PCefHandler; abrowser: PCefBrowser;
-    event: TCefHandlerKeyEventType; code, modifiers,
-    isSystemKey: Integer): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnKeyEvent(
-      TCefBrowserRef.UnWrap(abrowser),
-      event, code, modifiers, isSystemKey <> 0);
-end;
-
-function cef_handler_console_message(self: PCefHandler; abrowser: PCefBrowser;
-  const message, source: PCefString; line: Integer): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnConsoleMessage(TCefBrowserRef.UnWrap(abrowser), CefString(message), CefString(source), line);
-end;
-
-function cef_handler_handle_status(self: PCefHandler; abrowser: PCefBrowser;
-  value: PCefString; type_: TCefHandlerStatusType): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnStatus(TCefBrowserRef.UnWrap(abrowser), CefString(value), type_);
-end;
-
-function cef_handler_handle_find_result(self: PCefHandler; abrowser: PCefBrowser;
-  identifier, count: Integer; const selectionRect: PCefRect;
-  activeMatchOrdinal, finalUpdate: Integer): TCefRetval; stdcall;
-begin
- with TCustomChromium(CefGetObject(self)) do
-    Result := doOnFindResult(
-      TCefBrowserRef.UnWrap(abrowser),
-        count, selectionRect,
-        identifier <> 0,
-        activeMatchOrdinal <> 0,
-        finalUpdate <> 0);
-end;
-
-function cef_handler_handle_print_options(self: PCefHandler; abrowser: PCefBrowser;
-        printOptions: PCefPrintOptions): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnPrintOptions(
-      TCefBrowserRef.UnWrap(abrowser), printOptions);
-end;
-
-function cef_handler_handle_jsbinding(self: PCefHandler; abrowser: PCefBrowser;
-      frame: PCefFrame; obj: PCefv8Value): TCefRetval; stdcall;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnJsBinding(
-      TCefBrowserRef.UnWrap(abrowser),
-      TCefFrameRef.UnWrap(frame),
-      TCefv8ValueRef.UnWrap(obj));
-end;
-
-function cef_handler_handle_tooltip(self: PCefHandler;
-        abrowser: PCefBrowser; text: PCefString): TCefRetval; stdcall;
-var
-  t: ustring;
-begin
-  t := CefStringClearAndGet(text^);
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnTooltip(
-      TCefBrowserRef.UnWrap(abrowser), t);
-  text^ := CefStringAlloc(t);
-end;
-
-function cef_handler_handle_download_response(self: PCefHandler;
-  abrowser: PCefBrowser; const mimeType, fileName: PCefString; contentLength: int64;
-  var handler: PCefDownloadHandler): TCefRetval; stdcall;
-var
-  _handler: ICefDownloadHandler;
-begin
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnDownloadResponse(
-      TCefBrowserRef.UnWrap(abrowser),
-      CefString(mimeType), CefString(fileName), contentLength, _handler);
-  if _handler <> nil then
-    handler := _handler.Wrap else
-    handler := nil;
-end;
-
-function cef_handle_authentication_request(
-  self: PCefHandler; abrowser: PCefBrowser; isProxy: Integer;
-  const host: PCefString; const realm: PCefString; const scheme: PCefString;
-  username: PCefString; password: PCefString): TCefRetval; stdcall;
-var
-  _username, _password: ustring;
-begin
-  _username := CefString(username);
-  _password := CefString(password);
-  with TCustomChromium(CefGetObject(self)) do
-    Result := doOnAuthenticationRequest(
-      TCefBrowserRef.UnWrap(abrowser), isProxy <> 0,
-      CefString(host), CefString(realm), CefString(scheme),
-      _username, _password
-    );
-  if Result = RV_HANDLED then
-  begin
-    CefStringSet(username, _username);
-    CefStringSet(password, _password);
-  end;
-end;
 
 { TCustomChromium }
 
 constructor TCustomChromium.Create(AOwner: TComponent);
 begin
   inherited;
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   if not (csDesigning in ComponentState) then
-    InterlockedIncrement(CefInstances);
-{$ENDIF}
-  FSelf := Self;
-  FillChar(FHandler, SizeOf(FHandler), 0);
-  FHandler.base.size := SizeOf(FHandler);
-  FHandler.handle_before_created := @cef_handler_handle_before_created;
-  FHandler.handle_after_created := @cef_handler_handle_after_created;
-  FHandler.handle_address_change := @cef_handler_handle_address_change;
-  FHandler.handle_title_change := @cef_handler_handle_title_change;
-  FHandler.handle_before_browse := @cef_handler_handle_before_browse;
-  FHandler.handle_load_start := @cef_handler_handle_load_start;
-  FHandler.handle_load_end := @cef_handler_handle_load_end;
-  FHandler.handle_load_error := @cef_handler_handle_load_error;
-  FHandler.handle_before_resource_load := @cef_handler_handle_before_resource_load;
-  FHandler.handle_protocol_execution := @cef_handler_handle_protocol_execution;
-  FHandler.handle_download_response := @cef_handler_handle_download_response;
-  FHandler.handle_authentication_request := @cef_handle_authentication_request;
-  FHandler.handle_before_menu := @cef_handler_handle_before_menu;
-  FHandler.handle_get_menu_label := @cef_handler_handle_get_menu_label;
-  FHandler.handle_menu_action := @cef_handler_handle_menu_action;
-  FHandler.handle_print_header_footer := @cef_handler_handle_print_header_footer;
-  FHandler.handle_jsalert := @cef_handler_handle_jsalert;
-  FHandler.handle_jsconfirm := @cef_handler_handle_jsconfirm;
-  FHandler.handle_jsprompt := @cef_handler_handle_jsprompt;
-  FHandler.handle_before_window_close := @cef_handler_handle_before_window_close;
-  FHandler.handle_take_focus := @cef_handler_handle_take_focus;
-  FHandler.handle_set_focus := @cef_handler_handle_set_focus;
-  FHandler.handle_key_event := @cef_handler_handle_key_event;
-  FHandler.handle_console_message := @cef_handler_console_message;
-  FHandler.handle_status := @cef_handler_handle_status;
-  FHandler.handle_find_result := @cef_handler_handle_find_result;
-  FHandler.handle_print_options := @cef_handler_handle_print_options;
-  FHandler.handle_jsbinding := @cef_handler_handle_jsbinding;
-  FHandler.handle_tooltip := @cef_handler_handle_tooltip;
+    FHandler := TCefCustomHandler.Create(Self) as ICefBase;
 
   FOptions := [];
   FFontOptions := TChromiumFontOptions.Create;
@@ -878,9 +464,9 @@ begin
     info.Height := rect.bottom - rect.top;
     info.ExStyle := 0;
 {$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-    CefBrowserCreate(@info, False, @FHandler, FDefaultUrl);
+    CefBrowserCreate(@info, False, FHandler.Wrap, FDefaultUrl);
 {$ELSE}
-    FBrowser := CefBrowserCreateSync(@info, False, @FHandler, '');
+    FBrowser := CefBrowserCreateSync(@info, False, FHandler.Wrap, '');
     FBrowserHandle := FBrowser.GetWindowHandle;
 {$ENDIF}
   end;
@@ -890,10 +476,8 @@ destructor TCustomChromium.Destroy;
 begin
   FBrowser := nil;
   FFontOptions.Free;
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-  if not (csDesigning in ComponentState) then
-    InterlockedDecrement(CefInstances);
-{$ENDIF}
+  (FHandler as ICefCustomHandler).Disconnect;
+  FHandler := nil;
   inherited;
 end;
 
@@ -968,11 +552,11 @@ end;
 function TCustomChromium.doOnBeforeWindowClose(
   const browser: ICefBrowser): TCefRetval;
 begin
-  if browser.GetWindowHandle = FBrowserHandle then
-    FBrowser := nil;
   Result := RV_CONTINUE;
   if Assigned(FOnBeforeWindowClose) then
     FOnBeforeWindowClose(Self, browser, Result);
+  if browser.GetWindowHandle = FBrowserHandle then
+    FBrowser := nil;
 end;
 
 function TCustomChromium.doOnConsoleMessage(const browser: ICefBrowser; const message,
@@ -1262,6 +846,327 @@ begin
   end;
 end;
 {$ENDIF}
+
+{ TCefCustomHandler }
+
+constructor TCefCustomHandler.Create(crm: TCustomChromium);
+begin
+  inherited Create;
+  FCrm := crm;
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+  InterlockedIncrement(CefInstances);
+{$ENDIF}
+end;
+
+destructor TCefCustomHandler.Destroy;
+begin
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+  InterlockedDecrement(CefInstances);
+{$ENDIF}
+  inherited;
+end;
+
+procedure TCefCustomHandler.Disconnect;
+begin
+  FCrm := nil;
+end;
+
+function TCefCustomHandler.doOnAddressChange(const browser: ICefBrowser;
+  const frame: ICefFrame; const url: ustring): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnAddressChange(browser, frame, url) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnAfterCreated(
+  const browser: ICefBrowser): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnAfterCreated(browser) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnAuthenticationRequest(const browser: ICefBrowser;
+  isProxy: Boolean; const host, realm, scheme: ustring; var username,
+  password: ustring): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnAuthenticationRequest(browser, isProxy, host, realm, scheme, username, password) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnBeforeBrowse(const browser: ICefBrowser;
+  const frame: ICefFrame; const request: ICefRequest;
+  navType: TCefHandlerNavtype; isRedirect: boolean): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnBeforeBrowse(browser, frame, request, navType, isRedirect) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnBeforeCreated(const parentBrowser: ICefBrowser;
+  var windowInfo: TCefWindowInfo; popup: Boolean; var popupFeatures: TCefPopupFeatures;
+  var handler: ICefBase; var url: ustring; var settings: TCefBrowserSettings): TCefRetval;
+begin
+  if FCrm <> nil then
+  begin
+    Result := FCrm.doOnBeforeCreated(parentBrowser, windowInfo, popup, handler, url, popupFeatures);
+
+    Assert(settings.size = SizeOf(settings));
+    settings.standard_font_family := CefString(FCrm.FFontOptions.FStandardFontFamily);
+    settings.fixed_font_family := CefString(FCrm.FFontOptions.FFixedFontFamily);
+    settings.serif_font_family := CefString(FCrm.FFontOptions.FSerifFontFamily);
+    settings.sans_serif_font_family := CefString(FCrm.FFontOptions.FSansSerifFontFamily);
+    settings.cursive_font_family := CefString(FCrm.FFontOptions.FCursiveFontFamily);
+    settings.fantasy_font_family := CefString(FCrm.FFontOptions.FFantasyFontFamily);
+    settings.default_font_size := FCrm.FFontOptions.FDefaultFontSize;
+    settings.default_fixed_font_size := FCrm.FFontOptions.FDefaultFixedFontSize;
+    settings.minimum_font_size := FCrm.FFontOptions.FMinimumFontSize;
+    settings.minimum_logical_font_size := FCrm.FFontOptions.FMinimumLogicalFontSize;
+    settings.remote_fonts_disabled := FCrm.FFontOptions.FRemoteFontsDisabled;
+    settings.default_encoding := CefString(FCrm.FDefaultEncoding);
+    settings.user_style_sheet_location := CefString(FCrm.FUserStyleSheetLocation);
+
+    settings.drag_drop_disabled := coDragDropDisabled in FCrm.FOptions;
+    settings.encoding_detector_enabled := coEncodingDetectorEnabled in FCrm.FOptions;
+    settings.javascript_disabled := coJavascriptDisabled in FCrm.FOptions;
+    settings.javascript_open_windows_disallowed := coJavascriptOpenWindowsDisallowed in FCrm.FOptions;
+    settings.javascript_close_windows_disallowed := coJavascriptCloseWindowsDisallowed in FCrm.FOptions;
+    settings.javascript_access_clipboard_disallowed := coJavascriptAccessClipboardDisallowed in FCrm.FOptions;
+    settings.dom_paste_disabled := coDomPasteDisabled in FCrm.FOptions;
+    settings.caret_browsing_enabled := coCaretBrowsingEnabled in FCrm.FOptions;
+    settings.java_disabled := coJavaDisabled in FCrm.FOptions;
+    settings.plugins_disabled := coPluginsDisabled in FCrm.FOptions;
+    settings.universal_access_from_file_urls_allowed := coUniversalAccessFromFileUrlsAllowed in FCrm.FOptions;
+    settings.file_access_from_file_urls_allowed := coFileAccessFromFileUrlsAllowed in FCrm.FOptions;
+    settings.web_security_disabled := coWebSecurityDisabled in FCrm.FOptions;
+    settings.xss_auditor_enabled := coXssAuditorEnabled in FCrm.FOptions;
+    settings.image_load_disabled := coImageLoadDisabled in FCrm.FOptions;
+    settings.shrink_standalone_images_to_fit := coShrinkStandaloneImagesToFit in FCrm.FOptions;
+    settings.site_specific_quirks_disabled := coSiteSpecificQuirksDisabled in FCrm.FOptions;
+    settings.text_area_resize_disabled := coTextAreaResizeDisabled in FCrm.FOptions;
+    settings.page_cache_disabled := coPageCacheDisabled in FCrm.FOptions;
+    settings.tab_to_links_disabled := coTabToLinksDisabled in FCrm.FOptions;
+    settings.hyperlink_auditing_disabled := coHyperlinkAuditingDisabled in FCrm.FOptions;
+    settings.user_style_sheet_enabled := coUserStyleSheetEnabled in FCrm.FOptions;
+    settings.author_and_user_styles_disabled := coAuthorAndUserStylesDisabled in FCrm.FOptions;
+    settings.local_storage_disabled := coLocalStorageDisabled in FCrm.FOptions;
+    settings.databases_disabled := coDatabasesDisabled in FCrm.FOptions;
+    settings.application_cache_disabled := coApplicationCacheDisabled in FCrm.FOptions;
+    settings.webgl_disabled := coWebglDisabled in FCrm.FOptions;
+    settings.accelerated_compositing_disabled := coAcceleratedCompositingDisabled in FCrm.FOptions;
+    settings.accelerated_layers_disabled := coAcceleratedLayersDisabled in FCrm.FOptions;
+    settings.accelerated_2d_canvas_disabled := coAccelerated2dCanvasDisabled in FCrm.FOptions;
+    settings.developer_tools_disabled := coDeveloperToolsDisabled in FCrm.FOptions;
+  end else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnBeforeMenu(const browser: ICefBrowser;
+  const menuInfo: PCefHandlerMenuInfo): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnBeforeMenu(browser, menuInfo) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnBeforeResourceLoad(const browser: ICefBrowser;
+  const request: ICefRequest; var redirectUrl: ustring;
+  var resourceStream: ICefStreamReader; var mimeType: ustring;
+  loadFlags: Integer): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnBeforeResourceLoad(browser, request, redirectUrl,
+      resourceStream, mimeType, loadFlags) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnBeforeWindowClose(
+  const browser: ICefBrowser): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnBeforeWindowClose(browser) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnConsoleMessage(const browser: ICefBrowser;
+  const message, source: ustring; line: Integer): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnConsoleMessage(browser, message, source, line) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnDownloadResponse(const browser: ICefBrowser;
+  const mimeType, fileName: ustring; contentLength: int64;
+  var handler: ICefDownloadHandler): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnDownloadResponse(browser, mimeType, fileName, contentLength, handler) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnFindResult(const browser: ICefBrowser;
+  count: Integer; selectionRect: PCefRect; identifier, activeMatchOrdinal,
+  finalUpdate: Boolean): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnFindResult(browser, count, selectionRect, identifier,
+      activeMatchOrdinal, finalUpdate) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnGetMenuLabel(const browser: ICefBrowser;
+  menuId: TCefHandlerMenuId; var caption: ustring): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnGetMenuLabel(browser, menuId, caption) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnJsAlert(const browser: ICefBrowser;
+  const frame: ICefFrame; const message: ustring): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnJsAlert(browser, frame, message) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnJsBinding(const browser: ICefBrowser;
+  const frame: ICefFrame; const obj: ICefv8Value): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnJsBinding(browser, frame, obj) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnJsConfirm(const browser: ICefBrowser;
+  const frame: ICefFrame; const message: ustring;
+  var retval: Boolean): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnJsConfirm(browser, frame, message, retval) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnJsPrompt(const browser: ICefBrowser;
+  const frame: ICefFrame; const message, defaultValue: ustring;
+  var retval: Boolean; var return: ustring): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnJsPrompt(browser, frame, message, defaultValue, retval, return) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnKeyEvent(const browser: ICefBrowser;
+  event: TCefHandlerKeyEventType; code, modifiers: Integer;
+  isSystemKey: Boolean): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnKeyEvent(browser, event, code, modifiers, isSystemKey) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnLoadEnd(const browser: ICefBrowser;
+  const frame: ICefFrame; httpStatusCode: Integer): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnLoadEnd(browser, frame, httpStatusCode) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnLoadError(const browser: ICefBrowser;
+  const frame: ICefFrame; errorCode: TCefHandlerErrorcode;
+  const failedUrl: ustring; var errorText: ustring): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnLoadError(browser, frame, errorCode, failedUrl, errorText) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnLoadStart(const browser: ICefBrowser;
+  const frame: ICefFrame): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnLoadStart(browser, frame) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnMenuAction(const browser: ICefBrowser;
+  menuId: TCefHandlerMenuId): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnMenuAction(browser, menuId) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnPrintHeaderFooter(const browser: ICefBrowser;
+  const frame: ICefFrame; printInfo: PCefPrintInfo; const url, title: ustring;
+  currentPage, maxPages: Integer; var topLeft, topCenter, topRight, bottomLeft,
+  bottomCenter, bottomRight: ustring): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnPrintHeaderFooter(browser, frame, printInfo, url, title,
+    currentPage, maxPages, topLeft, topCenter, topRight, bottomLeft, bottomCenter, bottomRight) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnPrintOptions(const browser: ICefBrowser;
+  printOptions: PCefPrintOptions): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnPrintOptions(browser, printOptions) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnProtocolExecution(const browser: ICefBrowser;
+  const url: ustring; var AllowOsExecution: Boolean): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnProtocolExecution(browser, url, AllowOsExecution) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnSetFocus(const browser: ICefBrowser;
+  isWidget: Boolean): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnSetFocus(browser, isWidget) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnStatus(const browser: ICefBrowser;
+  const value: ustring; StatusType: TCefHandlerStatusType): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnStatus(browser, value, StatusType) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnTakeFocus(const browser: ICefBrowser;
+  reverse: Integer): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnTakeFocus(browser, reverse) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnTitleChange(const browser: ICefBrowser;
+  const title: ustring): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnTitleChange(browser, title) else
+    Result := RV_CONTINUE;
+end;
+
+function TCefCustomHandler.doOnTooltip(const browser: ICefBrowser;
+  var text: ustring): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnTooltip(browser, text) else
+    Result := RV_CONTINUE;
+end;
 
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 var
