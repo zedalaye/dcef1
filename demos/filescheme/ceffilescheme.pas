@@ -36,7 +36,7 @@ type
     function ReadResponse(DataOut: Pointer; BytesToRead: Integer;
       var BytesRead: Integer): Boolean; override;
   public
-    constructor Create; override;
+    constructor Create(SyncMainThread: Boolean); override;
     destructor Destroy; override;
   end;
 
@@ -221,9 +221,9 @@ end;
 
 { TFileScheme }
 
-constructor TFileScheme.Create;
+constructor TFileScheme.Create(SyncMainThread: Boolean);
 begin
-  inherited;
+  inherited Create(SyncMainThread);
   FDataStream := nil;
 end;
 

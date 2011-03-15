@@ -319,6 +319,6 @@ begin
 end;
 
 initialization
-  CefRegisterScheme('file', '', True, TFileScheme);
+  CefRegisterScheme('file', '', True, False, TFileScheme);
 
 end.

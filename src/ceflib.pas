@@ -2832,7 +2832,7 @@ type
     function ReadResponse(DataOut: Pointer; BytesToRead: Integer;
       var BytesRead: Integer): Boolean; virtual;
   public
-    constructor Create; virtual;
+    constructor Create(SyncMainThread: Boolean); virtual;
     property Cancelled: Boolean read FCancelled;
   end;
   TCefSchemeHandlerClass = class of TCefSchemeHandlerOwn;
@@ -2840,10 +2840,11 @@ type
   TCefSchemeHandlerFactoryOwn = class(TCefBaseOwn, ICefSchemeHandlerFactory)
   private
     FClass: TCefSchemeHandlerClass;
+    FSyncMainThread: Boolean;
   protected
     function New: ICefSchemeHandler; virtual;
   public
-    constructor Create(const AClass: TCefSchemeHandlerClass); virtual;
+    constructor Create(const AClass: TCefSchemeHandlerClass; SyncMainThread: Boolean); virtual;
   end;
 
   TCefDownloadHandlerOwn = class(TCefBaseOwn, ICefDownloadHandler)
@@ -3150,7 +3151,7 @@ function CefBrowserCreateSync(windowInfo: PCefWindowInfo; popup: Boolean;
 procedure CefDoMessageLoopWork;
 {$ENDIF}
 function CefRegisterScheme(const SchemeName, HostName: ustring;
-  isStandard: Boolean; const handler: TCefSchemeHandlerClass): Boolean;
+  isStandard, SyncMainThread: Boolean; const handler: TCefSchemeHandlerClass): Boolean;
 function CefRegisterExtension(const name, code: ustring;
   const Handler: ICefv8Handler): Boolean;
 function CefCurrentlyOn(ThreadId: TCefThreadId): Boolean;
@@ -3169,6 +3170,64 @@ var
   CefExtraPluginPaths: ustring = '';
 
 implementation
+
+{$IFNDEF DELPHI12_UP}
+type
+  TSHSyncProcessRequest = class
+  private
+    FHandler: TCefSchemeHandlerOwn;
+    FRequest: ICefRequest;
+    FMimeType: ustring;
+    FResponseLength: Integer;
+    FResult: Boolean;
+  public
+    procedure Execute;
+    constructor Create(Handler: TCefSchemeHandlerOwn; Request: ICefRequest); virtual;
+  end;
+
+  TSHSyncReadResponse = class
+  private
+    FHandler: TCefSchemeHandlerOwn;
+    FDataOut: Pointer;
+    FBytesToRead: Integer;
+    FBytesRead: Integer;
+    FResult: Boolean;
+  public
+    procedure Execute;
+    constructor Create(Handler: TCefSchemeHandlerOwn; DataOut: Pointer;
+      BytesToRead: Integer; BytesRead: Integer);
+  end;
+
+  procedure TSHSyncProcessRequest.Execute;
+  begin
+    FResult := FHandler.ProcessRequest(FRequest, FMimeType, FResponseLength);
+  end;
+
+  constructor TSHSyncProcessRequest.Create(Handler: TCefSchemeHandlerOwn; Request: ICefRequest);
+  begin
+    FHandler := Handler;
+    FRequest := Request;
+    FMimeType := '';
+    FResponseLength := 0;
+    FResult := False;
+  end;
+
+  procedure TSHSyncReadResponse.Execute;
+  begin
+    FResult := FHandler.ReadResponse(FDataOut, FBytesToRead, FBytesRead);
+  end;
+
+  constructor TSHSyncReadResponse.Create(Handler: TCefSchemeHandlerOwn; DataOut: Pointer;
+    BytesToRead: Integer; BytesRead: Integer);
+  begin
+    FHandler := Handler;
+    FDataOut := DataOut;
+    FBytesToRead := BytesToRead;
+    FBytesRead := BytesRead;
+    FResult := False;
+  end;
+
+{$ENDIF}
 
 const
   LIBCEF = 'libcef.dll';
@@ -4030,17 +4089,85 @@ begin
     mime_type := CefStringAlloc(_mime_type);
 end;
 
+function cef_scheme_handler_process_request_sync(self: PCefSchemeHandler;
+  request: PCefRequest; var mime_type: TCefString;
+  var response_length: Integer): Integer; stdcall;
+{$IFDEF DELPHI12_UP}
+var
+  _mime_type: ustring;
+  _Result, _response_length: Integer;
+begin
+  _response_length := response_length;
+  TThread.Synchronize(nil, procedure begin
+    with TCefSchemeHandlerOwn(CefGetObject(self)) do
+      _Result := Ord(ProcessRequest(TCefRequestRef.UnWrap(request), _mime_type, _response_length));
+  end);
+  response_length := _response_length;
+  Result := _Result;
+  if _mime_type <> '' then
+    mime_type := CefStringAlloc(_mime_type);
+end;
+{$ELSE}
+var
+  sync: TSHSyncProcessRequest;
+begin
+  sync := TSHSyncProcessRequest.Create(TCefSchemeHandlerOwn(CefGetObject(self)),
+    TCefRequestRef.UnWrap(request));
+  try
+    TThread.Synchronize(nil, sync.Execute);
+    Result := Ord(sync.FResult);
+    response_length := sync.FResponseLength;
+    if sync.FMimeType <> '' then
+      mime_type := CefStringAlloc(sync.FMimeType);
+  finally
+    sync.Free;
+  end;
+end;
+{$ENDIF}
+
 procedure cef_scheme_handler_cancel(self: PCefSchemeHandler); stdcall;
 begin
   with TCefSchemeHandlerOwn(CefGetObject(self)) do
     Cancel;
 end;
 
-function cef_scheme_handler_read_response(self: PCefSchemeHandler; data_out: Pointer; bytes_to_read: Integer; var bytes_read: Integer): Integer; stdcall;
+function cef_scheme_handler_read_response(self: PCefSchemeHandler; data_out: Pointer;
+ bytes_to_read: Integer; var bytes_read: Integer): Integer; stdcall;
 begin
   with TCefSchemeHandlerOwn(CefGetObject(self)) do
     Result := Ord(ReadResponse(data_out, bytes_to_read, bytes_read));
 end;
+
+function cef_scheme_handler_read_response_sync(self: PCefSchemeHandler; data_out: Pointer;
+ bytes_to_read: Integer; var bytes_read: Integer): Integer; stdcall;
+{$IFDEF DELPHI12_UP}
+var
+  ret: Boolean;
+  read: Integer;
+begin
+  read := bytes_read;
+  TThread.Synchronize(nil, procedure begin
+    with TCefSchemeHandlerOwn(CefGetObject(self)) do
+      ret := ReadResponse(data_out, bytes_to_read, read);
+  end);
+  bytes_read := read;
+  Result := Ord(ret);
+end;
+{$ELSE}
+var
+  sync: TSHSyncReadResponse;
+begin
+  sync := TSHSyncReadResponse.Create(TCefSchemeHandlerOwn(CefGetObject(self)),
+    data_out, bytes_to_read, bytes_read);
+  try
+    TThread.Synchronize(nil, sync.Execute);
+    Result := ord(sync.FResult);
+    bytes_read := sync.FBytesRead;
+  finally
+    sync.Free
+  end;
+end;
+{$ENDIF}
 
 { cef_v8_handler }
 
@@ -5585,7 +5712,7 @@ begin
 end;
 
 function CefRegisterScheme(const SchemeName, HostName: ustring;
-  isStandard: Boolean; const handler: TCefSchemeHandlerClass): Boolean;
+  isStandard, SyncMainThread: Boolean; const handler: TCefSchemeHandlerClass): Boolean;
 var
   s, h: TCefString;
 begin
@@ -5596,7 +5723,7 @@ begin
     @s,
     @h,
     Ord(isStandard),
-    (TCefSchemeHandlerFactoryOwn.Create(handler) as ICefBase).Wrap) <> 0;
+    (TCefSchemeHandlerFactoryOwn.Create(handler, SyncMainThread) as ICefBase).Wrap) <> 0;
 end;
 
 function CefRegisterExtension(const name, code: ustring;
@@ -5627,17 +5754,18 @@ end;
 
 { TCefSchemeHandlerFactoryOwn }
 
-constructor TCefSchemeHandlerFactoryOwn.Create(const AClass: TCefSchemeHandlerClass);
+constructor TCefSchemeHandlerFactoryOwn.Create(const AClass: TCefSchemeHandlerClass; SyncMainThread: Boolean);
 begin
   inherited CreateData(SizeOf(TCefSchemeHandlerFactory));
   with PCefSchemeHandlerFactory(FData)^ do
     create := @cef_scheme_handler_factory_create;
   FClass := AClass;
+  FSyncMainThread := SyncMainThread;
 end;
 
 function TCefSchemeHandlerFactoryOwn.New: ICefSchemeHandler;
 begin
-  Result := FClass.Create as ICefSchemeHandler;
+  Result := FClass.Create(FSyncMainThread) as ICefSchemeHandler;
 end;
 
 { TCefSchemeHandlerOwn }
@@ -5648,15 +5776,23 @@ begin
   FCancelled := True;
 end;
 
-constructor TCefSchemeHandlerOwn.Create;
+constructor TCefSchemeHandlerOwn.Create(SyncMainThread: Boolean);
 begin
   inherited CreateData(SizeOf(TCefSchemeHandler));
   FCancelled := False;
   with PCefSchemeHandler(FData)^ do
   begin
-    process_request := @cef_scheme_handler_process_request;
+    if SyncMainThread then
+    begin
+      process_request := @cef_scheme_handler_process_request_sync;
+      read_response := @cef_scheme_handler_read_response_sync;
+    end else
+    begin
+      process_request := @cef_scheme_handler_process_request;
+      read_response := @cef_scheme_handler_read_response;
+    end;
     cancel := @cef_scheme_handler_cancel;
-    read_response := @cef_scheme_handler_read_response;
+
   end;
 end;
 
