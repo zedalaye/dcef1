@@ -476,8 +476,11 @@ destructor TCustomChromium.Destroy;
 begin
   FBrowser := nil;
   FFontOptions.Free;
-  (FHandler as ICefCustomHandler).Disconnect;
-  FHandler := nil;
+  if FHandler <> nil then
+  begin
+    (FHandler as ICefCustomHandler).Disconnect;
+    FHandler := nil;
+  end;
   inherited;
 end;
 
