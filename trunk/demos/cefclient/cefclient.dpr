@@ -38,7 +38,7 @@ type
     function ReadResponse(DataOut: Pointer; BytesToRead: Integer;
       var BytesRead: Integer): Boolean; override;
   public
-    constructor Create; override;
+    constructor Create(SyncMainThread: Boolean); override;
     destructor Destroy; override;
   end;
 
@@ -331,9 +331,9 @@ end;
 
 { TScheme }
 
-constructor TScheme.Create;
+constructor TScheme.Create(SyncMainThread: Boolean);
 begin
-  inherited;
+  inherited Create(SyncMainThread);
   FResponse := TMemoryStream.Create;
 end;
 
@@ -462,8 +462,8 @@ var
   wndClass : TWndClass;
 begin
   CefLoadLibDefault;
-  CefRegisterScheme('client', 'test', True, TScheme);
-  CefRegisterScheme('file', '', True, TFileScheme);
+  CefRegisterScheme('client', 'test', True, False, TScheme);
+  CefRegisterScheme('file', '', True, False, TFileScheme);
   CefRegisterExtension('v8/test', code, TExtension.Create as ICefV8Handler);
   //navigateto := 'client://test/';
   //navigateto := 'file://c:\';
