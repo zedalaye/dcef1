@@ -3128,6 +3128,10 @@ type
   end;
 {$ENDIF}
 
+  ECefException = class(Exception)
+
+  end;
+
 procedure CefLoadLibDefault;
 procedure CefLoadLib(const Cache: ustring = ''; const UserAgent: ustring = '';
   const ProductVersion: ustring = ''; const Locale: ustring = '';
@@ -3161,6 +3165,7 @@ function CefGetData(const i: ICefBase): Pointer;
 function CefParseUrl(const url: ustring; var parts: TCefUrlParts): Boolean;
 
 var
+  CefLibrary: string = 'libcef.dll';
   CefCache: ustring = '';
   CefUserAgent: ustring = '';
   CefProductVersion: ustring = '';
@@ -3228,9 +3233,6 @@ type
   end;
 
 {$ENDIF}
-
-const
-  LIBCEF = 'libcef.dll';
 
 var
 // These functions set string values. If |copy| is true (1) the value will be
@@ -5373,7 +5375,7 @@ begin
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
     Set8087CW(Get8087CW or $3F); // deactivate FPU exception
 {$ENDIF}
-    LibHandle := LoadLibrary(LIBCEF);
+    LibHandle := LoadLibrary(PChar(CefLibrary));
     if LibHandle = 0 then
       RaiseLastOSError;
 
@@ -5567,7 +5569,7 @@ begin
       Assigned(cef_web_urlrequest_create) and
       Assigned(cef_xml_reader_create) and
       Assigned(cef_zip_reader_create)
-    ) then raise Exception.Create('Invalid CEF Library version');
+    ) then raise ECefException.Create('Invalid CEF Library version');
 
     FillChar(settings, SizeOf(settings), 0);
     settings.size := SizeOf(settings);
