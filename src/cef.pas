@@ -350,6 +350,7 @@ type
   end;
 {$ENDIF}
 
+type
   ICefCustomHandler = interface
     ['{91D102A8-E68B-41F8-A323-F77F0C190BD9}']
     procedure Disconnect;
