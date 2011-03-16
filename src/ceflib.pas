@@ -3727,7 +3727,7 @@ begin
       loadFlags
       );
 
-    if Result = RV_HANDLED then
+    if Result = RV_CONTINUE then
     begin
       if _redirectUrl <> '' then
         redirectUrl := CefStringAlloc(_redirectUrl);
