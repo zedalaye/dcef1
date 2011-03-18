@@ -171,7 +171,7 @@ type
     procedure Loaded; override;
     procedure CreateWindowHandle(const Params: TCreateParams); override;
     procedure Resize; override;
-
+    function doOnCreateHandler: ICefBase; virtual;
     function doOnBeforeCreated(const parentBrowser: ICefBrowser;
       var windowInfo: TCefWindowInfo; popup: Boolean;
       var handler: ICefBase; var url: ustring; var popupFeatures: TCefPopupFeatures): TCefRetval; virtual;
@@ -235,6 +235,7 @@ type
       StatusType: TCefHandlerStatusType): TCefRetval; virtual;
 
     property DefaultUrl: ustring read FDefaultUrl write FDefaultUrl;
+
     property OnBeforeCreated: TOnBeforeCreated read FOnBeforeCreated write FOnBeforeCreated;
     property OnAfterCreated: TOnAfterCreated read FOnAfterCreated write FOnAfterCreated;
     property OnAddressChange: TOnAddressChange read FOnAddressChange write FOnAddressChange;
@@ -326,37 +327,19 @@ type
     property UserStyleSheetLocation;
   end;
 
-procedure Register;
-
-implementation
-
-procedure Register;
-begin
-  RegisterComponents('Google', [TChromium]);
-end;
-
-
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-var
-  CefInstances: Integer = 0;
-
-type
-  TCefApplicationEvents = class(TApplicationEvents)
-  private
-    FTick: Cardinal;
-  public
-    procedure doIdle(Sender: TObject; var Done: Boolean);
-    constructor Create(AOwner: TComponent); override;
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+  TChromiumSync = class(TChromium)
+  protected
+    function doOnCreateHandler: ICefBase; override;
   end;
 {$ENDIF}
 
-type
   ICefCustomHandler = interface
     ['{91D102A8-E68B-41F8-A323-F77F0C190BD9}']
     procedure Disconnect;
   end;
 
-  TCefCustomHandler = class(TCefHandlerOwn, ICefCustomHandler)
+  TCustomChromiumHandler = class(TCefHandlerOwn, ICefCustomHandler)
   private
     FCrm: TCustomChromium;
   protected
@@ -424,10 +407,37 @@ type
     function doOnAuthenticationRequest(const browser: ICefBrowser; isProxy: Boolean;
       const host, realm, scheme: ustring; var username, password: ustring): TCefRetval; override;
   public
-    constructor Create(crm: TCustomChromium); reintroduce;
+    constructor Create(crm: TCustomChromium {$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}; SyncUI, SyncIO: Boolean{$ENDIF}); reintroduce;
     destructor Destroy; override;
-    property Crm: TCustomChromium read FCrm write FCrm;
   end;
+
+procedure Register;
+
+implementation
+
+procedure Register;
+begin
+  RegisterComponents('Chromium', [TChromium
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+    ,TChromiumSync
+{$ENDIF}
+  ]);
+end;
+
+
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+var
+  CefInstances: Integer = 0;
+
+type
+  TCefApplicationEvents = class(TApplicationEvents)
+  private
+    FTick: Cardinal;
+  public
+    procedure doIdle(Sender: TObject; var Done: Boolean);
+    constructor Create(AOwner: TComponent); override;
+  end;
+{$ENDIF}
 
 { TCustomChromium }
 
@@ -435,7 +445,7 @@ constructor TCustomChromium.Create(AOwner: TComponent);
 begin
   inherited;
   if not (csDesigning in ComponentState) then
-    FHandler := TCefCustomHandler.Create(Self) as ICefBase;
+    FHandler := doOnCreateHandler;
 
   FOptions := [];
   FFontOptions := TChromiumFontOptions.Create;
@@ -761,6 +771,12 @@ begin
   Load(FDefaultUrl);
 end;
 
+function TCustomChromium.doOnCreateHandler: ICefBase;
+begin
+  Result := TCustomChromiumHandler.Create(Self{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}, False, False{$ENDIF}) as ICefBase
+end;
+
+
 procedure TCustomChromium.Resize;
 var
   brws: ICefBrowser;
@@ -820,6 +836,16 @@ begin
   FMinimumFontSize := 0;
 end;
 
+
+{ TChromiumSync}
+
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+function TChromiumSync.doOnCreateHandler;
+begin
+  Result := TCustomChromiumHandler.Create(Self{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}, True, True{$ENDIF}) as ICefBase
+end;
+{$ENDIF}
+
 { TCefApplicationEvents }
 
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
@@ -853,16 +879,16 @@ end;
 
 { TCefCustomHandler }
 
-constructor TCefCustomHandler.Create(crm: TCustomChromium);
+constructor TCustomChromiumHandler.Create(crm: TCustomChromium{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}; SyncUI, SyncIO: Boolean{$ENDIF});
 begin
-  inherited Create;
+  inherited Create({$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP} SyncUI, SyncIO{$ENDIF});
   FCrm := crm;
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   InterlockedIncrement(CefInstances);
 {$ENDIF}
 end;
 
-destructor TCefCustomHandler.Destroy;
+destructor TCustomChromiumHandler.Destroy;
 begin
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   InterlockedDecrement(CefInstances);
@@ -870,12 +896,12 @@ begin
   inherited;
 end;
 
-procedure TCefCustomHandler.Disconnect;
+procedure TCustomChromiumHandler.Disconnect;
 begin
   FCrm := nil;
 end;
 
-function TCefCustomHandler.doOnAddressChange(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnAddressChange(const browser: ICefBrowser;
   const frame: ICefFrame; const url: ustring): TCefRetval;
 begin
   if FCrm <> nil then
@@ -883,7 +909,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnAfterCreated(
+function TCustomChromiumHandler.doOnAfterCreated(
   const browser: ICefBrowser): TCefRetval;
 begin
   if FCrm <> nil then
@@ -891,7 +917,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnAuthenticationRequest(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnAuthenticationRequest(const browser: ICefBrowser;
   isProxy: Boolean; const host, realm, scheme: ustring; var username,
   password: ustring): TCefRetval;
 begin
@@ -900,7 +926,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnBeforeBrowse(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnBeforeBrowse(const browser: ICefBrowser;
   const frame: ICefFrame; const request: ICefRequest;
   navType: TCefHandlerNavtype; isRedirect: boolean): TCefRetval;
 begin
@@ -909,7 +935,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnBeforeCreated(const parentBrowser: ICefBrowser;
+function TCustomChromiumHandler.doOnBeforeCreated(const parentBrowser: ICefBrowser;
   var windowInfo: TCefWindowInfo; popup: Boolean; var popupFeatures: TCefPopupFeatures;
   var handler: ICefBase; var url: ustring; var settings: TCefBrowserSettings): TCefRetval;
 begin
@@ -967,7 +993,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnBeforeMenu(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnBeforeMenu(const browser: ICefBrowser;
   const menuInfo: PCefHandlerMenuInfo): TCefRetval;
 begin
   if FCrm <> nil then
@@ -975,7 +1001,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnBeforeResourceLoad(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnBeforeResourceLoad(const browser: ICefBrowser;
   const request: ICefRequest; var redirectUrl: ustring;
   var resourceStream: ICefStreamReader; var mimeType: ustring;
   loadFlags: Integer): TCefRetval;
@@ -986,7 +1012,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnBeforeWindowClose(
+function TCustomChromiumHandler.doOnBeforeWindowClose(
   const browser: ICefBrowser): TCefRetval;
 begin
   if FCrm <> nil then
@@ -994,7 +1020,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnConsoleMessage(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnConsoleMessage(const browser: ICefBrowser;
   const message, source: ustring; line: Integer): TCefRetval;
 begin
   if FCrm <> nil then
@@ -1002,7 +1028,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnDownloadResponse(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnDownloadResponse(const browser: ICefBrowser;
   const mimeType, fileName: ustring; contentLength: int64;
   var handler: ICefDownloadHandler): TCefRetval;
 begin
@@ -1011,7 +1037,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnFindResult(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnFindResult(const browser: ICefBrowser;
   count: Integer; selectionRect: PCefRect; identifier, activeMatchOrdinal,
   finalUpdate: Boolean): TCefRetval;
 begin
@@ -1021,7 +1047,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnGetMenuLabel(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnGetMenuLabel(const browser: ICefBrowser;
   menuId: TCefHandlerMenuId; var caption: ustring): TCefRetval;
 begin
   if FCrm <> nil then
@@ -1029,7 +1055,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnJsAlert(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnJsAlert(const browser: ICefBrowser;
   const frame: ICefFrame; const message: ustring): TCefRetval;
 begin
   if FCrm <> nil then
@@ -1037,7 +1063,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnJsBinding(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnJsBinding(const browser: ICefBrowser;
   const frame: ICefFrame; const obj: ICefv8Value): TCefRetval;
 begin
   if FCrm <> nil then
@@ -1045,7 +1071,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnJsConfirm(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnJsConfirm(const browser: ICefBrowser;
   const frame: ICefFrame; const message: ustring;
   var retval: Boolean): TCefRetval;
 begin
@@ -1054,7 +1080,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnJsPrompt(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnJsPrompt(const browser: ICefBrowser;
   const frame: ICefFrame; const message, defaultValue: ustring;
   var retval: Boolean; var return: ustring): TCefRetval;
 begin
@@ -1063,7 +1089,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnKeyEvent(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnKeyEvent(const browser: ICefBrowser;
   event: TCefHandlerKeyEventType; code, modifiers: Integer;
   isSystemKey: Boolean): TCefRetval;
 begin
@@ -1072,7 +1098,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnLoadEnd(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnLoadEnd(const browser: ICefBrowser;
   const frame: ICefFrame; httpStatusCode: Integer): TCefRetval;
 begin
   if FCrm <> nil then
@@ -1080,7 +1106,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnLoadError(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnLoadError(const browser: ICefBrowser;
   const frame: ICefFrame; errorCode: TCefHandlerErrorcode;
   const failedUrl: ustring; var errorText: ustring): TCefRetval;
 begin
@@ -1089,7 +1115,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnLoadStart(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnLoadStart(const browser: ICefBrowser;
   const frame: ICefFrame): TCefRetval;
 begin
   if FCrm <> nil then
@@ -1097,7 +1123,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnMenuAction(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnMenuAction(const browser: ICefBrowser;
   menuId: TCefHandlerMenuId): TCefRetval;
 begin
   if FCrm <> nil then
@@ -1105,7 +1131,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnPrintHeaderFooter(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnPrintHeaderFooter(const browser: ICefBrowser;
   const frame: ICefFrame; printInfo: PCefPrintInfo; const url, title: ustring;
   currentPage, maxPages: Integer; var topLeft, topCenter, topRight, bottomLeft,
   bottomCenter, bottomRight: ustring): TCefRetval;
@@ -1116,7 +1142,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnPrintOptions(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnPrintOptions(const browser: ICefBrowser;
   printOptions: PCefPrintOptions): TCefRetval;
 begin
   if FCrm <> nil then
@@ -1124,7 +1150,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnProtocolExecution(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnProtocolExecution(const browser: ICefBrowser;
   const url: ustring; var AllowOsExecution: Boolean): TCefRetval;
 begin
   if FCrm <> nil then
@@ -1132,7 +1158,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnSetFocus(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnSetFocus(const browser: ICefBrowser;
   isWidget: Boolean): TCefRetval;
 begin
   if FCrm <> nil then
@@ -1140,7 +1166,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnStatus(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnStatus(const browser: ICefBrowser;
   const value: ustring; StatusType: TCefHandlerStatusType): TCefRetval;
 begin
   if FCrm <> nil then
@@ -1148,7 +1174,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnTakeFocus(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnTakeFocus(const browser: ICefBrowser;
   reverse: Integer): TCefRetval;
 begin
   if FCrm <> nil then
@@ -1156,7 +1182,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnTitleChange(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnTitleChange(const browser: ICefBrowser;
   const title: ustring): TCefRetval;
 begin
   if FCrm <> nil then
@@ -1164,7 +1190,7 @@ begin
     Result := RV_CONTINUE;
 end;
 
-function TCefCustomHandler.doOnTooltip(const browser: ICefBrowser;
+function TCustomChromiumHandler.doOnTooltip(const browser: ICefBrowser;
   var text: ustring): TCefRetval;
 begin
   if FCrm <> nil then
