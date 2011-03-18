@@ -57,7 +57,7 @@ object MainForm: TMainForm
     Action = actGoTo
     Anchors = [akTop, akRight]
   end
-  object crm: TChromium
+  object crm: TChromiumSync
     Left = 0
     Top = 22
     Width = 786

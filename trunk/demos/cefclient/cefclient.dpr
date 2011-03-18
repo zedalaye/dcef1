@@ -123,7 +123,7 @@ begin
         end;
       WM_CREATE:
         begin
-          handl := THandler.Create;
+          handl := THandler.Create(True, True);
           x := 0;
           GetClientRect(Wnd, rect);
 
@@ -462,7 +462,7 @@ var
   wndClass : TWndClass;
 begin
   CefLoadLibDefault;
-  CefRegisterScheme('client', 'test', True, False, TScheme);
+  CefRegisterScheme('client', 'test', False, False, TScheme);
   CefRegisterScheme('file', '', True, False, TFileScheme);
   CefRegisterExtension('v8/test', code, TExtension.Create as ICefV8Handler);
   //navigateto := 'client://test/';
