@@ -170,6 +170,7 @@ type
     procedure WndProc(var Message: TMessage); override;
     procedure Loaded; override;
     procedure CreateWindowHandle(const Params: TCreateParams); override;
+
     procedure Resize; override;
     function doOnCreateHandler: ICefBase; virtual;
     function doOnBeforeCreated(const parentBrowser: ICefBrowser;
@@ -233,7 +234,7 @@ type
       const host, realm, scheme: ustring; var username, password: ustring): TCefRetval; virtual;
     function doOnStatus(const browser: ICefBrowser; const value: ustring;
       StatusType: TCefHandlerStatusType): TCefRetval; virtual;
-
+    
     property DefaultUrl: ustring read FDefaultUrl write FDefaultUrl;
 
     property OnBeforeCreated: TOnBeforeCreated read FOnBeforeCreated write FOnBeforeCreated;
