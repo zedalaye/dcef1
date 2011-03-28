@@ -157,6 +157,12 @@ type
     Height: Integer;
     WndParent: HWND;
     Menu: HMENU;
+
+    // If window rendering is disabled no browser window will be created. Set
+    // |m_hWndParent| to the window that will act as the parent for popup menus,
+    // dialog boxes, etc.
+    m_bWindowRenderingDisabled: BOOL;
+
     // Handle for the new browser window.
     Wnd: HWND ;
   end;
@@ -385,6 +391,21 @@ type
   end;
 
 
+  // Mouse button types.
+
+  TCefMouseButtonType = (
+    MBT_LEFT   = 0,
+    MBT_MIDDLE,
+    MBT_RIGHT
+  );
+
+  // Key types.
+  TCefKeyType = (
+    KT_KEYUP    = 0,
+    KT_KEYDOWN,
+    KT_CHAR
+  );
+
   // Define handler return value types. Returning RV_HANDLED indicates
   // that the implementation completely handled the method and that no further
   // processing is required.  Returning RV_CONTINUE indicates that the
@@ -463,15 +484,21 @@ const
 type
   // Structure representing menu information.
   TCefHandlerMenuInfo = record
+    // Values from the cef_handler_menutypebits_t enumeration.
     typeFlags: Integer;
+    // If window rendering is enabled |x| and |y| will be in screen coordinates.
+    // Otherwise, |x| and |y| will be in view coordinates.
     x: Integer;
     y: Integer;
+
     linkUrl: TCefString;
     imageUrl: TCefString;
     pageUrl: TCefString;
     frameUrl: TCefString;
     selectionText: TCefString;
     misspelledWord: TCefString;
+
+    // Values from the cef_handler_menucapabilitybits_t enumeration
     editFlags: Integer;
     securityInfo: TCefString;
   end;
@@ -535,6 +562,11 @@ type
     MENU_ID_SELECTALL = 26,
     MENU_ID_PRINT = 30,
     MENU_ID_VIEWSOURCE = 31
+  );
+
+  TCefPaintElementType = (
+    PET_VIEW  = 0,
+    PET_POPUP
   );
 
   // Post data elements may represent either bytes or files.
@@ -898,6 +930,59 @@ type
     // Explicitly close the developer tools window if one exists for this browser
     // instance.
     close_dev_tools: procedure(self: PCefBrowser); stdcall;
+
+    // Returns true (1) if window rendering is disabled.
+    is_window_rendering_disabled: function(self: PCefBrowser): Integer; stdcall;
+
+    // Get the size of the specified element. This function should only be called
+    // on the UI thread.
+    get_size: function(self: PCefBrowser; type_: TCefPaintElementType; width, height: PInteger): Integer; stdcall;
+
+    // Set the size of the specified element. This function is only used when
+    // window rendering is disabled.
+    set_size: procedure(self: PCefBrowser; type_: TCefPaintElementType; width, height: Integer); stdcall;
+
+    // Returns true (1) if a popup is currently visible. This function should only
+    // be called on the UI thread.
+    is_popup_visible: function(self: PCefBrowser): Integer; stdcall;
+
+    // Hide the currently visible popup, if any.
+    hide_popup: procedure(self: PCefBrowser); stdcall;
+
+    // Invalidate the |dirtyRect| region of the view. This function is only used
+    // when window rendering is disabled and will result in a call to
+    // handle_paint().
+    invalidate: procedure(self: PCefBrowser; const dirtyRect: PCefRect); stdcall;
+
+    // Get the raw image data contained in the specified element without
+    // performing validation. The specified |width| and |height| dimensions must
+    // match the current element size. On Windows |buffer| must be width*height*4
+    // bytes in size and represents a BGRA image with an upper-left origin. This
+    // function should only be called on the UI thread.
+    get_image: function(self: PCefBrowser; type_: TCefPaintElementType;
+      width, height: Integer; buffer: Pointer): Integer; stdcall;
+
+    // Send a key event to the browser.
+    send_key_event: procedure(self: PCefBrowser; type_: TCefKeyType; key, modifiers, sysChar, imeChar: Integer); stdcall;
+
+    // Send a mouse click event to the browser. The |x| and |y| coordinates are
+    // relative to the upper-left corner of the view.
+    send_mouse_click_event: procedure(self: PCefBrowser;
+      x, y: Integer; type_: TCefMouseButtonType; mouseUp, clickCount: Integer); stdcall;
+
+    // Send a mouse move event to the browser. The |x| and |y| coordinates are
+    // relative to the upper-left corner of the view.
+    send_mouse_move_event: procedure(self: PCefBrowser; x, y, mouseLeave: Integer); stdcall;
+
+    // Send a mouse wheel event to the browser. The |x| and |y| coordinates are
+    // relative to the upper-left corner of the view.
+    send_mouse_wheel_event: procedure(self: PCefBrowser; x, y, delta: Integer); stdcall;
+
+    // Send a focus event to the browser.
+    send_focus_event: procedure(self: PCefBrowser; setFocus: Integer); stdcall;
+
+    // Send a capture lost event to the browser.
+    send_capture_lost_event: procedure(self: PCefBrowser); stdcall;
   end;
 
   // Structure used to represent a frame in the browser window. The functions of
@@ -1026,6 +1111,12 @@ type
     handle_title_change: function(
         self: PCefHandler; browser: PCefBrowser;
         const title: PCefString): TCefRetval; stdcall;
+
+    // Called on the UI thread when the navigation state has changed. The return
+    // value is currently ignored.
+    handle_nav_state_change: function(self: PCefHandler; browser: PCefBrowser;
+      canGoBack, canGoForward: Integer): TCefRetval; stdcall;
+
 
     // Called on the UI thread before browser navigation. The client has an
     // opportunity to modify the |request| object if desired.  Return RV_HANDLED
@@ -1250,6 +1341,46 @@ type
     handle_find_result: function(self: PCefHandler; browser: PCefBrowser;
         identifier, count: Integer; const selectionRect: PCefRect;
         activeMatchOrdinal, finalUpdate: Integer): TCefRetval; stdcall;
+
+	  // Called on the UI thread to retrieve either the simulated screen rectangle
+	  // if |screen| is true (1) or the view rectangle if |screen| is false (0). The
+	  // view rectangle is relative to the screen coordinates. This function is only
+	  // called if window rendering has been disabled. Return RV_CONTINUE if the
+	  // rectangle was provided.
+    handle_get_rect: function(self: PCefHandler; browser: PCefBrowser;
+      screen: Integer; rect: PCefRect): TCefRetval; stdcall;
+
+	  // Called on the UI thread retrieve the translation from view coordinates to
+	  // actual screen coordinates. This function is only called if window rendering
+	  // has been disabled. Return RV_CONTINUE if the screen coordinates were
+	  // provided.
+	  handle_get_screen_point: function(self: PCefHandler; browser: PCefBrowser;
+      viewX, viewY: Integer; screenX, screenY: PInteger): TCefRetval; stdcall;
+
+	  // Called on the UI thread when the browser wants to show, hide, resize or
+	  // move the popup. If |show| is true (1) and |rect| is zero size then the
+	  // popup should be shown. If |show| is true (1) and |rect| is non-zero size
+	  // then |rect| represents the popup location in view coordinates. If |show| is
+	  // false (0) then the popup should be hidden. This function is only called if
+	  // window rendering has been disabled. The return value is currently ignored.
+    handle_popup_change: function(self: PCefHandler; browser: PCefBrowser;
+      show: Integer; const rect: PCefRect): TCefRetval; stdcall;
+
+	  // Called when an element should be painted. |type| indicates whether the
+	  // element is the view or the popup. |buffer| contains the pixel data for the
+	  // whole image. |dirtyRect| indicates the portion of the image that has been
+	  // repainted. On Windows |buffer| will be width*height*4 bytes in size and
+	  // represents a BGRA image with an upper-left origin. This function is only
+	  // called if window rendering has been disabled. The return value is currently
+	  // ignored.
+
+	  handle_paint: function(self: PCefHandler; browser: PCefBrowser; typ: TCefPaintElementType;
+      const dirtyRect: PCefRect; const buffer: Pointer): TCefRetval; stdcall;
+
+	  // Called when the browser window's cursor has changed. This function is only
+	  // called if window rendering has been disabled. The return value is currently
+	  // ignored.
+    handle_cursor_change: function(self: PCefHandler; browser: PCefBrowser; cursor: HCURSOR): TCefRetval; stdcall;
 
   end;
 
@@ -2129,6 +2260,19 @@ type
     procedure SetZoomLevel(zoomLevel: Double);
     procedure ShowDevTools;
     procedure CloseDevTools;
+    function IsWindowRenderingDisabled: Boolean;
+    function GetSize(typ: TCefPaintElementType; var width, height: Integer): Boolean;
+    procedure SetSize(typ: TCefPaintElementType; width, height: Integer);
+    function IsPopupVisible: Boolean;
+    procedure HidePopup;
+    procedure Invalidate(dirtyRect: PCefRect);
+    function GetImage(typ: TCefPaintElementType; width, height: Integer; buffer: Pointer): Boolean;
+    procedure SendKeyEvent(typ: TCefKeyType; key, modifiers, sysChar, imeChar: Integer);
+    procedure SendMouseClickEvent(x, y: Integer; typ: TCefMouseButtonType; mouseUp, clickCount: Integer);
+    procedure SendMouseMoveEvent(x, y, mouseLeave: Integer);
+    procedure SendMouseWheelEvent(x, y, delta: Integer);
+    procedure SendFocusEvent(setFocus: Integer);
+    procedure SendCaptureLostEvent;
     property MainFrame: ICefFrame read GetMainFrame;
     property Frame[const name: ustring]: ICefFrame read GetFrame;
     property ZoomLevel: Double read GetZoomLevel write SetZoomLevel;
@@ -2499,7 +2643,8 @@ type
     function GetHeader(const name: ustring): ustring;
     procedure GetHeaderMap(const headerMap: ICefStringMap);
   end;
-
+
+
   ICefWebUrlRequestClient = interface(ICefBase)
   ['{7A89C098-9C7D-43AE-9A82-CF1D10D91D20}']
     procedure OnStateChange(const requester: ICefWebUrlRequest; state: TCefWebUrlRequestState);
@@ -2560,6 +2705,19 @@ type
     procedure SetZoomLevel(zoomLevel: Double);
     procedure ShowDevTools;
     procedure CloseDevTools;
+    function IsWindowRenderingDisabled: Boolean;
+    function GetSize(typ: TCefPaintElementType; var width, height: Integer): Boolean;
+    procedure SetSize(typ: TCefPaintElementType; width, height: Integer);
+    function IsPopupVisible: Boolean;
+    procedure HidePopup;
+    procedure Invalidate(dirtyRect: PCefRect);
+    function GetImage(typ: TCefPaintElementType; width, height: Integer; buffer: Pointer): Boolean;
+    procedure SendKeyEvent(typ: TCefKeyType; key, modifiers, sysChar, imeChar: Integer);
+    procedure SendMouseClickEvent(x, y: Integer; typ: TCefMouseButtonType; mouseUp, clickCount: Integer);
+    procedure SendMouseMoveEvent(x, y, mouseLeave: Integer);
+    procedure SendMouseWheelEvent(x, y, delta: Integer);
+    procedure SendFocusEvent(setFocus: Integer);
+    procedure SendCaptureLostEvent;
   public
     class function UnWrap(data: Pointer): ICefBrowser;
   end;
@@ -3162,6 +3320,7 @@ function CefBrowserCreateSync(windowInfo: PCefWindowInfo; popup: Boolean;
   handler: PCefHandler; const url: ustring): ICefBrowser;
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 procedure CefDoMessageLoopWork;
+procedure CefRunMessageLoop;
 {$ENDIF}
 function CefRegisterScheme(const SchemeName, HostName: ustring;
   isStandard, SyncMainThread: Boolean; const handler: TCefSchemeHandlerClass): Boolean;
@@ -4228,10 +4387,21 @@ var
   // popup window. This function should only be called on the UI thread.
   cef_browser_create_sync: function(windowInfo: PCefWindowInfo; popup: Integer; handler: PCefHandler; const url: PCefString): PCefBrowser; cdecl;
 
-  // Perform message loop processing. This function must be called on the main
-  // application thread if cef_initialize() is called with a
-  // CefSettings.multi_threaded_message_loop value of false (0).
+  // Perform a single iteration of CEF message loop processing. This function is
+  // used to integrate the CEF message loop into an existing application message
+  // loop. Care must be taken to balance performance against excessive CPU usage.
+  // This function should only be called on the main application thread and only
+  // if cef_initialize() is called with a CefSettings.multi_threaded_message_loop
+  // value of false (0). This function will not block.
   cef_do_message_loop_work: procedure(); cdecl;
+
+  // Run the CEF message loop. Use this function instead of an application-
+  // provided message loop to get the best balance between performance and CPU
+  // usage. This function should only be called on the main application thread and
+  // only if cef_initialize() is called with a
+  // CefSettings.multi_threaded_message_loop value of false (0). This function
+  // will block until a quit message is received by the system.
+  cef_run_message_loop: procedure; cdecl;
 
   // This function should be called on the main application thread to initialize
   // CEF when the application is started.  A return value of true (1) indicates
@@ -4872,7 +5042,8 @@ begin
   end;
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 function cef_handle_authentication_request_sync(
   self: PCefHandler; browser: PCefBrowser; isProxy: Integer;
   const host: PCefString; const realm: PCefString; const scheme: PCefString;
@@ -5373,7 +5544,8 @@ begin
     TCefBrowserRef.UnWrap(browser), CefString(value), type_);
   Result := RV_CONTINUE;
 end;
-{$ENDIF}
+
+{$ENDIF}
 
 function cef_handler_handle_console_message(self: PCefHandler; browser: PCefBrowser;
   const message, source: PCefString; line: Integer): TCefRetval; stdcall;
@@ -6134,9 +6306,21 @@ begin
   Result := TInterfacedObject(CefGetObject(PCefBrowser(FData)^.get_handler(PCefBrowser(FData)))) as ICefBase;
 end;
 
+function TCefBrowserRef.GetImage(typ: TCefPaintElementType; width,
+  height: Integer; buffer: Pointer): Boolean;
+begin
+  Result := PCefBrowser(FData)^.get_image(PCefBrowser(FData), typ, width, height, buffer) <> 0;
+end;
+
 function TCefBrowserRef.GetMainFrame: ICefFrame;
 begin
   Result := TCefFrameRef.UnWrap(PCefBrowser(FData)^.get_main_frame(PCefBrowser(FData)))
+end;
+
+function TCefBrowserRef.GetSize(typ: TCefPaintElementType; var width,
+  height: Integer): Boolean;
+begin
+  Result := PCefBrowser(FData)^.get_size(PCefBrowser(FData), typ, @width, @height) <> 0;
 end;
 
 function TCefBrowserRef.GetWindowHandle: CefWindowHandle;
@@ -6159,9 +6343,29 @@ begin
   PCefBrowser(FData)^.go_forward(PCefBrowser(FData));
 end;
 
+procedure TCefBrowserRef.HidePopup;
+begin
+  PCefBrowser(FData)^.hide_popup(PCefBrowser(FData));
+end;
+
+procedure TCefBrowserRef.Invalidate(dirtyRect: PCefRect);
+begin
+  PCefBrowser(FData)^.invalidate(PCefBrowser(FData), dirtyRect);
+end;
+
 function TCefBrowserRef.IsPopup: Boolean;
 begin
   Result := PCefBrowser(FData)^.is_popup(PCefBrowser(FData)) <> 0;
+end;
+
+function TCefBrowserRef.IsPopupVisible: Boolean;
+begin
+  Result := PCefBrowser(FData)^.is_popup_visible(PCefBrowser(FData)) <> 0;
+end;
+
+function TCefBrowserRef.IsWindowRenderingDisabled: Boolean;
+begin
+  Result := PCefBrowser(FData)^.is_window_rendering_disabled(PCefBrowser(FData)) <> 0;
 end;
 
 procedure TCefBrowserRef.Reload;
@@ -6174,9 +6378,47 @@ begin
   PCefBrowser(FData)^.reload_ignore_cache(PCefBrowser(FData));
 end;
 
+procedure TCefBrowserRef.SendCaptureLostEvent;
+begin
+  PCefBrowser(FData)^.send_capture_lost_event(PCefBrowser(FData));
+end;
+
+procedure TCefBrowserRef.SendFocusEvent(setFocus: Integer);
+begin
+  PCefBrowser(FData)^.send_focus_event(PCefBrowser(FData), setFocus);
+end;
+
+procedure TCefBrowserRef.SendKeyEvent(typ: TCefKeyType; key, modifiers,
+  sysChar, imeChar: Integer);
+begin
+  PCefBrowser(FData)^.send_key_event(PCefBrowser(FData), typ, key, modifiers, sysChar, imeChar);
+end;
+
+procedure TCefBrowserRef.SendMouseClickEvent(x, y: Integer;
+  typ: TCefMouseButtonType; mouseUp, clickCount: Integer);
+begin
+  PCefBrowser(FData)^.send_mouse_click_event(PCefBrowser(FData), x, y, typ, mouseUp, clickCount);
+end;
+
+procedure TCefBrowserRef.SendMouseMoveEvent(x, y, mouseLeave: Integer);
+begin
+  PCefBrowser(FData)^.send_mouse_move_event(PCefBrowser(FData), x, y, mouseLeave);
+end;
+
+procedure TCefBrowserRef.SendMouseWheelEvent(x, y, delta: Integer);
+begin
+  PCefBrowser(FData)^.send_mouse_wheel_event(PCefBrowser(FData), x, y, delta);
+end;
+
 procedure TCefBrowserRef.SetFocus(enable: Boolean);
 begin
   PCefBrowser(FData)^.set_focus(PCefBrowser(FData), ord(enable));
+end;
+
+procedure TCefBrowserRef.SetSize(typ: TCefPaintElementType; width,
+  height: Integer);
+begin
+  PCefBrowser(FData)^.set_size(PCefBrowser(FData), typ, width, height);
 end;
 
 procedure TCefBrowserRef.SetZoomLevel(zoomLevel: Double);
@@ -6927,6 +7169,7 @@ begin
     cef_initialize := GetProcAddress(LibHandle, 'cef_initialize');
     cef_shutdown := GetProcAddress(LibHandle, 'cef_shutdown');
     cef_do_message_loop_work := GetProcAddress(LibHandle, 'cef_do_message_loop_work');
+    cef_run_message_loop := GetProcAddress(LibHandle, 'cef_run_message_loop');
     cef_register_extension := GetProcAddress(LibHandle, 'cef_register_extension');
     cef_register_scheme := GetProcAddress(LibHandle, 'cef_register_scheme');
     cef_currently_on := GetProcAddress(LibHandle, 'cef_currently_on');
@@ -7002,6 +7245,7 @@ begin
       Assigned(cef_initialize) and
       Assigned(cef_shutdown) and
       Assigned(cef_do_message_loop_work) and
+      Assigned(cef_run_message_loop) and
       Assigned(cef_register_extension) and
       Assigned(cef_register_scheme) and
       Assigned(cef_currently_on) and
@@ -7106,6 +7350,13 @@ begin
   if LibHandle > 0 then
     cef_do_message_loop_work;
 end;
+
+procedure CefRunMessageLoop;
+begin
+  if LibHandle > 0 then
+    cef_run_message_loop;
+end;
+
 {$ENDIF}
 
 function CefString(const str: ustring): TCefString;
