@@ -68,6 +68,7 @@ object MainForm: TMainForm
     TabOrder = 0
     OnAddressChange = crmAddressChange
     OnTitleChange = crmTitleChange
+    OnNavStateChange = crmNavStateChange
     OnLoadStart = crmLoadStart
     OnLoadEnd = crmLoadEnd
     OnStatus = crmStatus
@@ -97,13 +98,11 @@ object MainForm: TMainForm
       Caption = '<-'
       Enabled = False
       OnExecute = actPrevExecute
-      OnUpdate = actPrevUpdate
     end
     object actNext: TAction
       Caption = '->'
       Enabled = False
       OnExecute = actNextExecute
-      OnUpdate = actNextUpdate
     end
     object actHome: TAction
       Caption = 'actHome'
@@ -210,5 +209,9 @@ object MainForm: TMainForm
         Action = actDom
       end
     end
+  end
+  object SaveDialog: TSaveDialog
+    Left = 624
+    Top = 168
   end
 end

@@ -34,6 +34,8 @@ type
     const frame: ICefFrame; const url: ustring; out Result: TCefRetval) of object;
   TOnTitleChange = procedure(Sender: TCustomChromium; const browser: ICefBrowser;
     const title: ustring; out Result: TCefRetval) of object;
+  TOnNavStateChange = procedure(Sender: TCustomChromium; const browser: ICefBrowser;
+    canGoBack, canGoForward: Boolean; out Result: TCefRetval) of object;
   TOnBeforeBrowse = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const frame: ICefFrame;
     const request: ICefRequest; navType: TCefHandlerNavtype;
     isRedirect: boolean; out Result: TCefRetval) of object;
@@ -136,6 +138,7 @@ type
     FOnAfterCreated: TOnAfterCreated;
     FOnAddressChange: TOnAddressChange;
     FOnTitleChange: TOnTitleChange;
+    FOnNavStateChange: TOnNavStateChange;
     FOnBeforeBrowse: TOnBeforeBrowse;
     FOnLoadStart: TOnLoadStart;
     FOnLoadEnd: TOnLoadEnd;
@@ -181,6 +184,8 @@ type
       const frame: ICefFrame; const url: ustring): TCefRetval; virtual;
     function doOnTitleChange(const browser: ICefBrowser;
       const title: ustring): TCefRetval; virtual;
+    function doOnNavStateChange(const browser: ICefBrowser; canGoBack,
+      canGoForward: Boolean): TCefRetval; virtual;
     function doOnBeforeBrowse(const browser: ICefBrowser; const frame: ICefFrame;
       const request: ICefRequest; navType: TCefHandlerNavtype;
       isRedirect: boolean): TCefRetval; virtual;
@@ -241,6 +246,7 @@ type
     property OnAfterCreated: TOnAfterCreated read FOnAfterCreated write FOnAfterCreated;
     property OnAddressChange: TOnAddressChange read FOnAddressChange write FOnAddressChange;
     property OnTitleChange: TOnTitleChange read FOnTitleChange write FOnTitleChange;
+    property OnNavStateChange: TOnNavStateChange read FOnNavStateChange write FOnNavStateChange;
     property OnBeforeBrowse: TOnBeforeBrowse read FOnBeforeBrowse write FOnBeforeBrowse;
     property OnLoadStart: TOnLoadStart read FOnLoadStart write FOnLoadStart;
     property OnLoadEnd: TOnLoadEnd read FOnLoadEnd write FOnLoadEnd;
@@ -296,6 +302,7 @@ type
     property OnAfterCreated;
     property OnAddressChange;
     property OnTitleChange;
+    property OnNavStateChange;
     property OnBeforeBrowse;
     property OnLoadStart;
     property OnLoadEnd;
@@ -353,6 +360,8 @@ type
       const frame: ICefFrame; const url: ustring): TCefRetval; override;
     function doOnTitleChange(const browser: ICefBrowser;
       const title: ustring): TCefRetval; override;
+    function doOnNavStateChange(const browser: ICefBrowser; canGoBack: Boolean;
+      canGoForward: Boolean): TCefRetval; override;
     function doOnBeforeBrowse(const browser: ICefBrowser; const frame: ICefFrame;
       const request: ICefRequest; navType: TCefHandlerNavtype;
       isRedirect: boolean): TCefRetval; override;
@@ -683,6 +692,14 @@ begin
   Result := RV_CONTINUE;
   if Assigned(FOnMenuAction) then
     FOnMenuAction(Self, browser, menuId, Result);
+end;
+
+function TCustomChromium.doOnNavStateChange(const browser: ICefBrowser;
+  canGoBack, canGoForward: Boolean): TCefRetval;
+begin
+  Result := RV_CONTINUE;
+  if Assigned(FOnNavStateChange) then
+    FOnNavStateChange(Self, browser, canGoBack, canGoForward, Result);
 end;
 
 function TCustomChromium.doOnPrintHeaderFooter(const browser: ICefBrowser;
@@ -1130,6 +1147,13 @@ begin
   if FCrm <> nil then
     Result := FCrm.doOnMenuAction(browser, menuId) else
     Result := RV_CONTINUE;
+end;
+
+function TCustomChromiumHandler.doOnNavStateChange(const browser: ICefBrowser;
+  canGoBack, canGoForward: Boolean): TCefRetval;
+begin
+  if FCrm <> nil then
+    Result := FCrm.doOnNavStateChange(browser, canGoBack, canGoForward);
 end;
 
 function TCustomChromiumHandler.doOnPrintHeaderFooter(const browser: ICefBrowser;

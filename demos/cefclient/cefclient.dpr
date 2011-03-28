@@ -123,7 +123,7 @@ begin
         end;
       WM_CREATE:
         begin
-          handl := THandler.Create(True, True);
+          handl := THandler.Create({$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP} True, True{$ENDIF});
           x := 0;
           GetClientRect(Wnd, rect);
 
@@ -496,14 +496,16 @@ begin
 
     ShowWindow(Window, SW_SHOW);
     UpdateWindow(Window);
+
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+    CefRunMessageLoop;
+{$ELSE}
     while(GetMessageW(msg, 0, 0, 0)) do
     begin
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-      CefDoMessageLoopWork;
-{$ENDIF}
       TranslateMessage(msg);
       DispatchMessageW(msg);
     end;
+{$ENDIF}
   finally
     handl := nil;
   end;
