@@ -49,13 +49,12 @@ type
     actFileScheme1: TMenuItem;
     actDom: TAction;
     VisitDOM1: TMenuItem;
+    SaveDialog: TSaveDialog;
     procedure edAddressKeyPress(Sender: TObject; var Key: Char);
     procedure actPrevExecute(Sender: TObject);
     procedure actNextExecute(Sender: TObject);
     procedure actHomeExecute(Sender: TObject);
     procedure actReloadExecute(Sender: TObject);
-    procedure actPrevUpdate(Sender: TObject);
-    procedure actNextUpdate(Sender: TObject);
     procedure actReloadUpdate(Sender: TObject);
     procedure actGoToExecute(Sender: TObject);
     procedure FormCreate(Sender: TObject);
@@ -84,10 +83,11 @@ type
     procedure actPrintExecute(Sender: TObject);
     procedure actFileSchemeExecute(Sender: TObject);
     procedure actDomExecute(Sender: TObject);
+    procedure crmNavStateChange(Sender: TCustomChromium;
+      const browser: ICefBrowser; canGoBack, canGoForward: Boolean;
+      out Result: TCefRetval);
   private
     { Déclarations privées }
-    FCanGoBack: Boolean;
-    FCanGoForward: Boolean;
     FLoading: Boolean;
   end;
 
@@ -191,20 +191,10 @@ begin
     crm.Browser.GoForward;
 end;
 
-procedure TMainForm.actNextUpdate(Sender: TObject);
-begin
-  TAction(Sender).Enabled := FCanGoForward;
-end;
-
 procedure TMainForm.actPrevExecute(Sender: TObject);
 begin
   if crm.Browser <> nil then
     crm.Browser.GoBack;
-end;
-
-procedure TMainForm.actPrevUpdate(Sender: TObject);
-begin
-  TAction(Sender).Enabled := FCanGoBack;
 end;
 
 procedure TMainForm.actPrintExecute(Sender: TObject);
@@ -266,8 +256,6 @@ procedure TMainForm.crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrows
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
   begin
-    FCanGoBack := browser.CanGoBack;
-    FCanGoForward := browser.CanGoForward;
     FLoading := False;
   end;
 end;
@@ -277,6 +265,14 @@ procedure TMainForm.crmLoadStart(Sender: TCustomChromium;
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
     FLoading := True;
+end;
+
+procedure TMainForm.crmNavStateChange(Sender: TCustomChromium;
+  const browser: ICefBrowser; canGoBack, canGoForward: Boolean;
+  out Result: TCefRetval);
+begin
+  actPrev.Enabled := canGoBack;
+  actNext.Enabled := canGoForward;
 end;
 
 procedure TMainForm.crmStatus(Sender: TCustomChromium;
@@ -313,8 +309,6 @@ end;
 
 procedure TMainForm.FormCreate(Sender: TObject);
 begin
-  FCanGoBack := False;
-  FCanGoForward := False;
   FLoading := False;
 end;
 
