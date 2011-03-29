@@ -1710,6 +1710,12 @@ type
         obj: PCefv8Value; argumentCount: Cardinal;
         const arguments: PPCefV8Value; var retval: PCefV8Value;
         var exception: TCefString): Integer; stdcall;
+
+    // Execute the function using the specified V8 context.
+    execute_function_with_context: function(self: PCefV8value;
+        context: PCefv8Context; obj: PCefv8Value;
+        argumentCount: Cardinal; const arguments: PPCefV8Value;
+        var retval: PCefv8Value; var exception: TCefString): Integer; stdcall;
   end;
 
   // Structure that creates cef_scheme_handler_t instances. The functions of this
@@ -2467,6 +2473,9 @@ type
     function ExecuteFunction(const obj: ICefv8Value;
       const arguments: TCefv8ValueArray; var retval: ICefv8Value;
       var exception: ustring): Boolean;
+    function ExecuteFunctionWithContext(const context: ICefv8Context;
+      const obj: ICefv8Value; const arguments: TCefv8ValueArray;
+      var retval: ICefv8Value; var exception: ustring): Boolean;
   end;
 
   ICefXmlReader = interface(ICefBase)
@@ -2843,6 +2852,9 @@ type
     function ExecuteFunction(const obj: ICefv8Value;
       const arguments: TCefv8ValueArray; var retval: ICefv8Value;
       var exception: ustring): Boolean;
+    function ExecuteFunctionWithContext(const context: ICefv8Context;
+      const obj: ICefv8Value; const arguments: TCefv8ValueArray;
+      var retval: ICefv8Value; var exception: ustring): Boolean;
   public
     class function UnWrap(data: Pointer): ICefv8Value;
     class function CreateUndefined: ICefv8Value;
@@ -6205,6 +6217,30 @@ begin
     FillChar(exc, SizeOf(exc), 0);
     Result := PCefV8Value(FData)^.execute_function(PCefV8Value(FData),
       CefGetData(obj), Length(arguments), args, ret, exc) <> 0;
+    retval := TCefv8ValueRef.UnWrap(ret);
+    exception := CefStringClearAndGet(exc);
+  finally
+    FreeMem(args);
+  end;
+end;
+
+function TCefv8ValueRef.ExecuteFunctionWithContext(const context: ICefv8Context;
+  const obj: ICefv8Value; const arguments: TCefv8ValueArray;
+  var retval: ICefv8Value; var exception: ustring): Boolean;
+var
+  args: PPCefV8Value;
+  i: Integer;
+  ret: PCefV8Value;
+  exc: TCefString;
+begin
+  GetMem(args, SizeOf(PCefV8Value) * Length(arguments));
+  try
+    for i := 0 to Length(arguments) - 1 do
+      args[i] := CefGetData(arguments[i]);
+    ret := nil;
+    FillChar(exc, SizeOf(exc), 0);
+    Result := PCefV8Value(FData)^.execute_function_with_context(PCefV8Value(FData),
+      CefGetData(context), CefGetData(obj), Length(arguments), args, ret, exc) <> 0;
     retval := TCefv8ValueRef.UnWrap(ret);
     exception := CefStringClearAndGet(exc);
   finally
