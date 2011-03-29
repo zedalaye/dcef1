@@ -170,9 +170,8 @@ type
     procedure WndProc(var Message: TMessage); override;
     procedure Loaded; override;
     procedure CreateWindowHandle(const Params: TCreateParams); override;
-
     procedure Resize; override;
-    function doOnCreateHandler: ICefBase; virtual;
+
     function doOnBeforeCreated(const parentBrowser: ICefBrowser;
       var windowInfo: TCefWindowInfo; popup: Boolean;
       var handler: ICefBase; var url: ustring; var popupFeatures: TCefPopupFeatures): TCefRetval; virtual;
@@ -332,13 +331,6 @@ type
     property UserStyleSheetLocation;
   end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-  TChromiumSync = class(TChromium)
-  protected
-    function doOnCreateHandler: ICefBase; override;
-  end;
-{$ENDIF}
-
   ICefCustomHandler = interface
     ['{91D102A8-E68B-41F8-A323-F77F0C190BD9}']
     procedure Disconnect;
@@ -414,7 +406,7 @@ type
     function doOnAuthenticationRequest(const browser: ICefBrowser; isProxy: Boolean;
       const host, realm, scheme: ustring; var username, password: ustring): TCefRetval; override;
   public
-    constructor Create(crm: TCustomChromium {$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}; SyncUI, SyncIO: Boolean{$ENDIF}); reintroduce;
+    constructor Create(crm: TCustomChromium); reintroduce;
     destructor Destroy; override;
   end;
 
@@ -429,11 +421,7 @@ var
 
 procedure Register;
 begin
-  RegisterComponents('Chromium', [TChromium
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-    ,TChromiumSync
-{$ENDIF}
-  ]);
+  RegisterComponents('Chromium', [TChromium]);
 end;
 
 { TCustomChromium }
@@ -442,7 +430,7 @@ constructor TCustomChromium.Create(AOwner: TComponent);
 begin
   inherited;
   if not (csDesigning in ComponentState) then
-    FHandler := doOnCreateHandler;
+    FHandler := TCustomChromiumHandler.Create(Self) as ICefBase;
 
   FOptions := [];
   FFontOptions := TChromiumFontOptions.Create;
@@ -776,12 +764,6 @@ begin
   Load(FDefaultUrl);
 end;
 
-function TCustomChromium.doOnCreateHandler: ICefBase;
-begin
-  Result := TCustomChromiumHandler.Create(Self{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}, False, False{$ENDIF}) as ICefBase
-end;
-
-
 procedure TCustomChromium.Resize;
 var
   brws: ICefBrowser;
@@ -841,21 +823,11 @@ begin
   FMinimumFontSize := 0;
 end;
 
-
-{ TChromiumSync}
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function TChromiumSync.doOnCreateHandler;
-begin
-  Result := TCustomChromiumHandler.Create(Self{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}, True, True{$ENDIF}) as ICefBase
-end;
-{$ENDIF}
-
 { TCefCustomHandler }
 
-constructor TCustomChromiumHandler.Create(crm: TCustomChromium{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}; SyncUI, SyncIO: Boolean{$ENDIF});
+constructor TCustomChromiumHandler.Create(crm: TCustomChromium);
 begin
-  inherited Create({$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP} SyncUI, SyncIO{$ENDIF});
+  inherited Create;
   FCrm := crm;
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   InterlockedIncrement(CefInstances);

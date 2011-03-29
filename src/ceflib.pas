@@ -2845,15 +2845,15 @@ type
       var exception: ustring): Boolean;
   public
     class function UnWrap(data: Pointer): ICefv8Value;
-    constructor CreateUndefined;
-    constructor CreateNull;
-    constructor CreateBool(value: Boolean);
-    constructor CreateInt(value: Integer);
-    constructor CreateDouble(value: Double);
-    constructor CreateString(const str: ustring);
-    constructor CreateObject(const UserData: ICefv8Value);
-    constructor CreateArray;
-    constructor CreateFunction(const name: ustring; const handler: ICefv8Handler);
+    class function CreateUndefined: ICefv8Value;
+    class function CreateNull: ICefv8Value;
+    class function CreateBool(value: Boolean): ICefv8Value;
+    class function CreateInt(value: Integer): ICefv8Value;
+    class function CreateDouble(value: Double): ICefv8Value;
+    class function CreateString(const str: ustring): ICefv8Value;
+    class function CreateObject(const UserData: ICefv8Value): ICefv8Value;
+    class function CreateArray: ICefv8Value;
+    class function CreateFunction(const name: ustring; const handler: ICefv8Handler): ICefv8Value;
   end;
 
   TCefv8ContextRef = class(TCefBaseRef, ICefv8Context)
@@ -2880,11 +2880,6 @@ type
   end;
 
   TCefHandlerOwn = class(TCefBaseOwn)
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-  private
-    FWindowHandle: HWND;
-    procedure WndProc(var Msg: TMessage);
-{$ENDIF}
   protected
     function doOnBeforeCreated(const parentBrowser: ICefBrowser;
       var windowInfo: TCefWindowInfo; popup: Boolean;
@@ -2961,8 +2956,7 @@ type
       const dirtyRect: PCefRect; const buffer: Pointer): TCefRetval; virtual;
     function doOnCursorChange(const browser: ICefBrowser; cursor: HCURSOR): TCefRetval; virtual;
   public
-    constructor Create({$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}SyncUI, SyncIO: Boolean{$ENDIF}); virtual;
-    destructor Destroy; override;
+    constructor Create; virtual;
   end;
 
   TCefCustomStreamReader = class(TCefBaseOwn, ICefCustomStreamReader)
@@ -3411,1054 +3405,6 @@ type
     FResult := False;
   end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-type
-  TEHSyncObject = class
-  private
-    FThis: TCefHandlerOwn;
-  public
-    procedure Execute; virtual; abstract;
-    procedure Post;
-    procedure Send;
-  end;
-
-  procedure TEHSyncObject.Post;
-  begin
-    PostMessage(FThis.FWindowHandle, WM_USER + 1, Integer(Self), 0);
-  end;
-
-  procedure TEHSyncObject.Send;
-  begin
-    SendMessage(FThis.FWindowHandle, WM_USER + 1, Integer(Self), 0);
-  end;
-
-type
-  TEHSyncBeforeCreated = class(TEHSyncObject)
-  private
-    FParentBrowser: ICefBrowser;
-    FWindowInfo: PCefWindowInfo;
-    FPopup: Boolean;
-    FPopupFeatures: PCefPopupFeatures;
-    FHandler: ICefBase;
-    FUrl: ustring;
-    FSettings: PCefBrowserSettings;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const parentBrowser: ICefBrowser;
-      var windowInfo: TCefWindowInfo; popup: Boolean;
-      popupFeatures: PCefPopupFeatures; const handler: ICefBase;
-      const url: ustring; settings: PCefBrowserSettings);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncBeforeCreated.Create(This: TCefHandlerOwn;
-    const parentBrowser: ICefBrowser; var windowInfo: TCefWindowInfo;
-    popup: Boolean; popupFeatures: PCefPopupFeatures; const handler: ICefBase;
-    const url: ustring; settings: PCefBrowserSettings);
-  begin
-    FThis := This;
-    FParentBrowser := parentBrowser;
-    FWindowInfo := @windowInfo;
-    FPopup := popup;
-    FPopupFeatures := PopupFeatures;
-    FHandler := Handler;
-    FUrl := url;
-    FSettings := Settings;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncBeforeCreated.Execute;
-  begin
-    FResult := FThis.doOnBeforeCreated(FParentBrowser, FWindowInfo^, FPopup,
-      FPopupFeatures^, FHandler, FUrl, FSettings^);
-  end;
-
-type
-  TEHSyncAfterCreated = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncAfterCreated.Create(This: TCefHandlerOwn; const browser: ICefBrowser);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FResult := RV_CONTINUE;
-    Post;
-  end;
-
-  procedure TEHSyncAfterCreated.Execute;
-  begin
-    FResult := FThis.doOnAfterCreated(FBrowser);
-    Free;
-  end;
-
-type
-  TEHSyncAddressChange = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FFrame: ICefFrame;
-    FUrl: ustring;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      const frame: ICefFrame; const url: ustring);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncAddressChange.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser; const frame: ICefFrame; const url: ustring);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FFrame := frame;
-    FUrl := url;
-    Post;
-  end;
-
-  procedure TEHSyncAddressChange.Execute;
-  begin
-    FThis.doOnAddressChange(FBrowser, FFrame, FUrl);
-    Free;
-  end;
-
-type
-  TEHSyncTitleChange = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FTitle: ustring;
-  public
-    procedure Execute; override;
-    constructor Create(This: TCefHandlerOwn;
-      const browser: ICefBrowser; const title: ustring);
-  end;
-
-  constructor TEHSyncTitleChange.Create(This: TCefHandlerOwn; const browser: ICefBrowser; const title: ustring);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FTitle := title;
-    Post;
-  end;
-
-  procedure TEHSyncTitleChange.Execute;
-  begin
-    FThis.doOnTitleChange(FBrowser, FTitle);
-    Free;
-  end;
-
-type
-  TEHSyncNavStateChange = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FCanGoBack, FCanGoForward: Boolean;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      canGoBack, canGoForward: Boolean);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncNavStateChange.Create(This: TCefHandlerOwn; const browser: ICefBrowser; canGoBack: Boolean; canGoForward: Boolean);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FCanGoBack := canGoBack;
-    FCanGoForward := canGoForward;
-    Post;
-  end;
-
-  procedure TEHSyncNavStateChange.Execute;
-  begin
-    FThis.doOnNavStateChange(FBrowser, FCanGoBack, FCanGoForward);
-    Free;
-  end;
-
-type
-  TEHSyncBeforeBrowse = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FFrame: ICefFrame;
-    FRequest: ICefRequest;
-    FNavType: TCefHandlerNavtype;
-    FIsRedirect: Boolean;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser; const frame: ICefFrame;
-      const request: ICefRequest; navType: TCefHandlerNavtype; isRedirect: boolean);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncBeforeBrowse.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser; const frame: ICefFrame;
-    const request: ICefRequest; navType: TCefHandlerNavtype; isRedirect: Boolean);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FFrame := frame;
-    FRequest := request;
-    FNavType := navType;
-    FIsRedirect := isRedirect;
-    FResult :=  RV_CONTINUE;
-  end;
-
-  procedure TEHSyncBeforeBrowse.Execute;
-  begin
-    FResult := FThis.doOnBeforeBrowse(FBrowser, FFrame, FRequest,
-      FNavType, FIsRedirect);
-  end;
-
-type
-  TEHSyncLoadStart = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FFrame: ICefFrame;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      const frame: ICefFrame);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncLoadStart.Create(This: TCefHandlerOwn; const browser: ICefBrowser; const frame: ICefFrame);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FFrame := frame;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncLoadStart.Execute;
-  begin
-    FResult := FThis.doOnLoadStart(FBrowser, FFrame);
-  end;
-
-type
-  TEHSyncLoadEnd = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FFrame: ICefFrame;
-    FHttpStatusCode: Integer;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      const frame: ICefFrame; httpStatusCode: Integer);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncLoadEnd.Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-    const frame: ICefFrame; httpStatusCode: Integer);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FFrame := frame;
-    FHttpStatusCode := httpStatusCode;
-    Post;
-  end;
-
-  procedure TEHSyncLoadEnd.Execute;
-  begin
-    FThis.doOnLoadEnd(FBrowser, FFrame, FHttpStatusCode);
-    Free;
-  end;
-
-type
-  TEHSyncLoadError = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FFrame: ICefFrame;
-    FErrorCode: TCefHandlerErrorcode;
-    FFailedUrl: ustring;
-    FErrorText: ustring;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      const frame: ICefFrame; errorCode: TCefHandlerErrorcode;
-      const failedUrl: ustring; const errorText: ustring);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncLoadError.Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-    const frame: ICefFrame; errorCode: Integer; const failedUrl: ustring;
-    const errorText: ustring);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FFrame := frame;
-    FErrorCode := errorCode;
-    FFailedUrl := failedUrl;
-    FErrorText := errorText;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncLoadError.Execute;
-  begin
-    FResult := FThis.doOnLoadError(FBrowser, FFrame, FErrorCode, FFailedUrl, FErrorText);
-  end;
-
-type
-  TEHSyncBeforeResourceLoad = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FRequest: ICefRequest;
-    FRedirectUrl: ustring;
-    FResourceStream: ICefStreamReader;
-    FMimeType: ustring;
-    FLoadFlags: Integer;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      const request: ICefRequest; const redirectUrl: ustring;
-      const resourceStream: ICefStreamReader; const mimeType: ustring;
-      loadFlags: Integer);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncBeforeResourceLoad.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser; const request: ICefRequest;
-    const redirectUrl: ustring; const resourceStream: ICefStreamReader;
-    const mimeType: ustring; loadFlags: Integer);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FRequest := request;
-    FRedirectUrl := redirectUrl;
-    FResourceStream := resourceStream;
-    FMimeType := mimeType;
-    FLoadFlags := loadFlags;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncBeforeResourceLoad.Execute;
-  begin
-    FResult := FThis.doOnBeforeResourceLoad(FBrowser, FRequest, FRedirectUrl,
-      FResourceStream, FMimeType, FLoadFlags);
-  end;
-
-type
-  TEHSyncProtocolExecution = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FUrl: ustring;
-    FAllowOsExecution: Boolean;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      const url: ustring; AllowOsExecution: Boolean);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncProtocolExecution.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser; const url: ustring; AllowOsExecution: Boolean);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FUrl := url;
-    FAllowOsExecution := AllowOsExecution;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncProtocolExecution.Execute;
-  begin
-    FResult := FThis.doOnProtocolExecution(FBrowser, FUrl, FAllowOsExecution);
-  end;
-
-type
-  TEHSyncDownloadResponse = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FMimeType, FFileName: ustring;
-    FContentLength: int64;
-    FHandler: ICefDownloadHandler;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      const mimeType, fileName: ustring; contentLength: int64);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncDownloadResponse.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser; const mimeType: ustring;
-    const fileName: ustring; contentLength: Int64);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FMimeType := mimeType;
-    FFileName := fileName;
-    FContentLength := contentLength;
-    FHandler := nil;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncDownloadResponse.Execute;
-  begin
-    FResult := FThis.doOnDownloadResponse(FBrowser, FMimeType, FFileName,
-      FContentLength, FHandler);
-  end;
-
-type
-  TEHSyncAuthenticationRequest = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FIsProxy: Boolean;
-    FHost, FRealm, FScheme, FUsername, FPassword: ustring;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      isProxy: Boolean; const host, realm, scheme: ustring;
-      const username, password: ustring);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncAuthenticationRequest.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser; isProxy: Boolean;
-    const host: ustring; const realm: ustring;
-    const scheme: ustring; const username: ustring; const password: ustring);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FIsProxy := isProxy;
-    FHost := host;
-    FRealm := realm;
-    FScheme := scheme;
-    FUsername := username;
-    FPassword := password;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncAuthenticationRequest.Execute;
-  begin
-    FResult := FThis.doOnAuthenticationRequest(FBrowser, FIsProxy, FHost,
-      FRealm, FScheme, FUsername, FPassword);
-  end;
-
-type
-  TEHSyncBeforeMenu = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FMenuInfo: PCefHandlerMenuInfo;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      const menuInfo: PCefHandlerMenuInfo);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncBeforeMenu.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser; const menuInfo: PCefHandlerMenuInfo);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FMenuInfo := menuInfo;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncBeforeMenu.Execute;
-  begin
-    FResult := FThis.doOnBeforeMenu(FBrowser, FMenuInfo);
-  end;
-
-type
-  TEHSyncGetMenuLabel = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FMenuId: TCefHandlerMenuId;
-    FCaption: ustring;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      menuId: TCefHandlerMenuId; const caption: ustring);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncGetMenuLabel.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser; menuId: TCefHandlerMenuId;
-    const caption: ustring);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FMenuId := menuId;
-    FCaption := caption;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncGetMenuLabel.Execute;
-  begin
-    FResult := FThis.doOnGetMenuLabel(FBrowser, FMenuId, FCaption);
-  end;
-
-type
-  TEHSyncMenuAction = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FMenuId: TCefHandlerMenuId;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      menuId: TCefHandlerMenuId);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncMenuAction.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser; menuId: TCefHandlerMenuId);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FMenuId := menuId;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncMenuAction.Execute;
-  begin
-    FResult := FThis.doOnMenuAction(FBrowser, FMenuId);
-  end;
-
-type
-  TEHSyncPrintOptions = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FPrintOptions: PCefPrintOptions;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      printOptions: PCefPrintOptions);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncPrintOptions.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser; printOptions: PCefPrintOptions);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FPrintOptions := printOptions;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncPrintOptions.Execute;
-  begin
-    FResult := FThis.doOnPrintOptions(FBrowser, FPrintOptions);
-  end;
-
-type
-  TEHSyncPrintHeaderFooter = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FFrame: ICefFrame;
-    FPrintInfo: PCefPrintInfo;
-    FUrl, FTitle: ustring;
-    FCurrentPage, FMaxPages: Integer;
-    FTopLeft, FTopCenter, FTopRight, FBottomLeft, FBottomCenter, FBottomRight: ustring;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      const frame: ICefFrame; printInfo: PCefPrintInfo;
-      const url, title: ustring; currentPage, maxPages: Integer);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncPrintHeaderFooter.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser; const frame: ICefFrame;
-    printInfo: PCefPrintInfo; const url: ustring;
-    const title: ustring; currentPage: Integer; maxPages: Integer);
-  begin
-    FThis := This;
-    FBrowser := Browser;
-    FFrame := Frame;
-    FPrintInfo := PrintInfo;
-    FUrl := url;
-    FTitle := title;
-    FCurrentPage := currentPage;
-    FMaxPages := maxPages;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncPrintHeaderFooter.Execute;
-  begin
-    FResult := FThis.doOnPrintHeaderFooter(FBrowser, FFrame, FPrintInfo, FUrl,
-      FTitle, FCurrentPage, FMaxPages, FTopLeft, FTopCenter, FTopRight,
-      FBottomLeft, FBottomCenter, FBottomRight);
-  end;
-
-type
-  TEHSyncJsAlert = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FFrame: ICefFrame;
-    FMessage: ustring;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      const frame: ICefFrame; const message: ustring);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncJsAlert.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser; const frame: ICefFrame; const message: ustring);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FFrame := frame;
-    FMessage := message;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncJsAlert.Execute;
-  begin
-    FResult := FThis.doOnJsAlert(FBrowser, FFrame, FMessage);
-  end;
-
-type
-  TEHSyncJsConfirm = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FFrame: ICefFrame;
-    FMessage: ustring;
-    FRetVal: Boolean;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      const frame: ICefFrame; const message: ustring; retval: Boolean);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncJsConfirm.Create(This: TCefHandlerOwn; const browser: ICefBrowser; const frame: ICefFrame; const message: ustring; retval: Boolean);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FFrame := frame;
-    FMessage := message;
-    FRetVal := retval;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncJsConfirm.Execute;
-  begin
-    FResult := FThis.doOnJsConfirm(FBrowser, FFrame, FMessage, FRetVal);
-  end;
-
-type
-  TEHSyncJsPrompt = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FFrame: ICefFrame;
-    FMessage: ustring;
-    FDefaultValue: ustring;
-    FRetVal: Boolean;
-    FReturn: ustring;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      const frame: ICefFrame; const message, defaultValue: ustring;
-      retval: Boolean);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncJsPrompt.Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-    const frame: ICefFrame; const message: ustring; const defaultValue: ustring;
-    retval: Boolean);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FFrame := frame;
-    FMessage := message;
-    FDefaultValue := defaultValue;
-    FRetVal := retval;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncJsPrompt.Execute;
-  begin
-    FResult := FThis.doOnJsPrompt(FBrowser, FFrame, FMessage, FDefaultValue,
-      FRetVal, FReturn);
-  end;
-
-type
-  TEHSyncJsBinding = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FFrame: ICefFrame;
-    FObj: ICefv8Value;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      const frame: ICefFrame; const obj: ICefv8Value);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncJsBinding.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser; const frame: ICefFrame; const obj: ICefv8Value);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FFrame := frame;
-    FObj := obj;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncJsBinding.Execute;
-  begin
-    FResult := FThis.doOnJsBinding(FBrowser, FFrame, FObj);
-  end;
-
-type
-  TEHBeforeWindowClose = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser);
-    procedure Execute; override;
-  end;
-
-  constructor TEHBeforeWindowClose.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHBeforeWindowClose.Execute;
-  begin
-    FResult := FThis.doOnBeforeWindowClose(FBrowser);
-  end;
-
-type
-  TEHSyncTakeFocus = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FReverse: Integer;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      reverse: Integer);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncTakeFocus.Create(This: TCefHandlerOwn; const browser: ICefBrowser; reverse: Integer);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FReverse := reverse;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncTakeFocus.Execute;
-  begin
-    FResult := FThis.doOnTakeFocus(FBrowser, FReverse);
-  end;
-
-type
-  TEHSyncSetFocus = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FisWidget: Boolean;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser; isWidget: Boolean);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncSetFocus.Create(This: TCefHandlerOwn; const browser: ICefBrowser; isWidget: Boolean);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FisWidget := isWidget;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncSetFocus.Execute;
-  begin
-    FResult := FThis.doOnSetFocus(FBrowser, FisWidget);
-  end;
-
-type
-  TEHSyncKeyEvent = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FEvent: TCefHandlerKeyEventType;
-    FCode: Integer;
-    FModifiers: Integer;
-    FIsSystemKey: Boolean;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      event: TCefHandlerKeyEventType; code, modifiers: Integer; isSystemKey: Boolean);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncKeyEvent.Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-    event: TCefHandlerKeyEventType; code: Integer; modifiers: Integer; isSystemKey: Boolean);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FEvent := event;
-    FCode := code;
-    FModifiers := modifiers;
-    FIsSystemKey := isSystemKey;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncKeyEvent.Execute;
-  begin
-    FResult := FThis.doOnKeyEvent(FBrowser, FEvent, FCode, FModifiers, FIsSystemKey);
-  end;
-
-type
-  TEHSyncTooltip = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FText: ustring;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser; const text: ustring);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncTooltip.Create(This: TCefHandlerOwn; const browser: ICefBrowser; const text: ustring);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FText := text;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncTooltip.Execute;
-  begin
-    FResult := FThis.doOnTooltip(FBrowser, FText);
-  end;
-
-type
-  TEHSyncStatus = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FValue: ustring;
-    FStatusType: TCefHandlerStatusType;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      const value: ustring; StatusType: TCefHandlerStatusType);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncStatus.Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-    const value: ustring; StatusType: TCefHandlerStatusType);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FValue := value;
-    FStatusType := StatusType;
-    Post;
-  end;
-
-  procedure TEHSyncStatus.Execute;
-  begin
-    FThis.doOnStatus(FBrowser, FValue, FStatusType);
-    Free;
-  end;
-
-type
-  TEHSyncConsoleMessage = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FMessage: ustring;
-    FSource: ustring;
-    FLine: Integer;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      const message, source: ustring; line: Integer);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncConsoleMessage.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser; const message: ustring;
-    const source: ustring; line: Integer);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FMessage := message;
-    FSource := source;
-    FLine := FLine;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncConsoleMessage.Execute;
-  begin
-    FResult := FThis.doOnConsoleMessage(FBrowser, FMessage, FSource, FLine);
-  end;
-
-type
-  TEHSyncFindResult = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FCount: Integer;
-    FSelectionRect: PCefRect;
-    FIdentifier, FActiveMatchOrdinal, FFinalUpdate: Boolean;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      count: Integer; selectionRect: PCefRect; identifier, activeMatchOrdinal,
-      finalUpdate: Boolean);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncFindResult.Create(This: TCefHandlerOwn; const browser: ICefBrowser; count: Integer; selectionRect: PCefRect; identifier: Boolean; activeMatchOrdinal: Boolean; finalUpdate: Boolean);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FCount := count;
-    FSelectionRect := selectionRect;
-    FIdentifier := identifier;
-    FActiveMatchOrdinal := activeMatchOrdinal;
-    FFinalUpdate := finalUpdate;
-    Post;
-  end;
-
-  procedure TEHSyncFindResult.Execute;
-  begin
-    FThis.doOnFindResult(FBrowser, FCount, FSelectionRect, FIdentifier,
-      FActiveMatchOrdinal, FFinalUpdate);
-    Free;
-  end;
-
-type
-  TEHSyncGetRect = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FScreen: Integer;
-    FRect: PCefRect;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn;
-      const browser: ICefBrowser; screen: Integer; rect: PCefRect);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncGetRect.Create(This: TCefHandlerOwn;
-    const browser: ICefBrowser; screen: Integer; rect: PCefRect);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FScreen := screen;
-    FRect := rect;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncGetRect.Execute;
-  begin
-    FResult := FThis.doOnGetRect(FBrowser, FScreen, FRect);
-  end;
-
-type
-  TEHSyncGetScreenPoint = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FViewX, FViewY: Integer;
-    FScreenX, FScreenY: PInteger;
-    FResult: TCefRetval;
- public
-   constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-     viewX, viewY: Integer; screenX, screenY: PInteger);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncGetScreenPoint.Create(This: TCefHandlerOwn; const browser: ICefBrowser; viewX: Integer; viewY: Integer; screenX: PInteger; screenY: PInteger);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FViewX := viewX;
-    FViewY := viewY;
-    FScreenX := screenX;
-    FScreenY := screenY;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncGetScreenPoint.Execute;
-  begin
-    FResult := FThis.doOngetScreenPoint(FBrowser, FViewX, FViewY, FScreenX, FScreenY);
-  end;
-
-type
-  TEHSyncPopupChange = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FShow: Boolean;
-    FRect: PCefRect;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-      show: Boolean; const rect: PCefRect);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncPopupChange.Create(This: TCefHandlerOwn; const browser: ICefBrowser; show: Boolean; const rect: PCefRect);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FShow := show;
-    FRect := rect;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncPopupChange.Execute;
-  begin
-    FResult := FThis.doOnPopupChange(FBrowser, FShow, FRect);
-  end;
-
-type
-  TEHSyncPaint = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FType: TCefPaintElementType;
-    FDirtyRect: PCefRect;
-    FBuffer: Pointer;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser;
-     typ: TCefPaintElementType; const dirtyRect: PCefRect; const buffer: Pointer);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncPaint.Create(This: TCefHandlerOwn; const browser: ICefBrowser; typ: TCefPaintElementType; const dirtyRect: PCefRect; const buffer: Pointer);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FType := typ;
-    FDirtyRect := dirtyRect;
-    FBuffer := buffer;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncPaint.Execute;
-  begin
-    FResult := FThis.doOnPaint(FBrowser, FType, FDirtyRect, FBuffer);
-  end;
-
-type
-  TEHSyncCursorChange = class(TEHSyncObject)
-  private
-    FBrowser: ICefBrowser;
-    FCursor: HCURSOR;
-    FResult: TCefRetval;
-  public
-    constructor Create(This: TCefHandlerOwn; const browser: ICefBrowser; cursor: HCURSOR);
-    procedure Execute; override;
-  end;
-
-  constructor TEHSyncCursorChange.Create(This: TCefHandlerOwn; const browser: ICefBrowser; cursor: HICON);
-  begin
-    FThis := This;
-    FBrowser := browser;
-    FCursor := cursor;
-    FResult := RV_CONTINUE;
-  end;
-
-  procedure TEHSyncCursorChange.Execute;
-  begin
-    FResult := FThis.doOnCursorChange(FBrowser, FCursor);
-  end;
-
-{$ENDIF}
 var
 // These functions set string values. If |copy| is true (1) the value will be
 // copied instead of referenced. It is up to the user to properly manage
@@ -4857,47 +3803,12 @@ begin
   end;
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_before_created_sync(
-      self: PCefHandler; parentBrowser: PCefBrowser;
-      var windowInfo: TCefWindowInfo; popup: Integer;
-      const popupFeatures: PCefPopupFeatures;
-      var handler: PCefHandler; url: PCefString;
-      settings: PCefBrowserSettings): TCefRetval; stdcall;
-var
-  sync: TEHSyncBeforeCreated;
-begin
-  sync := TEHSyncBeforeCreated.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(parentBrowser), windowInfo, popup <> 0,
-    popupFeatures, TCefBaseRef.UnWrap(handler), CefString(url), settings);
-  try
-    handler.base.release(@handler.base);
-    sync.Send;
-    CefStringSet(url, sync.FUrl);
-    handler :=  CefGetData(sync.FHandler);
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
-
 function cef_handler_handle_after_created(self: PCefHandler;
   browser: PCefBrowser): TCefRetval; stdcall;
 begin
   with TCefHandlerOwn(CefGetObject(self)) do
     Result := doOnAfterCreated(TCefBrowserRef.UnWrap(browser));
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_after_created_sync(self: PCefHandler;
-  browser: PCefBrowser): TCefRetval; stdcall;
-begin
-  TEHSyncAfterCreated.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser));
-  Result := RV_CONTINUE;
-end;
-{$ENDIF}
 
 function cef_handler_handle_address_change(
     self: PCefHandler; browser: PCefBrowser;
@@ -4910,17 +3821,6 @@ begin
       cefstring(url))
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_address_change_sync(
-    self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame; const url: PCefString): TCefRetval; stdcall;
-begin
-  TEHSyncAddressChange.Create(TCefHandlerOwn(CefGetObject(self)),
-      TCefBrowserRef.UnWrap(browser), TCefFrameRef.UnWrap(frame), cefstring(url));
-  Result := RV_CONTINUE;
-end;
-{$ENDIF}
-
 function cef_handler_handle_title_change(
     self: PCefHandler; browser: PCefBrowser;
     const title: PCefString): TCefRetval; stdcall;
@@ -4929,17 +3829,6 @@ begin
     Result := doOnTitleChange(TCefBrowserRef.UnWrap(browser), CefString(title));
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_title_change_sync(
-  self: PCefHandler; browser: PCefBrowser;
-  const title: PCefString): TCefRetval; stdcall;
-begin
-  TEHSyncTitleChange.Create(TCefHandlerOwn(CefGetObject(self)),
-   TCefBrowserRef.UnWrap(browser), CefString(title));
-  Result := RV_CONTINUE;
-end;
-{$ENDIF}
-
 function cef_handler_handle_nav_state_change(self: PCefHandler; browser: PCefBrowser;
       canGoBack, canGoForward: Integer): TCefRetval; stdcall;
 begin
@@ -4947,16 +3836,6 @@ begin
     Result := doOnNavStateChange(TCefBrowserRef.UnWrap(browser), canGoBack <> 0,
     canGoForward <> 0);
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_nav_state_change_sync(self: PCefHandler; browser: PCefBrowser;
-      canGoBack, canGoForward: Integer): TCefRetval; stdcall;
-begin
-  TEHSyncNavStateChange.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), canGoBack <> 0, canGoForward <> 0);
-  Result := RV_CONTINUE;
-end;
-{$ENDIF}
 
 function cef_handler_handle_before_browse(
     self: PCefHandler; browser: PCefBrowser;
@@ -4972,26 +3851,6 @@ begin
       isRedirect <> 0)
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_before_browse_sync(
-    self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame; request: PCefRequest;
-    navType: TCefHandlerNavtype; isRedirect: Integer): TCefRetval; stdcall;
-var
-  sync: TEHSyncBeforeBrowse;
-begin
-  sync := TEHSyncBeforeBrowse.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), TCefFrameRef.UnWrap(frame),
-    TCefRequestRef.UnWrap(request), navType, isRedirect <> 0);
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
-
 function cef_handler_handle_load_start(
     self: PCefHandler; browser: PCefBrowser;
     frame: PCefFrame): TCefRetval; stdcall;
@@ -5002,25 +3861,6 @@ begin
       TCefFrameRef.UnWrap(frame));
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_load_start_sync(
-    self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame): TCefRetval; stdcall;
-var
-  sync: TEHSyncLoadStart;
-begin
-  sync := TEHSyncLoadStart.Create(TCefHandlerOwn(CefGetObject(self)),
-      TCefBrowserRef.UnWrap(browser),
-      TCefFrameRef.UnWrap(frame));
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
-
 function cef_handler_handle_load_end(self: PCefHandler;
     browser: PCefBrowser; frame: PCefFrame; httpStatusCode: Integer): TCefRetval; stdcall;
 begin
@@ -5030,18 +3870,6 @@ begin
       TCefFrameRef.UnWrap(frame),
       httpStatusCode);
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_load_end_sync(self: PCefHandler;
-    browser: PCefBrowser; frame: PCefFrame; httpStatusCode: Integer): TCefRetval; stdcall;
-begin
-  TEHSyncLoadEnd.Create(TCefHandlerOwn(CefGetObject(self)),
-      TCefBrowserRef.UnWrap(browser),
-      TCefFrameRef.UnWrap(frame),
-      httpStatusCode);
-  Result := RV_CONTINUE;
-end;
-{$ENDIF}
 
 function cef_handler_handle_load_error(
     self: PCefHandler; browser: PCefBrowser;
@@ -5063,28 +3891,6 @@ begin
       CefStringSet(@errorText, err);
   end;
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_load_error_sync(
-    self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame; errorCode: TCefHandlerErrorcode;
-    const failedUrl: PCefString; var errorText: TCefString): TCefRetval; stdcall;
-var
-  sync: TEHSyncLoadError;
-begin
-  sync := TEHSyncLoadError.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), TCefFrameRef.UnWrap(frame),
-      errorCode, CefString(failedUrl), CefString(@errorText));
-  try
-    sync.Send;
-    Result := sync.FResult;
-    if Result = RV_HANDLED then
-      CefStringSet(@errorText, sync.FErrorText);
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
 
 function cef_handler_handle_before_resource_load(
     self: PCefHandler; browser: PCefBrowser;
@@ -5122,35 +3928,6 @@ begin
   end;
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_before_resource_load_sync(
-    self: PCefHandler; browser: PCefBrowser;
-    request: PCefRequest; var redirectUrl: TCefString;
-    var resourceStream: PCefStreamReader; var mimeType: TCefString;
-    loadFlags: Integer): TCefRetval; stdcall;
-var
-  sync: TEHSyncBeforeResourceLoad;
-begin
-  sync := TEHSyncBeforeResourceLoad.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), TCefRequestRef.UnWrap(request),
-    CefString(@redirectUrl), TCefStreamReaderRef.UnWrap(resourceStream),
-    CefString(@mimeType), loadFlags);
-  try
-    sync.Send;
-    Result := sync.FResult;
-    if Result = RV_CONTINUE then
-    begin
-      if sync.FRedirectUrl <> '' then
-        redirectUrl := CefStringAlloc(sync.FRedirectUrl);
-      resourceStream := CefGetData(sync.FResourceStream);
-      mimeType := CefStringAlloc(sync.FMimeType);
-    end;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
-
 function cef_handler_handle_protocol_execution(self: PCefHandler; browser: PCefBrowser;
   const url: PCefString; var allow_os_execution: Integer): TCefRetval; stdcall;
 var
@@ -5166,26 +3943,6 @@ begin
     allow_os_execution := 0;
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_protocol_execution_sync(self: PCefHandler; browser: PCefBrowser;
-  const url: PCefString; var allow_os_execution: Integer): TCefRetval; stdcall;
-var
-  sync: TEHSyncProtocolExecution;
-begin
-  sync := TEHSyncProtocolExecution.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), CefString(url), allow_os_execution <> 0);
-  try
-    sync.Send;
-    Result := sync.FResult;
-    if sync.FAllowOsExecution then
-      allow_os_execution := 1 else
-      allow_os_execution := 0;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
-
 function cef_handler_handle_download_response(self: PCefHandler;
   browser: PCefBrowser; const mimeType, fileName: PCefString; contentLength: int64;
   var handler: PCefDownloadHandler): TCefRetval; stdcall;
@@ -5198,26 +3955,6 @@ begin
       CefString(mimeType), CefString(fileName), contentLength, _handler);
   handler := CefGetData(_handler);
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_download_response_sync(self: PCefHandler;
-  browser: PCefBrowser; const mimeType, fileName: PCefString; contentLength: int64;
-  var handler: PCefDownloadHandler): TCefRetval; stdcall;
-var
-  sync: TEHSyncDownloadResponse;
-begin
-  sync := TEHSyncDownloadResponse.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), CefString(mimeType), CefString(fileName),
-    contentLength);
-  try
-    sync.Send;
-    Result := sync.FResult;
-    handler := CefGetData(sync.FHandler);
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
 
 function cef_handle_authentication_request(
   self: PCefHandler; browser: PCefBrowser; isProxy: Integer;
@@ -5240,32 +3977,6 @@ begin
   end;
 end;
 
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handle_authentication_request_sync(
-  self: PCefHandler; browser: PCefBrowser; isProxy: Integer;
-  const host: PCefString; const realm: PCefString; const scheme: PCefString;
-  username: PCefString; password: PCefString): TCefRetval; stdcall;
-var
-  sync: TEHSyncAuthenticationRequest;
-begin
-  sync := TEHSyncAuthenticationRequest.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), isProxy <> 0, CefString(host), CefString(realm),
-    CefString(scheme), CefString(username), CefString(password));
-  try
-    sync.Send;
-    Result := sync.FResult;
-    if Result = RV_HANDLED then
-    begin
-      CefStringSet(username, sync.FUsername);
-      CefStringSet(password, sync.FPassword);
-    end;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
-
 function cef_handler_handle_before_menu(
   self: PCefHandler; browser: PCefBrowser;
   const menuInfo: PCefHandlerMenuInfo): TCefRetval; stdcall;
@@ -5275,24 +3986,6 @@ begin
       TCefBrowserRef.UnWrap(browser),
       menuInfo);
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_before_menu_sync(
-  self: PCefHandler; browser: PCefBrowser;
-  const menuInfo: PCefHandlerMenuInfo): TCefRetval; stdcall;
-var
-  sync: TEHSyncBeforeMenu;
-begin
-  sync := TEHSyncBeforeMenu.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), menuInfo);
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
 
 function cef_handler_handle_get_menu_label(
     self: PCefHandler; browser: PCefBrowser;
@@ -5312,25 +4005,6 @@ begin
   end;
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_get_menu_label_sync(self: PCefHandler; browser: PCefBrowser;
-  menuId: TCefHandlerMenuId; var label_: TCefString): TCefRetval; stdcall;
-var
-  sync: TEHSyncGetMenuLabel;
-begin
-  sync := TEHSyncGetMenuLabel.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser),  menuId, CefString(@label_));
-  try
-    sync.Send;
-    Result := sync.FResult;
-    if Result = RV_HANDLED then
-      CefStringSet(@label_, sync.FCaption);
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
-
 function cef_handler_handle_menu_action(
     self: PCefHandler; browser: PCefBrowser;
     menuId: TCefHandlerMenuId): TCefRetval; stdcall;
@@ -5341,24 +4015,6 @@ begin
       menuId);
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_menu_action_sync(
-    self: PCefHandler; browser: PCefBrowser;
-    menuId: TCefHandlerMenuId): TCefRetval; stdcall;
-var
-  sync: TEHSyncMenuAction;
-begin
-  sync := TEHSyncMenuAction.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), menuId);
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
-
 function cef_handler_handle_print_options(self: PCefHandler;
   browser: PCefBrowser; printOptions: PCefPrintOptions): TCefRetval; stdcall;
 begin
@@ -5366,23 +4022,6 @@ begin
     Result := doOnPrintOptions(
       TCefBrowserRef.UnWrap(browser), printOptions);
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_print_options_sync(self: PCefHandler;
-  browser: PCefBrowser; printOptions: PCefPrintOptions): TCefRetval; stdcall;
-var
-  sync: TEHSyncPrintOptions;
-begin
-  sync := TEHSyncPrintOptions.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), printOptions);
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
 
 function cef_handler_handle_print_header_footer(
     self: PCefHandler; browser: PCefBrowser;
@@ -5413,37 +4052,6 @@ begin
   end;
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_print_header_footer_sync(
-    self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame; printInfo: PCefPrintInfo;
-    url, title: PCefString; currentPage, maxPages: Integer;
-    var topLeft, topCenter, topRight, bottomLeft, bottomCenter,
-    bottomRight: TCefString): TCefRetval; stdcall;
-var
-  sync: TEHSyncPrintHeaderFooter;
-begin
-  sync := TEHSyncPrintHeaderFooter.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), TCefFrameRef.UnWrap(frame), printInfo,
-    CefString(url), CefString(title), currentPage, maxPages);
-  try
-    sync.Send;
-    Result := sync.FResult;
-    if Result = RV_HANDLED then
-    begin
-      topLeft := CefStringAlloc(sync.FtopLeft);
-      topCenter := CefStringAlloc(sync.FtopCenter);
-      topRight := CefStringAlloc(sync.FtopRight);
-      bottomLeft := CefStringAlloc(sync.FbottomLeft);
-      bottomCenter := CefStringAlloc(sync.FbottomCenter);
-      bottomRight := CefStringAlloc(sync.FbottomRight);
-    end;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
-
 function cef_handler_handle_jsalert(self: PCefHandler;
     browser: PCefBrowser; frame: PCefFrame;
     const message: PCefString): TCefRetval; stdcall;
@@ -5454,24 +4062,6 @@ begin
       TCefFrameRef.UnWrap(frame),
       CefString(message));
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_jsalert_sync(self: PCefHandler;
-    browser: PCefBrowser; frame: PCefFrame;
-    const message: PCefString): TCefRetval; stdcall;
-var
-  sync: TEHSyncJsAlert;
-begin
-  sync := TEHSyncJsAlert.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), TCefFrameRef.UnWrap(frame), CefString(message));
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
 
 function cef_handler_handle_jsconfirm(
     self: PCefHandler; browser: PCefBrowser;
@@ -5489,28 +4079,6 @@ begin
   if Result = RV_HANDLED then
     retval := Ord(ret);
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_jsconfirm_sync(
-    self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame; const message: PCefString;
-    var retval: Integer): TCefRetval; stdcall;
-var
-  sync: TEHSyncJsConfirm;
-begin
-  sync := TEHSyncJsConfirm.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), TCefFrameRef.UnWrap(frame),
-    CefString(message), retval <> 0);
-  try
-    sync.Send;
-    Result := sync.FResult;
-    if Result = RV_HANDLED then
-      retval := Ord(sync.FRetVal);
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
 
 function cef_handler_handle_jsprompt(self: PCefHandler;
     browser: PCefBrowser; frame: PCefFrame;
@@ -5535,31 +4103,6 @@ begin
   end;
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_jsprompt_sync(self: PCefHandler;
-    browser: PCefBrowser; frame: PCefFrame;
-    const message, defaultValue: PCefString; var retval: Integer;
-    var return: TCefString): TCefRetval; stdcall;
-var
-  sync: TEHSyncJsPrompt;
-begin
-  sync := TEHSyncJsPrompt.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), TCefFrameRef.UnWrap(frame),
-    CefString(message), CefString(defaultValue), retval <> 0);
-  try
-    sync.Send;
-    Result := sync.FResult;
-    if Result = RV_HANDLED then
-    begin
-      retval := Ord(sync.FRetVal);
-      return := CefStringAlloc(sync.FReturn);
-    end;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
-
 function cef_handler_handle_jsbinding(self: PCefHandler; browser: PCefBrowser;
       frame: PCefFrame; obj: PCefv8Value): TCefRetval; stdcall;
 begin
@@ -5570,24 +4113,6 @@ begin
       TCefv8ValueRef.UnWrap(obj));
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_jsbinding_sync(self: PCefHandler; browser: PCefBrowser;
-  frame: PCefFrame; obj: PCefv8Value): TCefRetval; stdcall;
-var
-  sync: TEHSyncJsBinding;
-begin
-  sync := TEHSyncJsBinding.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), TCefFrameRef.UnWrap(frame),
-    TCefv8ValueRef.UnWrap(obj));
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
-
 function cef_handler_handle_before_window_close(
     self: PCefHandler; browser: PCefBrowser): TCefRetval; stdcall;
 begin
@@ -5595,23 +4120,6 @@ begin
     Result := doOnBeforeWindowClose(
       TCefBrowserRef.UnWrap(browser))
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_before_window_close_sync(
-  self: PCefHandler; browser: PCefBrowser): TCefRetval; stdcall;
-var
-  sync: TEHBeforeWindowClose;
-begin
-  sync := TEHBeforeWindowClose.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser));
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
 
 function cef_handler_handle_take_focus(
     self: PCefHandler; browser: PCefBrowser;
@@ -5622,24 +4130,6 @@ begin
       TCefBrowserRef.UnWrap(browser), reverse);
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_take_focus_sync(
-    self: PCefHandler; browser: PCefBrowser;
-    reverse: Integer): TCefRetval; stdcall;
-var
-  sync: TEHSyncTakeFocus;
-begin
-  sync := TEHSyncTakeFocus.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), reverse);
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
-
 function cef_handler_handle_set_focus(
     self: PCefHandler; browser: PCefBrowser;
     isWidget: Integer): TCefRetval; stdcall;
@@ -5648,24 +4138,6 @@ begin
     Result := doOnSetFocus(
       TCefBrowserRef.UnWrap(browser), isWidget <> 0);
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_set_focus_sync(
-    self: PCefHandler; browser: PCefBrowser;
-    isWidget: Integer): TCefRetval; stdcall;
-var
-  sync: TEHSyncSetFocus;
-begin
-  sync := TEHSyncSetFocus.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), isWidget <> 0);
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
 
 function cef_handler_handle_key_event(
     self: PCefHandler; browser: PCefBrowser;
@@ -5677,25 +4149,6 @@ begin
       TCefBrowserRef.UnWrap(browser),
       event, code, modifiers, isSystemKey <> 0);
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_key_event_sync(
-    self: PCefHandler; browser: PCefBrowser;
-    event: TCefHandlerKeyEventType; code, modifiers,
-    isSystemKey: Integer): TCefRetval; stdcall;
-var
-  sync: TEHSyncKeyEvent;
-begin
-  sync := TEHSyncKeyEvent.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), event, code, modifiers, isSystemKey <> 0);
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
 
 function cef_handler_handle_tooltip(self: PCefHandler;
   browser: PCefBrowser; text: PCefString): TCefRetval; stdcall;
@@ -5709,24 +4162,6 @@ begin
   text^ := CefStringAlloc(t);
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_tooltip_sync(self: PCefHandler;
-  browser: PCefBrowser; text: PCefString): TCefRetval; stdcall;
-var
-  sync: TEHSyncTooltip;
-begin
-  sync := TEHSyncTooltip.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), CefStringClearAndGet(text^));
-  try
-    sync.Send;
-    Result := sync.FResult;
-    text^ := CefStringAlloc(sync.FText);
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
-
 function cef_handler_handle_status(self: PCefHandler; browser: PCefBrowser;
   value: PCefString; type_: TCefHandlerStatusType): TCefRetval; stdcall;
 begin
@@ -5734,40 +4169,12 @@ begin
     Result := doOnStatus(TCefBrowserRef.UnWrap(browser), CefString(value), type_);
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_status_sync(self: PCefHandler; browser: PCefBrowser;
-  value: PCefString; type_: TCefHandlerStatusType): TCefRetval; stdcall;
-begin
-  TEHSyncStatus.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), CefString(value), type_);
-  Result := RV_CONTINUE;
-end;
-
-{$ENDIF}
-
 function cef_handler_handle_console_message(self: PCefHandler; browser: PCefBrowser;
   const message, source: PCefString; line: Integer): TCefRetval; stdcall;
 begin
   with TCefHandlerOwn(CefGetObject(self)) do
     Result := doOnConsoleMessage(TCefBrowserRef.UnWrap(browser), CefString(message), CefString(source), line);
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_console_message_sync(self: PCefHandler; browser: PCefBrowser;
-  const message, source: PCefString; line: Integer): TCefRetval; stdcall;
-var
-  sync: TEHSyncConsoleMessage;
-begin
-  sync := TEHSyncConsoleMessage.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), CefString(message), CefString(source), line);
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
 
 function cef_handler_handle_find_result(self: PCefHandler; browser: PCefBrowser;
   identifier, count: Integer; const selectionRect: PCefRect;
@@ -5779,38 +4186,11 @@ begin
         count, selectionRect, identifier <> 0, activeMatchOrdinal <> 0, finalUpdate <> 0);
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_find_result_sync(self: PCefHandler; browser: PCefBrowser;
-  identifier, count: Integer; const selectionRect: PCefRect;
-  activeMatchOrdinal, finalUpdate: Integer): TCefRetval; stdcall;
-begin
-  TEHSyncFindResult.Create(TCefHandlerOwn(CefGetObject(self)), TCefBrowserRef.UnWrap(browser),
-    count, selectionRect, identifier <> 0, activeMatchOrdinal <> 0, finalUpdate <> 0);
-  Result := RV_CONTINUE;
-end;
-{$ENDIF}
-
 function cef_handler_handle_get_rect(self: PCefHandler; browser: PCefBrowser; screen: Integer; rect: PCefRect): TCefRetval; stdcall;
 begin
   with TCefHandlerOwn(CefGetObject(self)) do
     Result := doOngetRect(TCefBrowserRef.UnWrap(browser), screen, rect);
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_get_rect_sync(self: PCefHandler; browser: PCefBrowser; screen: Integer; rect: PCefRect): TCefRetval; stdcall;
-var
-  sync: TEHSyncGetRect;
-begin
-  sync := TEHSyncGetRect.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), screen, rect);
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
 
 function cef_handler_handle_get_screen_point(self: PCefHandler; browser: PCefBrowser; viewX, viewY: Integer; screenX, screenY: PInteger): TCefRetval; stdcall;
 begin
@@ -5818,43 +4198,11 @@ begin
     Result := doOngetScreenPoint(TCefBrowserRef.UnWrap(browser), viewX, viewY, screenX, screenY);
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_get_screen_point_sync(self: PCefHandler; browser: PCefBrowser; viewX, viewY: Integer; screenX, screenY: PInteger): TCefRetval; stdcall;
-var
-  sync: TEHSyncGetScreenPoint;
-begin
-  sync := TEHSyncGetScreenPoint.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), viewX, viewY, screenX, screenY);
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
-
 function cef_handler_handle_popup_change(self: PCefHandler; browser: PCefBrowser; show: Integer; const rect: PCefRect): TCefRetval; stdcall;
 begin
   with TCefHandlerOwn(CefGetObject(self)) do
     Result := doOnpopupChange(TCefBrowserRef.UnWrap(browser), show <> 0, rect);
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_popup_change_sync(self: PCefHandler; browser: PCefBrowser; show: Integer; const rect: PCefRect): TCefRetval; stdcall;
-var
-  sync: TEHSyncPopupChange;
-begin
-  sync := TEHSyncPopupChange.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), show <> 0, rect);
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
 
 function cef_handler_handle_paint(self: PCefHandler; browser: PCefBrowser; typ: TCefPaintElementType; const dirtyRect: PCefRect; const buffer: Pointer): TCefRetval; stdcall;
 begin
@@ -5862,43 +4210,11 @@ begin
     Result := doOnPaint(TCefBrowserRef.UnWrap(browser), typ, dirtyRect, buffer);
 end;
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_paint_sync(self: PCefHandler; browser: PCefBrowser; typ: TCefPaintElementType; const dirtyRect: PCefRect; const buffer: Pointer): TCefRetval; stdcall;
-var
-  sync: TEHSyncPaint;
-begin
-  sync := TEHSyncPaint.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), typ, dirtyRect, buffer);
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
-
 function cef_handler_handle_cursor_change(self: PCefHandler; browser: PCefBrowser; cursor: HCURSOR): TCefRetval; stdcall;
 begin
   with TCefHandlerOwn(CefGetObject(self)) do
     Result := doOnCursorChange(TCefBrowserRef.UnWrap(browser), cursor);
 end;
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-function cef_handler_handle_cursor_change_sync(self: PCefHandler; browser: PCefBrowser; cursor: HCURSOR): TCefRetval; stdcall;
-var
-  sync: TEHSyncCursorChange;
-begin
-  sync := TEHSyncCursorChange.Create(TCefHandlerOwn(CefGetObject(self)),
-    TCefBrowserRef.UnWrap(browser), cursor);
-  try
-    sync.Send;
-    Result := sync.FResult;
-  finally
-    sync.Free;
-  end;
-end;
-{$ENDIF}
 
 {  cef_stream_reader }
 
@@ -6214,127 +4530,49 @@ end;
 
 { TCefHandlerOwn }
 
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-procedure TCefHandlerOwn.WndProc(var Msg: TMessage);
-begin
-  case Msg.Msg of
-    WM_USER + 1: TEHSyncObject(Msg.WParam).Execute;
-  else
-    Msg.Result := DefWindowProc(FWindowHandle, Msg.Msg, Msg.wParam, Msg.lParam);
-  end;
-end;
-{$ENDIF}
-
-constructor TCefHandlerOwn.Create({$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-  SyncUI, SyncIO: Boolean{$ENDIF});
+constructor TCefHandlerOwn.Create;
 begin
   inherited CreateData(SizeOf(TCefHandler));
   with PCefHandler(FData)^ do
   begin
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-    if SyncUI or SyncIO then
-       FWindowHandle := AllocateHWnd(WndProc) else
-       FWindowHandle := 0;
+    handle_before_created := @cef_handler_handle_before_created;
+    handle_after_created := @cef_handler_handle_after_created;
+    handle_address_change := @cef_handler_handle_address_change;
+    handle_title_change := @cef_handler_handle_title_change;
+    handle_nav_state_change := @cef_handler_handle_nav_state_change;
+    handle_before_browse := @cef_handler_handle_before_browse;
+    handle_load_start := @cef_handler_handle_load_start;
+    handle_load_end := @cef_handler_handle_load_end;
+    handle_load_error := @cef_handler_handle_load_error;
+    handle_download_response := @cef_handler_handle_download_response;
+    handle_before_menu := @cef_handler_handle_before_menu;
+    handle_get_menu_label := @cef_handler_handle_get_menu_label;
+    handle_menu_action := @cef_handler_handle_menu_action;
+    handle_print_options := @cef_handler_handle_print_options;
+    handle_print_header_footer := @cef_handler_handle_print_header_footer;
+    handle_jsalert := @cef_handler_handle_jsalert;
+    handle_jsconfirm := @cef_handler_handle_jsconfirm;
+    handle_jsprompt := @cef_handler_handle_jsprompt;
+    handle_jsbinding := @cef_handler_handle_jsbinding;
+    handle_before_window_close := @cef_handler_handle_before_window_close;
+    handle_take_focus := @cef_handler_handle_take_focus;
+    handle_set_focus := @cef_handler_handle_set_focus;
+    handle_key_event := @cef_handler_handle_key_event;
+    handle_tooltip := @cef_handler_handle_tooltip;
+    handle_status := @cef_handler_handle_status;
+    handle_console_message := @cef_handler_handle_console_message;
+    handle_find_result := @cef_handler_handle_find_result;
+    handle_get_rect := @cef_handler_handle_get_rect;
+    handle_get_screen_point := @cef_handler_handle_get_screen_point;
+    handle_popup_change := @cef_handler_handle_popup_change;
+    handle_paint := @cef_handler_handle_paint;
+    handle_cursor_change := @cef_handler_handle_cursor_change;
 
-    if SyncUI then
-    begin
-      handle_before_created := @cef_handler_handle_before_created_sync;
-      handle_after_created := @cef_handler_handle_after_created_sync;
-      handle_address_change := @cef_handler_handle_address_change_sync;
-      handle_title_change := @cef_handler_handle_title_change_sync;
-      handle_nav_state_change := @cef_handler_handle_nav_state_change_sync;
-      handle_before_browse := @cef_handler_handle_before_browse_sync;
-      handle_load_start := @cef_handler_handle_load_start_sync;
-      handle_load_end := @cef_handler_handle_load_end_sync;
-      handle_load_error := @cef_handler_handle_load_error_sync;
-      handle_download_response := @cef_handler_handle_download_response_sync;
-      handle_before_menu := @cef_handler_handle_before_menu_sync;
-      handle_get_menu_label := @cef_handler_handle_get_menu_label_sync;
-      handle_menu_action := @cef_handler_handle_menu_action_sync;
-      handle_print_options := @cef_handler_handle_print_options_sync;
-      handle_print_header_footer := @cef_handler_handle_print_header_footer_sync;
-      handle_jsalert := @cef_handler_handle_jsalert_sync;
-      handle_jsconfirm := @cef_handler_handle_jsconfirm_sync;
-      handle_jsprompt := @cef_handler_handle_jsprompt_sync;
-      handle_jsbinding := @cef_handler_handle_jsbinding; // must run in UI thread !
-      handle_before_window_close := @cef_handler_handle_before_window_close_sync;
-      handle_take_focus := @cef_handler_handle_take_focus_sync;
-      handle_set_focus := @cef_handler_handle_set_focus_sync;
-      handle_key_event := @cef_handler_handle_key_event_sync;
-      handle_tooltip := @cef_handler_handle_tooltip_sync;
-      handle_status := @cef_handler_handle_status_sync;
-      handle_console_message := @cef_handler_handle_console_message_sync;
-      handle_find_result := @cef_handler_handle_find_result_sync;
-      handle_get_rect := @cef_handler_handle_get_rect_sync;
-      handle_get_screen_point := @cef_handler_handle_get_screen_point_sync;
-      handle_popup_change := @cef_handler_handle_popup_change_sync;
-      handle_paint := @cef_handler_handle_paint_sync;
-      handle_cursor_change := @cef_handler_handle_cursor_change_sync;
-    end else
-    begin
-{$ENDIF}
-      handle_before_created := @cef_handler_handle_before_created;
-      handle_after_created := @cef_handler_handle_after_created;
-      handle_address_change := @cef_handler_handle_address_change;
-      handle_title_change := @cef_handler_handle_title_change;
-      handle_nav_state_change := @cef_handler_handle_nav_state_change;
-      handle_before_browse := @cef_handler_handle_before_browse;
-      handle_load_start := @cef_handler_handle_load_start;
-      handle_load_end := @cef_handler_handle_load_end;
-      handle_load_error := @cef_handler_handle_load_error;
-      handle_download_response := @cef_handler_handle_download_response;
-      handle_before_menu := @cef_handler_handle_before_menu;
-      handle_get_menu_label := @cef_handler_handle_get_menu_label;
-      handle_menu_action := @cef_handler_handle_menu_action;
-      handle_print_options := @cef_handler_handle_print_options;
-      handle_print_header_footer := @cef_handler_handle_print_header_footer;
-      handle_jsalert := @cef_handler_handle_jsalert;
-      handle_jsconfirm := @cef_handler_handle_jsconfirm;
-      handle_jsprompt := @cef_handler_handle_jsprompt;
-      handle_jsbinding := @cef_handler_handle_jsbinding;
-      handle_before_window_close := @cef_handler_handle_before_window_close;
-      handle_take_focus := @cef_handler_handle_take_focus;
-      handle_set_focus := @cef_handler_handle_set_focus;
-      handle_key_event := @cef_handler_handle_key_event;
-      handle_tooltip := @cef_handler_handle_tooltip;
-      handle_status := @cef_handler_handle_status;
-      handle_console_message := @cef_handler_handle_console_message;
-      handle_find_result := @cef_handler_handle_find_result;
-      handle_get_rect := @cef_handler_handle_get_rect;
-      handle_get_screen_point := @cef_handler_handle_get_screen_point;
-      handle_popup_change := @cef_handler_handle_popup_change;
-      handle_paint := @cef_handler_handle_paint;
-      handle_cursor_change := @cef_handler_handle_cursor_change;
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-    end;
-{$ENDIF}
-
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-    if SyncIO then
-    begin
-      handle_before_resource_load := @cef_handler_handle_before_resource_load_sync;
-      handle_protocol_execution := @cef_handler_handle_protocol_execution_sync;
-      handle_authentication_request := @cef_handle_authentication_request_sync;
-    end else
-    begin
-{$ENDIF}
-      handle_before_resource_load := @cef_handler_handle_before_resource_load;
-      handle_protocol_execution := @cef_handler_handle_protocol_execution;
-      handle_authentication_request := @cef_handle_authentication_request;
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-    end;
-{$ENDIF}
-
+    // IO Thread
+    handle_before_resource_load := @cef_handler_handle_before_resource_load;
+    handle_protocol_execution := @cef_handler_handle_protocol_execution;
+    handle_authentication_request := @cef_handle_authentication_request;
   end;
-end;
-
-destructor TCefHandlerOwn.Destroy;
-begin
-{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-  if FWindowHandle <> 0 then
-    DeallocateHWnd(FWindowHandle);
-{$ENDIF}
-  inherited;
 end;
 
 function TCefHandlerOwn.doOnAddressChange(const browser: ICefBrowser;
@@ -7885,56 +6123,56 @@ end;
 
 { TCefv8ValueRef }
 
-constructor TCefv8ValueRef.CreateArray;
+class function TCefv8ValueRef.CreateArray: ICefv8Value;
 begin
-  Create(cef_v8value_create_array);
+  Result := Create(cef_v8value_create_array) as ICefv8Value;
 end;
 
-constructor TCefv8ValueRef.CreateBool(value: Boolean);
+class function TCefv8ValueRef.CreateBool(value: Boolean): ICefv8Value;
 begin
-  Create(cef_v8value_create_bool(Ord(value)));
+  Result := Create(cef_v8value_create_bool(Ord(value))) as ICefv8Value;
 end;
 
-constructor TCefv8ValueRef.CreateDouble(value: Double);
+class function TCefv8ValueRef.CreateDouble(value: Double): ICefv8Value;
 begin
-  Create(cef_v8value_create_double(value));
+  Result := Create(cef_v8value_create_double(value)) as ICefv8Value;
 end;
 
-constructor TCefv8ValueRef.CreateFunction(const name: ustring;
-  const handler: ICefv8Handler);
+class function TCefv8ValueRef.CreateFunction(const name: ustring;
+  const handler: ICefv8Handler): ICefv8Value;
 var
   n: TCefString;
 begin
   n := CefString(name);
-  Create(cef_v8value_create_function(@n, CefGetData(handler)));
+  Result := Create(cef_v8value_create_function(@n, CefGetData(handler))) as ICefv8Value;
 end;
 
-constructor TCefv8ValueRef.CreateInt(value: Integer);
+class function TCefv8ValueRef.CreateInt(value: Integer): ICefv8Value;
 begin
-  Create(cef_v8value_create_int(value))
+  Result := Create(cef_v8value_create_int(value)) as ICefv8Value;
 end;
 
-constructor TCefv8ValueRef.CreateNull;
+class function TCefv8ValueRef.CreateNull: ICefv8Value;
 begin
-  Create(cef_v8value_create_null);
+  Result := Create(cef_v8value_create_null) as ICefv8Value;
 end;
 
-constructor TCefv8ValueRef.CreateObject(const UserData: ICefv8Value);
+class function TCefv8ValueRef.CreateObject(const UserData: ICefv8Value): ICefv8Value;
 begin
-  Create(cef_v8value_create_object(CefGetData(UserData)));
+  Result := Create(cef_v8value_create_object(CefGetData(UserData))) as ICefv8Value;
 end;
 
-constructor TCefv8ValueRef.CreateString(const str: ustring);
+class function TCefv8ValueRef.CreateString(const str: ustring): ICefv8Value;
 var
   s: TCefString;
 begin
   s := CefString(str);
-  Create(cef_v8value_create_string(@s));
+  Result := Create(cef_v8value_create_string(@s)) as ICefv8Value;
 end;
 
-constructor TCefv8ValueRef.CreateUndefined;
+class function TCefv8ValueRef.CreateUndefined: ICefv8Value;
 begin
-  Create(cef_v8value_create_undefined);
+  Result := Create(cef_v8value_create_undefined) as ICefv8Value;
 end;
 
 function TCefv8ValueRef.DeleteValueByIndex(index: Integer): Boolean;
