@@ -9,7 +9,7 @@ uses
 
 type
   TMainForm = class(TForm)
-    crm: TChromiumSync;
+    crm: TChromium;
     edAddress: TEdit;
     SpeedButton1: TSpeedButton;
     SpeedButton2: TSpeedButton;
