@@ -123,7 +123,7 @@ begin
         end;
       WM_CREATE:
         begin
-          handl := THandler.Create({$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP} True, True{$ENDIF});
+          handl := THandler.Create;
           x := 0;
           GetClientRect(Wnd, rect);
 
