@@ -18,9 +18,6 @@ unit cef;
 {$I cef.inc}
 interface
 uses
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-  AppEvnts,
-{$ENDIF}
   Classes, Controls, Messages, Windows, ceflib;
 
 type
@@ -425,6 +422,11 @@ procedure Register;
 
 implementation
 
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+var
+  CefInstances: Integer = 0;
+{$ENDIF}
+
 procedure Register;
 begin
   RegisterComponents('Chromium', [TChromium
@@ -433,21 +435,6 @@ begin
 {$ENDIF}
   ]);
 end;
-
-
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-var
-  CefInstances: Integer = 0;
-
-type
-  TCefApplicationEvents = class(TApplicationEvents)
-  private
-    FTick: Cardinal;
-  public
-    procedure doIdle(Sender: TObject; var Done: Boolean);
-    constructor Create(AOwner: TComponent); override;
-  end;
-{$ENDIF}
 
 { TCustomChromium }
 
@@ -864,37 +851,6 @@ begin
 end;
 {$ENDIF}
 
-{ TCefApplicationEvents }
-
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-constructor TCefApplicationEvents.Create(AOwner: TComponent);
-begin
-  inherited;
-  OnIdle := DoIdle;
-  FTick := GetTickCount;
-end;
-{$ENDIF}
-
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-procedure TCefApplicationEvents.doIdle(Sender: TObject; var Done: Boolean);
-var
-  c: Cardinal;
-begin
-  if CefInstances > 0 then
-  begin
-    CefDoMessageLoopWork;
-    c := GetTickCount;
-    if  c - FTick <= 32 then
-      // avoid flickering :p
-      Done := False else
-      begin
-        Done := True;
-        FTick := c;
-      end;
-  end;
-end;
-{$ENDIF}
-
 { TCefCustomHandler }
 
 constructor TCustomChromiumHandler.Create(crm: TCustomChromium{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}; SyncUI, SyncIO: Boolean{$ENDIF});
@@ -1153,7 +1109,8 @@ function TCustomChromiumHandler.doOnNavStateChange(const browser: ICefBrowser;
   canGoBack, canGoForward: Boolean): TCefRetval;
 begin
   if FCrm <> nil then
-    Result := FCrm.doOnNavStateChange(browser, canGoBack, canGoForward);
+    Result := FCrm.doOnNavStateChange(browser, canGoBack, canGoForward) else
+    Result := RV_CONTINUE;
 end;
 
 function TCustomChromiumHandler.doOnPrintHeaderFooter(const browser: ICefBrowser;
@@ -1224,14 +1181,42 @@ begin
 end;
 
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+
+procedure AddressPatch(const ASource, ADestination: Pointer);
+type
+  PJump = ^TJump;
+  TJump = packed record
+    OpCode: Byte;
+    Distance: Pointer;
+  end;
 var
-  AppEvent: TCefApplicationEvents;
+  NewJump: PJump;
+  OldProtect: Cardinal;
+begin
+  if VirtualProtect(ASource, SizeOf(TJump), PAGE_EXECUTE_READWRITE, OldProtect) then
+  begin
+    NewJump := PJump(ASource);
+    NewJump.OpCode := $E9;
+    NewJump.Distance := Pointer(Integer(ADestination) - Integer(ASource) - 5);
+    FlushInstructionCache(GetCurrentProcess, ASource, SizeOf(TJump));
+    VirtualProtect(ASource, SizeOf(TJump), OldProtect, @OldProtect);
+  end;
+end;
+
+function __Real_PeekMessage__(var lpMsg: TMsg; hWnd: HWND;
+  wMsgFilterMin, wMsgFilterMax, wRemoveMsg: UINT): BOOL; stdcall;
+  external user32 name {$IFDEF UNICODE}'PeekMessageW'{$ELSE}'PeekMessageA'{$ENDIF};
+
+function __PeekMessage__(var lpMsg: TMsg; hWnd: HWND;
+  wMsgFilterMin, wMsgFilterMax, wRemoveMsg: UINT): BOOL; stdcall;
+begin
+  if (CefInstances > 0) and (MainThreadID = GetCurrentThreadId) then
+    CefDoMessageLoopWork;
+  Result := __Real_PeekMessage__(lpMsg, hWnd, wMsgFilterMin, wMsgFilterMax, wRemoveMsg);
+end;
 
 initialization
-  AppEvent := TCefApplicationEvents.Create(nil);
-
-finalization
-  AppEvent.Free;
+  AddressPatch(@PeekMessage, @__PeekMessage__)
 {$ENDIF}
-
 end.
+
