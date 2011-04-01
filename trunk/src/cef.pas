@@ -1163,14 +1163,13 @@ function GetMsgProc(code: Integer; wParam: WPARAM; lParam: LPARAM): HREsult; std
 begin
   Inc(Stack);
   try
-    if (Stack = 1) and (CefInstances > 0) then
+    if (code = 0) and (Stack = 1) and (CefInstances > 0) then
       CefDoMessageLoopWork;
     Result := CallNextHookEx(HOOK, code, wParam, lParam);
   finally
     Dec(Stack);
   end;
 end;
-
 {$ELSE}
 procedure AddressPatch(const ASource, ADestination: Pointer);
 type
@@ -1205,7 +1204,6 @@ begin
   Result := __Real_PeekMessage__(lpMsg, hWnd, wMsgFilterMin, wMsgFilterMax, wRemoveMsg);
 end;
 {$ENDIF}
-
 
 initialization
 {$IFDEF DELPHI12_UP}
