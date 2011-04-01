@@ -18,7 +18,7 @@ unit cef;
 {$I cef.inc}
 interface
 uses
-  Classes, Controls, Messages, Windows, ceflib;
+Forms, SysUtils,  Classes, Controls, Messages, Windows, ceflib;
 
 type
   TCustomChromium = class;
@@ -1154,6 +1154,24 @@ end;
 
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 
+{$IFDEF DELPHI12_UP}
+var
+  HOOK: HHOOK;
+  Stack: Integer = 0;
+
+function GetMsgProc(code: Integer; wParam: WPARAM; lParam: LPARAM): HREsult; stdcall;
+begin
+  Inc(Stack);
+  try
+    if (Stack = 1) and (CefInstances > 0) then
+      CefDoMessageLoopWork;
+    Result := CallNextHookEx(HOOK, code, wParam, lParam);
+  finally
+    Dec(Stack);
+  end;
+end;
+
+{$ELSE}
 procedure AddressPatch(const ASource, ADestination: Pointer);
 type
   PJump = ^TJump;
@@ -1186,9 +1204,15 @@ begin
     CefDoMessageLoopWork;
   Result := __Real_PeekMessage__(lpMsg, hWnd, wMsgFilterMin, wMsgFilterMax, wRemoveMsg);
 end;
+{$ENDIF}
+
 
 initialization
+{$IFDEF DELPHI12_UP}
+  HOOK := SetWindowsHookEx(WH_GETMESSAGE, @GetMsgProc, HInstance, MainThreadID);
+{$ELSE}
   AddressPatch(@PeekMessage, @__PeekMessage__)
+{$ENDIF}
 {$ENDIF}
 end.
 

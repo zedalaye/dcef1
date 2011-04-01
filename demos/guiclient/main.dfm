@@ -71,6 +71,7 @@ object MainForm: TMainForm
     OnNavStateChange = crmNavStateChange
     OnLoadStart = crmLoadStart
     OnLoadEnd = crmLoadEnd
+    OnDownloadResponse = crmDownloadResponse
     OnStatus = crmStatus
   end
   object edAddress: TEdit
@@ -211,7 +212,8 @@ object MainForm: TMainForm
     end
   end
   object SaveDialog: TSaveDialog
+    Options = [ofOverwritePrompt, ofHideReadOnly, ofEnableSizing]
     Left = 624
-    Top = 168
+    Top = 176
   end
 end
