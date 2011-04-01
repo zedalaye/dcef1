@@ -30,7 +30,7 @@ uses
 {$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   Messages,
 {$ENDIF}
-  Classes, Windows, SysUtils;
+  SysUtils, Classes, Windows, Graphics;
 
 type
 {$IFDEF UNICODE}
@@ -2272,6 +2272,7 @@ type
     procedure HidePopup;
     procedure Invalidate(dirtyRect: PCefRect);
     function GetImage(typ: TCefPaintElementType; width, height: Integer; buffer: Pointer): Boolean;
+    function GetBitmap(typ: TCefPaintElementType; Bitmap: TBitmap): Boolean;
     procedure SendKeyEvent(typ: TCefKeyType; key, modifiers, sysChar, imeChar: Integer);
     procedure SendMouseClickEvent(x, y: Integer; typ: TCefMouseButtonType; mouseUp, clickCount: Integer);
     procedure SendMouseMoveEvent(x, y, mouseLeave: Integer);
@@ -2720,6 +2721,7 @@ type
     procedure HidePopup;
     procedure Invalidate(dirtyRect: PCefRect);
     function GetImage(typ: TCefPaintElementType; width, height: Integer; buffer: Pointer): Boolean;
+    function GetBitmap(typ: TCefPaintElementType; Bitmap: TBitmap): Boolean;
     procedure SendKeyEvent(typ: TCefKeyType; key, modifiers, sysChar, imeChar: Integer);
     procedure SendMouseClickEvent(x, y: Integer; typ: TCefMouseButtonType; mouseUp, clickCount: Integer);
     procedure SendMouseMoveEvent(x, y, mouseLeave: Integer);
@@ -4875,6 +4877,34 @@ begin
     Ord(forward), Ord(matchCase), Ord(findNext));
 end;
 
+function TCefBrowserRef.GetBitmap(typ: TCefPaintElementType;
+  Bitmap: TBitmap): Boolean;
+var
+  w, h, i: Integer;
+  p, s: Pointer;
+begin
+  GetSize(typ, w, h);
+  Bitmap.PixelFormat := pf32bit;
+{$IFDEF DELPHI12_UP}
+  Bitmap.SetSize(w, h);
+{$ELSE}
+  Bitmap.Width := w;
+  Bitmap.Height := h;
+{$ENDIF}
+  GetMem(p, h * w * 4);
+  try
+    Result := GetImage(typ, w, h, p);
+    s := p;
+    for i := 0 to h - 1 do
+    begin
+      Move(s^, Bitmap.ScanLine[i]^, w*4);
+      Inc(Integer(s), w*4);
+    end;
+  finally
+    FreeMem(p);
+  end;
+end;
+
 function TCefBrowserRef.GetFocusedFrame: ICefFrame;
 begin
   Result := TCefFrameRef.UnWrap(PCefBrowser(FData)^.get_focused_frame(PCefBrowser(FData)))
@@ -6499,7 +6529,7 @@ end;
 
 procedure TCefTaskOwn.Execute(threadId: TCefThreadId);
 begin
-  Beep;
+
 end;
 
 { TCefStringMapOwn }
@@ -7886,7 +7916,6 @@ begin
     tkRecord: if not ProcessRecord then Exit(False);
     tkVariant: if not ProcessVariant then Exit(False);
     tkInterface: if not ProcessInterface then Exit(False);
-
   else
     Exit(False)
   end;

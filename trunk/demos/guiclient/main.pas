@@ -86,9 +86,25 @@ type
     procedure crmNavStateChange(Sender: TCustomChromium;
       const browser: ICefBrowser; canGoBack, canGoForward: Boolean;
       out Result: TCefRetval);
+    procedure crmDownloadResponse(Sender: TCustomChromium;
+      const browser: ICefBrowser; const mimeType, fileName: ustring;
+      contentLength: Int64; var handler: ICefDownloadHandler;
+      out Result: TCefRetval);
   private
     { Déclarations privées }
     FLoading: Boolean;
+  end;
+
+  TCefStreamDownloadHandler = class(TCefDownloadHandlerOwn)
+  private
+    FStream: TStream;
+    FOwned: Boolean;
+  protected
+    function ReceivedData(data: Pointer; DataSize: Integer): Integer; override;
+    procedure Complete; override;
+  public
+    constructor Create(stream: TStream; Owned: Boolean); reintroduce;
+    destructor Destroy; override;
   end;
 
 var
@@ -251,13 +267,22 @@ begin
     edAddress.Text := url;
 end;
 
+procedure TMainForm.crmDownloadResponse(Sender: TCustomChromium;
+  const browser: ICefBrowser; const mimeType, fileName: ustring;
+  contentLength: Int64; var handler: ICefDownloadHandler;
+  out Result: TCefRetval);
+begin
+  SaveDialog.FileName := fileName;
+  if SaveDialog.Execute then
+    handler := TCefStreamDownloadHandler.Create(
+      TFileStream.Create(SaveDialog.FileName, fmCreate), true);
+end;
+
 procedure TMainForm.crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
   const frame: ICefFrame; httpStatusCode: Integer; out Result: TCefRetval);
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
-  begin
     FLoading := False;
-  end;
 end;
 
 procedure TMainForm.crmLoadStart(Sender: TCustomChromium;
@@ -311,6 +336,35 @@ procedure TMainForm.FormCreate(Sender: TObject);
 begin
   FLoading := False;
 end;
+
+{ TCefStreamDownloadHandler }
+
+procedure TCefStreamDownloadHandler.Complete;
+begin
+  MainForm.StatusBar.SimpleText := 'Download complete';
+end;
+
+constructor TCefStreamDownloadHandler.Create(stream: TStream; Owned: Boolean);
+begin
+  inherited Create;
+  FStream := stream;
+  FOwned := Owned;
+end;
+
+destructor TCefStreamDownloadHandler.Destroy;
+begin
+  if FOwned then
+    FStream.Free;
+  inherited;
+end;
+
+function TCefStreamDownloadHandler.ReceivedData(data: Pointer;
+  DataSize: Integer): Integer;
+begin
+  Result := FStream.Write(data^, DataSize);
+  MainForm.StatusBar.SimpleText := 'Downloading ... ' + IntToStr(FStream.Position div 1000) + ' Kb';
+end;
+
 
 initialization
   CefRegisterScheme('file', '', True, False, TFileScheme);
