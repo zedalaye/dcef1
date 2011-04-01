@@ -1199,9 +1199,14 @@ function __Real_PeekMessage__(var lpMsg: TMsg; hWnd: HWND;
 function __PeekMessage__(var lpMsg: TMsg; hWnd: HWND;
   wMsgFilterMin, wMsgFilterMax, wRemoveMsg: UINT): BOOL; stdcall;
 begin
-  if (CefInstances > 0) and (MainThreadID = GetCurrentThreadId) then
+  if (CefInstances > 0) and (hWnd = 0) and (wMsgFilterMin = 0) and (wMsgFilterMax = 0)
+    and (wRemoveMsg = PM_REMOVE) and (MainThreadID = GetCurrentThreadId) then
+  begin
+    Result := __Real_PeekMessage__(lpMsg, hWnd, WM_MOUSEFIRST, WM_MOUSELAST, PM_REMOVE);
     CefDoMessageLoopWork;
-  Result := __Real_PeekMessage__(lpMsg, hWnd, wMsgFilterMin, wMsgFilterMax, wRemoveMsg);
+    Result := Result or __Real_PeekMessage__(lpMsg, 0, 0, 0, PM_REMOVE);
+  end else
+    Result := __Real_PeekMessage__(lpMsg, hWnd, wMsgFilterMin, wMsgFilterMax, wRemoveMsg);
 end;
 {$ENDIF}
 
