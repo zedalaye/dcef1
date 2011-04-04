@@ -1154,7 +1154,7 @@ end;
 
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 
-{$IFDEF DELPHI12_UP}
+{$IFDEF DELPHI9_UP}
 var
   HOOK: HHOOK;
   Stack: Integer = 0;
@@ -1163,9 +1163,9 @@ function GetMsgProc(code: Integer; wParam: WPARAM; lParam: LPARAM): HREsult; std
 begin
   Inc(Stack);
   try
+    Result := CallNextHookEx(HOOK, code, wParam, lParam);
     if (code = 0) and (Stack = 1) and (CefInstances > 0) then
       CefDoMessageLoopWork;
-    Result := CallNextHookEx(HOOK, code, wParam, lParam);
   finally
     Dec(Stack);
   end;
@@ -1211,7 +1211,7 @@ end;
 {$ENDIF}
 
 initialization
-{$IFDEF DELPHI12_UP}
+{$IFDEF DELPHI9_UP}
   HOOK := SetWindowsHookEx(WH_GETMESSAGE, @GetMsgProc, HInstance, MainThreadID);
 {$ELSE}
   AddressPatch(@PeekMessage, @__PeekMessage__)
