@@ -1161,13 +1161,15 @@ var
 
 function GetMsgProc(code: Integer; wParam: WPARAM; lParam: LPARAM): HREsult; stdcall;
 begin
-  Inc(Stack);
-  try
-    Result := CallNextHookEx(HOOK, code, wParam, lParam);
-    if (code = 0) and (Stack = 1) and (CefInstances > 0) then
+  Result := CallNextHookEx(HOOK, code, wParam, lParam);
+  if (code = 0) and (Stack = 0) and (CefInstances > 0) and (wParam = PM_REMOVE) then
+  begin
+    Inc(Stack);
+    try
       CefDoMessageLoopWork;
-  finally
-    Dec(Stack);
+    finally
+      Dec(Stack);
+    end;
   end;
 end;
 {$ELSE}
