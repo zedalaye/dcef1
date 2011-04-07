@@ -844,7 +844,7 @@ begin
   FCrm := crm;
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   if CefInstances = 0 then
-    CefTimer := SetTimer(0, 0, 1, @CefTimerProc);
+    CefTimer := SetTimer(0, 0, 10, @CefTimerProc);
   InterlockedIncrement(CefInstances);
 {$ENDIF}
 end;
