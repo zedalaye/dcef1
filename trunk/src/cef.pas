@@ -171,6 +171,7 @@ type
     procedure Loaded; override;
     procedure CreateWindowHandle(const Params: TCreateParams); override;
     procedure Resize; override;
+    procedure CMWantSpecialKey(var Msg: TCMWantSpecialKey); message CM_WANTSPECIALKEY;
 
     function doOnBeforeCreated(const parentBrowser: ICefBrowser;
       var windowInfo: TCefWindowInfo; popup: Boolean;
@@ -425,6 +426,11 @@ begin
 end;
 
 { TCustomChromium }
+
+procedure TCustomChromium.CMWantSpecialKey(var Msg: TCMWantSpecialKey);
+begin
+  Msg.Result := 1;
+end;
 
 constructor TCustomChromium.Create(AOwner: TComponent);
 begin
@@ -804,6 +810,7 @@ begin
   else
     inherited WndProc(Message);
   end;
+ // writeln(Message.Msg);
 end;
 
 { TChromiumFontOptions }
@@ -1205,8 +1212,8 @@ begin
     and (wRemoveMsg = PM_REMOVE) and (MainThreadID = GetCurrentThreadId) then
   begin
     Result := __Real_PeekMessage__(lpMsg, hWnd, WM_MOUSEFIRST, WM_MOUSELAST, PM_REMOVE);
-    CefDoMessageLoopWork;
     Result := Result or __Real_PeekMessage__(lpMsg, 0, 0, 0, PM_REMOVE);
+    CefDoMessageLoopWork;
   end else
     Result := __Real_PeekMessage__(lpMsg, hWnd, wMsgFilterMin, wMsgFilterMax, wRemoveMsg);
 end;
