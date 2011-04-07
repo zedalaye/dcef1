@@ -418,6 +418,12 @@ implementation
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 var
   CefInstances: Integer = 0;
+  CefTimer: UINT;
+
+procedure CefTimerProc(hwnd: HWND; uMsg: UINT; idEvent: UINT_PTR; dwTime: DWORD); stdcall;
+begin
+  CefDoMessageLoopWork;
+end;
 {$ENDIF}
 
 procedure Register;
@@ -837,6 +843,8 @@ begin
   inherited Create;
   FCrm := crm;
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+  if CefInstances = 0 then
+    CefTimer := SetTimer(0, 0, 1, @CefTimerProc);
   InterlockedIncrement(CefInstances);
 {$ENDIF}
 end;
@@ -845,6 +853,8 @@ destructor TCustomChromiumHandler.Destroy;
 begin
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   InterlockedDecrement(CefInstances);
+  if CefInstances = 0 then
+    KillTimer(0, CefTimer);
 {$ENDIF}
   inherited;
 end;
@@ -1159,72 +1169,5 @@ begin
     Result := RV_CONTINUE;
 end;
 
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-
-{$IFDEF DELPHI9_UP}
-var
-  HOOK: HHOOK;
-  Stack: Integer = 0;
-
-function GetMsgProc(code: Integer; wParam: WPARAM; lParam: LPARAM): HREsult; stdcall;
-begin
-  Result := CallNextHookEx(HOOK, code, wParam, lParam);
-  if (code = 0) and (Stack = 0) and (CefInstances > 0) and (wParam = PM_REMOVE) then
-  begin
-    Inc(Stack);
-    try
-      CefDoMessageLoopWork;
-    finally
-      Dec(Stack);
-    end;
-  end;
-end;
-{$ELSE}
-procedure AddressPatch(const ASource, ADestination: Pointer);
-type
-  PJump = ^TJump;
-  TJump = packed record
-    OpCode: Byte;
-    Distance: Pointer;
-  end;
-var
-  NewJump: PJump;
-  OldProtect: Cardinal;
-begin
-  if VirtualProtect(ASource, SizeOf(TJump), PAGE_EXECUTE_READWRITE, OldProtect) then
-  begin
-    NewJump := PJump(ASource);
-    NewJump.OpCode := $E9;
-    NewJump.Distance := Pointer(Integer(ADestination) - Integer(ASource) - 5);
-    FlushInstructionCache(GetCurrentProcess, ASource, SizeOf(TJump));
-    VirtualProtect(ASource, SizeOf(TJump), OldProtect, @OldProtect);
-  end;
-end;
-
-function __Real_PeekMessage__(var lpMsg: TMsg; hWnd: HWND;
-  wMsgFilterMin, wMsgFilterMax, wRemoveMsg: UINT): BOOL; stdcall;
-  external user32 name {$IFDEF UNICODE}'PeekMessageW'{$ELSE}'PeekMessageA'{$ENDIF};
-
-function __PeekMessage__(var lpMsg: TMsg; hWnd: HWND;
-  wMsgFilterMin, wMsgFilterMax, wRemoveMsg: UINT): BOOL; stdcall;
-begin
-  if (CefInstances > 0) and (hWnd = 0) and (wMsgFilterMin = 0) and (wMsgFilterMax = 0)
-    and (wRemoveMsg = PM_REMOVE) and (MainThreadID = GetCurrentThreadId) then
-  begin
-    Result := __Real_PeekMessage__(lpMsg, hWnd, WM_MOUSEFIRST, WM_MOUSELAST, PM_REMOVE);
-    Result := Result or __Real_PeekMessage__(lpMsg, 0, 0, 0, PM_REMOVE);
-    CefDoMessageLoopWork;
-  end else
-    Result := __Real_PeekMessage__(lpMsg, hWnd, wMsgFilterMin, wMsgFilterMax, wRemoveMsg);
-end;
-{$ENDIF}
-
-initialization
-{$IFDEF DELPHI9_UP}
-  HOOK := SetWindowsHookEx(WH_GETMESSAGE, @GetMsgProc, HInstance, MainThreadID);
-{$ELSE}
-  AddressPatch(@PeekMessage, @__PeekMessage__)
-{$ENDIF}
-{$ENDIF}
 end.
 
