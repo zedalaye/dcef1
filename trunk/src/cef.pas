@@ -418,12 +418,7 @@ implementation
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 var
   CefInstances: Integer = 0;
-  CefTimer: UINT;
-
-procedure CefTimerProc(hwnd: HWND; uMsg: UINT; idEvent: UINT_PTR; dwTime: DWORD); stdcall;
-begin
-  CefDoMessageLoopWork;
-end;
+  CefTimer: UINT = 0;
 {$ENDIF}
 
 procedure Register;
@@ -844,7 +839,7 @@ begin
   FCrm := crm;
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   if CefInstances = 0 then
-    CefTimer := SetTimer(0, 0, 10, @CefTimerProc);
+    CefTimer := SetTimer(0, 0, 10, nil);
   InterlockedIncrement(CefInstances);
 {$ENDIF}
 end;
@@ -1168,6 +1163,29 @@ begin
     Result := FCrm.doOnTooltip(browser, text) else
     Result := RV_CONTINUE;
 end;
+
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+var
+  HOOK: HHOOK;
+  Stack: Integer = 0;
+
+function GetMsgProc(code: Integer; wParam: WPARAM; lParam: LPARAM): HREsult; stdcall;
+begin
+  Result := CallNextHookEx(HOOK, code, wParam, lParam);
+  if (code = 0) and (Stack = 0) and (CefInstances > 0) and (wParam = PM_REMOVE) then
+  begin
+    Inc(Stack);
+    try
+      CefDoMessageLoopWork;
+    finally
+      Dec(Stack);
+    end;
+  end;
+end;
+
+initialization
+  HOOK := SetWindowsHookEx(WH_GETMESSAGE, @GetMsgProc, HInstance, MainThreadID);
+{$ENDIF}
 
 end.
 
