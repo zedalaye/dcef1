@@ -1185,6 +1185,9 @@ end;
 
 initialization
   HOOK := SetWindowsHookEx(WH_GETMESSAGE, @GetMsgProc, HInstance, MainThreadID);
+finalization
+  UnhookWindowsHookEx(HOOK);
+
 {$ENDIF}
 
 end.
