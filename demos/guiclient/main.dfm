@@ -4,7 +4,7 @@ object MainForm: TMainForm
   ActiveControl = edAddress
   Caption = 'Chromium Embedded'
   ClientHeight = 439
-  ClientWidth = 713
+  ClientWidth = 730
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -15,7 +15,7 @@ object MainForm: TMainForm
   OldCreateOrder = False
   OnCreate = FormCreate
   DesignSize = (
-    713
+    730
     439)
   PixelsPerInch = 96
   TextHeight = 13
@@ -50,7 +50,7 @@ object MainForm: TMainForm
     Caption = 'R'
   end
   object SpeedButton5: TSpeedButton
-    Left = 690
+    Left = 707
     Top = 0
     Width = 23
     Height = 22
@@ -60,7 +60,7 @@ object MainForm: TMainForm
   object crm: TChromium
     Left = 0
     Top = 24
-    Width = 713
+    Width = 730
     Height = 396
     Align = alBottom
     Anchors = [akLeft, akTop, akRight, akBottom]
@@ -72,12 +72,11 @@ object MainForm: TMainForm
     OnLoadEnd = crmLoadEnd
     OnDownloadResponse = crmDownloadResponse
     OnStatus = crmStatus
-    ExplicitWidth = 820
   end
   object edAddress: TEdit
     Left = 95
     Top = 0
-    Width = 594
+    Width = 610
     Height = 21
     Anchors = [akLeft, akTop, akRight]
     TabOrder = 1
@@ -87,11 +86,10 @@ object MainForm: TMainForm
   object StatusBar: TStatusBar
     Left = 0
     Top = 420
-    Width = 713
+    Width = 730
     Height = 19
     Panels = <>
     SimplePanel = True
-    ExplicitWidth = 820
   end
   object ActionList: TActionList
     Left = 624
