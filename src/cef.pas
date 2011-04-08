@@ -18,6 +18,9 @@ unit cef;
 {$I cef.inc}
 interface
 uses
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+  AppEvnts,
+{$ENDIF}
   SysUtils,  Classes, Controls, Messages, Windows, ceflib;
 
 type
@@ -1159,29 +1162,42 @@ begin
 end;
 
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-var
-  HOOK: HHOOK;
-  Stack: Integer = 0;
 
-function GetMsgProc(code: Integer; wParam: WPARAM; lParam: LPARAM): HREsult; stdcall;
-begin
-  Result := CallNextHookEx(HOOK, code, wParam, lParam);
-  if (code = 0) and (Stack = 0) and (CefInstances > 0) and (wParam = PM_REMOVE) then
-  begin
-    Inc(Stack);
-    try
-      CefDoMessageLoopWork;
-    finally
-      Dec(Stack);
-    end;
+type
+  TCefApplicationEvents = class(TApplicationEvents)
+  public
+    procedure doIdle(Sender: TObject; var Done: Boolean);
+    procedure doMessage(var Msg: TMsg; var Handled: Boolean);
+    constructor Create(AOwner: TComponent); override;
   end;
+
+constructor TCefApplicationEvents.Create(AOwner: TComponent);
+begin
+  inherited;
+  OnIdle := doIdle;
+  OnMessage := doMessage;
 end;
 
-initialization
-  HOOK := SetWindowsHookEx(WH_GETMESSAGE, @GetMsgProc, HInstance, MainThreadID);
-finalization
-  UnhookWindowsHookEx(HOOK);
+procedure TCefApplicationEvents.doIdle(Sender: TObject; var Done: Boolean);
+begin
+  if CefInstances > 0 then
+    CefDoMessageLoopWork;
+end;
 
+procedure TCefApplicationEvents.doMessage(var Msg: TMsg; var Handled: Boolean);
+begin
+  if CefInstances > 0 then
+    CefDoMessageLoopWork;
+end;
+
+var
+  AppEvent: TCefApplicationEvents;
+
+initialization
+  AppEvent := TCefApplicationEvents.Create(nil);
+
+finalization
+  AppEvent.Free;
 {$ENDIF}
 
 end.
