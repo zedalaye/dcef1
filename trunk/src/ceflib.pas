@@ -2341,9 +2341,7 @@ type
     property FirstPartyForCookies: ustring read GetFirstPartyForCookies write SetFirstPartyForCookies;
   end;
 
-{$IFDEF DELPHI12_UP}
-  TCefFastDomVisitorProc = reference to procedure(const document: ICefDomDocument);
-{$ENDIF}
+  TCefFastDomVisitorProc = {$IFDEF DELPHI12_UP}reference to{$ENDIF} procedure(const document: ICefDomDocument);
 
   ICefFrame = interface(ICefBase)
     ['{8FD3D3A6-EA3A-4A72-8501-0276BD5C3D1D}']
@@ -2370,9 +2368,7 @@ type
     function GetUrl: ustring;
     function GetBrowser: ICefBrowser;
     procedure VisitDom(const visitor: ICefDomVisitor);
-{$IFDEF DELPHI12_UP}
     procedure VisitDomProc(const proc: TCefFastDomVisitorProc);
-{$ENDIF}
     property Name: ustring read GetName;
     property Url: ustring read GetUrl;
     property Source: ustring read GetSource;
@@ -2554,9 +2550,7 @@ type
     procedure HandleEvent(const event: ICefDomEvent);
   end;
 
-{$IFDEF DELPHI12_UP}
-  TCefFastDomEventListenerProc = reference to procedure(const event: ICefDomEvent);
-{$ENDIF}
+  TCefFastDomEventListenerProc = {$IFDEF DELPHI12_UP}reference to {$ENDIF}procedure(const event: ICefDomEvent);
 
   ICefDomNode = interface(ICefBase)
   ['{96C03C9E-9C98-491A-8DAD-1947332232D6}']
@@ -2576,10 +2570,8 @@ type
     function GetLastChild: ICefDomNode;
     procedure AddEventListener(const eventType: ustring; useCapture: Boolean;
       const listener: ICefDomEventListener);
-{$IFDEF DELPHI12_UP}
     procedure AddEventListenerProc(const eventType: ustring; useCapture: Boolean;
       const proc: TCefFastDomEventListenerProc);
-{$ENDIF}
     function GetElementTagName: ustring;
     function HasElementAttributes: Boolean;
     function HasElementAttribute(const attrName: ustring): Boolean;
@@ -2757,9 +2749,7 @@ type
     function GetUrl: ustring;
     function GetBrowser: ICefBrowser;
     procedure VisitDom(const visitor: ICefDomVisitor);
-{$IFDEF DELPHI12_UP}
     procedure VisitDomProc(const proc: TCefFastDomVisitorProc);
-{$ENDIF}
   public
     class function UnWrap(data: Pointer): ICefFrame;
   end;
@@ -3136,7 +3126,6 @@ type
     constructor Create; virtual;
   end;
 
-{$IFDEF DELPHI12_UP}
   TCefFastDomVisitor = class(TCefDomVisitorOwn)
   private
     FProc: TCefFastDomVisitorProc;
@@ -3145,7 +3134,6 @@ type
   public
     constructor Create(const proc: TCefFastDomVisitorProc); reintroduce; virtual;
   end;
-{$ENDIF}
 
   TCefDomDocumentRef = class(TCefBaseRef, ICefDomDocument)
   protected
@@ -3187,10 +3175,8 @@ type
     function GetLastChild: ICefDomNode;
     procedure AddEventListener(const eventType: ustring;
       useCapture: Boolean; const listener: ICefDomEventListener);
-{$IFDEF DELPHI12_UP}
     procedure AddEventListenerProc(const eventType: ustring; useCapture: Boolean;
       const proc: TCefFastDomEventListenerProc);
-{$ENDIF}
     function GetElementTagName: ustring;
     function HasElementAttributes: Boolean;
     function HasElementAttribute(const attrName: ustring): Boolean;
@@ -3255,7 +3241,6 @@ type
       const client: ICefWebUrlRequestClient): ICefWebUrlRequest;
   end;
 
-{$IFDEF DELPHI12_UP}
   TCefFastDomEventListener = class(TCefDomEventListenerOwn)
   private
     FProc: TCefFastDomEventListenerProc;
@@ -3264,7 +3249,6 @@ type
   public
     constructor Create(const proc: TCefFastDomEventListenerProc); reintroduce; virtual;
   end;
-{$ENDIF}
 
 {$IFDEF DELPHI12_UP}
   TTaskMethod = TProc;
@@ -5229,13 +5213,10 @@ begin
   PCefFrame(FData)^.visit_dom(PCefFrame(FData), CefGetData(visitor));
 end;
 
-{$IFDEF DELPHI12_UP}
 procedure TCefFrameRef.VisitDomProc(const proc: TCefFastDomVisitorProc);
 begin
   VisitDom(TCefFastDomVisitor.Create(proc) as ICefDomVisitor);
 end;
-{$ENDIF}
-
 
 class function TCefFrameRef.UnWrap(data: Pointer): ICefFrame;
 begin
@@ -6960,7 +6941,6 @@ begin
 
 end;
 
-{$IFDEF DELPHI12_UP}
 { TCefFastDomVisitor }
 
 constructor TCefFastDomVisitor.Create(const proc: TCefFastDomVisitorProc);
@@ -6973,7 +6953,6 @@ procedure TCefFastDomVisitor.visit(const document: ICefDomDocument);
 begin
   FProc(document);
 end;
-{$ENDIF}
 
 { TCefDomDocumentRef }
 
@@ -7085,13 +7064,11 @@ begin
   PCefDomNode(FData)^.add_event_listener(PCefDomNode(FData), @et, listener.Wrap, Ord(useCapture));
 end;
 
-{$IFDEF DELPHI12_UP}
 procedure TCefDomNodeRef.AddEventListenerProc(const eventType: ustring; useCapture: Boolean;
   const proc: TCefFastDomEventListenerProc);
 begin
   AddEventListener(eventType, useCapture, TCefFastDomEventListener.Create(proc) as ICefDomEventListener);
 end;
-{$ENDIF}
 
 function TCefDomNodeRef.GetAsMarkup: ustring;
 begin
@@ -7292,7 +7269,6 @@ end;
 
 { TCefFastDomEventListener }
 
-{$IFDEF DELPHI12_UP}
 constructor TCefFastDomEventListener.Create(
   const proc: TCefFastDomEventListenerProc);
 begin
@@ -7305,7 +7281,6 @@ begin
   inherited;
   FProc(event);
 end;
-{$ENDIF}
 
 { TCefResponseRef }
 

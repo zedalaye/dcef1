@@ -4,7 +4,7 @@ object MainForm: TMainForm
   ActiveControl = edAddress
   Caption = 'Chromium Embedded'
   ClientHeight = 439
-  ClientWidth = 786
+  ClientWidth = 713
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -15,7 +15,7 @@ object MainForm: TMainForm
   OldCreateOrder = False
   OnCreate = FormCreate
   DesignSize = (
-    786
+    713
     439)
   PixelsPerInch = 96
   TextHeight = 13
@@ -50,7 +50,7 @@ object MainForm: TMainForm
     Caption = 'R'
   end
   object SpeedButton5: TSpeedButton
-    Left = 763
+    Left = 690
     Top = 0
     Width = 23
     Height = 22
@@ -59,25 +59,25 @@ object MainForm: TMainForm
   end
   object crm: TChromium
     Left = 0
-    Top = 22
-    Width = 786
-    Height = 398
+    Top = 24
+    Width = 713
+    Height = 396
     Align = alBottom
     Anchors = [akLeft, akTop, akRight, akBottom]
     DefaultUrl = 'http://www.google.com'
     TabOrder = 0
     OnAddressChange = crmAddressChange
     OnTitleChange = crmTitleChange
-    OnNavStateChange = crmNavStateChange
     OnLoadStart = crmLoadStart
     OnLoadEnd = crmLoadEnd
     OnDownloadResponse = crmDownloadResponse
     OnStatus = crmStatus
+    ExplicitWidth = 820
   end
   object edAddress: TEdit
     Left = 95
     Top = 0
-    Width = 668
+    Width = 594
     Height = 21
     Anchors = [akLeft, akTop, akRight]
     TabOrder = 1
@@ -87,10 +87,11 @@ object MainForm: TMainForm
   object StatusBar: TStatusBar
     Left = 0
     Top = 420
-    Width = 786
+    Width = 713
     Height = 19
     Panels = <>
     SimplePanel = True
+    ExplicitWidth = 820
   end
   object ActionList: TActionList
     Left = 624
@@ -99,11 +100,13 @@ object MainForm: TMainForm
       Caption = '<-'
       Enabled = False
       OnExecute = actPrevExecute
+      OnUpdate = actPrevUpdate
     end
     object actNext: TAction
       Caption = '->'
       Enabled = False
       OnExecute = actNextExecute
+      OnUpdate = actNextUpdate
     end
     object actHome: TAction
       Caption = 'actHome'
@@ -174,6 +177,7 @@ object MainForm: TMainForm
       end
       object Exit1: TMenuItem
         Caption = 'Exit'
+        ShortCut = 16465
         OnClick = Exit1Click
       end
     end

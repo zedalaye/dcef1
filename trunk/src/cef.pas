@@ -18,7 +18,7 @@ unit cef;
 {$I cef.inc}
 interface
 uses
-Forms, SysUtils,  Classes, Controls, Messages, Windows, ceflib;
+  SysUtils,  Classes, Controls, Messages, Windows, ceflib;
 
 type
   TCustomChromium = class;
@@ -171,7 +171,6 @@ type
     procedure Loaded; override;
     procedure CreateWindowHandle(const Params: TCreateParams); override;
     procedure Resize; override;
-    procedure CMWantSpecialKey(var Msg: TCMWantSpecialKey); message CM_WANTSPECIALKEY;
 
     function doOnBeforeCreated(const parentBrowser: ICefBrowser;
       var windowInfo: TCefWindowInfo; popup: Boolean;
@@ -236,7 +235,7 @@ type
       const host, realm, scheme: ustring; var username, password: ustring): TCefRetval; virtual;
     function doOnStatus(const browser: ICefBrowser; const value: ustring;
       StatusType: TCefHandlerStatusType): TCefRetval; virtual;
-    
+
     property DefaultUrl: ustring read FDefaultUrl write FDefaultUrl;
 
     property OnBeforeCreated: TOnBeforeCreated read FOnBeforeCreated write FOnBeforeCreated;
@@ -427,11 +426,6 @@ begin
 end;
 
 { TCustomChromium }
-
-procedure TCustomChromium.CMWantSpecialKey(var Msg: TCMWantSpecialKey);
-begin
-  Msg.Result := 1;
-end;
 
 constructor TCustomChromium.Create(AOwner: TComponent);
 begin
@@ -808,10 +802,10 @@ begin
     WM_ERASEBKGND:
       if (csDesigning in ComponentState) or (FBrowser = nil) then
         inherited WndProc(Message);
+    CM_WANTSPECIALKEY: Message.Result := 1;
   else
     inherited WndProc(Message);
   end;
- // writeln(Message.Msg);
 end;
 
 { TChromiumFontOptions }
