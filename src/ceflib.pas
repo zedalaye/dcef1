@@ -30,7 +30,11 @@ uses
 {$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   Messages,
 {$ENDIF}
-  SysUtils, Classes, Windows, Graphics;
+  SysUtils, Classes, Windows
+{$IFNDEF FPC}
+  ,Graphics
+{$ENDIF}
+  ;
 
 type
 {$IFDEF UNICODE}
@@ -2272,7 +2276,9 @@ type
     procedure HidePopup;
     procedure Invalidate(dirtyRect: PCefRect);
     function GetImage(typ: TCefPaintElementType; width, height: Integer; buffer: Pointer): Boolean;
+{$IFNDEF FPC}
     function GetBitmap(typ: TCefPaintElementType; Bitmap: TBitmap): Boolean;
+{$ENDIF}
     procedure SendKeyEvent(typ: TCefKeyType; key, modifiers, sysChar, imeChar: Integer);
     procedure SendMouseClickEvent(x, y: Integer; typ: TCefMouseButtonType; mouseUp, clickCount: Integer);
     procedure SendMouseMoveEvent(x, y, mouseLeave: Integer);
@@ -2713,7 +2719,9 @@ type
     procedure HidePopup;
     procedure Invalidate(dirtyRect: PCefRect);
     function GetImage(typ: TCefPaintElementType; width, height: Integer; buffer: Pointer): Boolean;
+{$IFNDEF FPC}
     function GetBitmap(typ: TCefPaintElementType; Bitmap: TBitmap): Boolean;
+{$ENDIF}
     procedure SendKeyEvent(typ: TCefKeyType; key, modifiers, sysChar, imeChar: Integer);
     procedure SendMouseClickEvent(x, y: Integer; typ: TCefMouseButtonType; mouseUp, clickCount: Integer);
     procedure SendMouseMoveEvent(x, y, mouseLeave: Integer);
@@ -4861,6 +4869,7 @@ begin
     Ord(forward), Ord(matchCase), Ord(findNext));
 end;
 
+{$IFNDEF FPC}
 function TCefBrowserRef.GetBitmap(typ: TCefPaintElementType;
   Bitmap: TBitmap): Boolean;
 var
@@ -4888,6 +4897,7 @@ begin
     FreeMem(p);
   end;
 end;
+{$ENDIF}
 
 function TCefBrowserRef.GetFocusedFrame: ICefFrame;
 begin
