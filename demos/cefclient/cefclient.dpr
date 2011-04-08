@@ -458,7 +458,9 @@ const
    '})();';
 
 var
+{$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   Msg      : TMsg;
+{$ENDIF}
   wndClass : TWndClass;
 begin
   CefLoadLibDefault;

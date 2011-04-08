@@ -5,7 +5,7 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, StdCtrls, cef, ceflib, Buttons, ComCtrls, ActnList, Menus;
+  Dialogs, StdCtrls, cef, ceflib, Buttons, ActnList, Menus, ComCtrls;
 
 type
   TMainForm = class(TForm)
@@ -83,13 +83,12 @@ type
     procedure actPrintExecute(Sender: TObject);
     procedure actFileSchemeExecute(Sender: TObject);
     procedure actDomExecute(Sender: TObject);
-    procedure crmNavStateChange(Sender: TCustomChromium;
-      const browser: ICefBrowser; canGoBack, canGoForward: Boolean;
-      out Result: TCefRetval);
     procedure crmDownloadResponse(Sender: TCustomChromium;
       const browser: ICefBrowser; const mimeType, fileName: ustring;
       contentLength: Int64; var handler: ICefDownloadHandler;
       out Result: TCefRetval);
+    procedure actNextUpdate(Sender: TObject);
+    procedure actPrevUpdate(Sender: TObject);
   private
     { Déclarations privées }
     FLoading: Boolean;
@@ -111,7 +110,8 @@ var
   MainForm: TMainForm;
 
 implementation
-uses ceffilescheme;
+uses
+  ceffilescheme;
 
 {$R *.dfm}
 
@@ -121,12 +121,22 @@ begin
      crm.Browser.CloseDevTools;
 end;
 
-{$IFDEF DELPHI12_UP}
 function getpath(const n: ICefDomNode): string;
 begin
   Result := '<' + n.Name + '>';
   if (n.Parent <> nil) then
     Result := getpath(n.Parent) + Result;
+end;
+
+{$IFNDEF DELPHI12_UP}
+procedure mouseeventcallback(const event: ICefDomEvent);
+begin
+  MainForm.caption := getpath(event.Target);
+end;
+
+procedure domvisitorcallback(const doc: ICefDomDocument);
+begin
+  doc.Body.AddEventListenerProc('mouseover', True, mouseeventcallback);
 end;
 {$ENDIF}
 
@@ -140,6 +150,8 @@ begin
           caption := getpath(event.Target);
         end)
   end);
+{$ELSE}
+  crm.Browser.MainFrame.VisitDomProc(domvisitorcallback);
 {$ENDIF}
 end;
 
@@ -207,10 +219,24 @@ begin
     crm.Browser.GoForward;
 end;
 
+procedure TMainForm.actNextUpdate(Sender: TObject);
+begin
+  if crm.Browser <> nil then
+    actNext.Enabled := crm.Browser.CanGoForward else
+    actNext.Enabled := False;
+end;
+
 procedure TMainForm.actPrevExecute(Sender: TObject);
 begin
   if crm.Browser <> nil then
     crm.Browser.GoBack;
+end;
+
+procedure TMainForm.actPrevUpdate(Sender: TObject);
+begin
+  if crm.Browser <> nil then
+    actPrev.Enabled := crm.Browser.CanGoBack else
+    actPrev.Enabled := False;
 end;
 
 procedure TMainForm.actPrintExecute(Sender: TObject);
@@ -290,14 +316,6 @@ procedure TMainForm.crmLoadStart(Sender: TCustomChromium;
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
     FLoading := True;
-end;
-
-procedure TMainForm.crmNavStateChange(Sender: TCustomChromium;
-  const browser: ICefBrowser; canGoBack, canGoForward: Boolean;
-  out Result: TCefRetval);
-begin
-  actPrev.Enabled := canGoBack;
-  actNext.Enabled := canGoForward;
 end;
 
 procedure TMainForm.crmStatus(Sender: TCustomChromium;
