@@ -237,19 +237,12 @@ begin
             urloffset := rect.left + BUTTON_WIDTH * 4;
             hdwp := BeginDeferWindowPos(1);
          		hdwp := DeferWindowPos(hdwp, editWnd, 0, urloffset, 0, rect.right - urloffset, URLBAR_HEIGHT, SWP_NOZORDER);
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-            cw := Get8087CW;
-            Set8087CW($7f);
-{$ENDIF}
             hdwp := DeferWindowPos(hdwp, browsrHwnd, 0, rect.left, rect.top,
               rect.right - rect.left, rect.bottom - rect.top, SWP_NOZORDER);
             EndDeferWindowPos(hdwp);
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-            Set8087CW(cw);
-{$ENDIF}
           end;
           result := DefWindowProc(Wnd, message, wParam, lParam);
-        end
+        end;
      else
        result := DefWindowProc(Wnd, message, wParam, lParam);
      end;
