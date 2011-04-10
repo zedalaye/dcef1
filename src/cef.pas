@@ -808,7 +808,7 @@ begin
     CM_WANTSPECIALKEY, WM_GETDLGCODE:
       if not (TWMKey(Message).CharCode in [VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN]) then
         Message.Result := 1 else
-        Message.Result := 0;
+        inherited WndProc(Message)
   else
     inherited WndProc(Message);
   end;
