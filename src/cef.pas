@@ -805,10 +805,12 @@ begin
     WM_ERASEBKGND:
       if (csDesigning in ComponentState) or (FBrowser = nil) then
         inherited WndProc(Message);
-    CM_WANTSPECIALKEY, WM_GETDLGCODE:
-      if not (TWMKey(Message).CharCode in [VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN]) then
+    CM_WANTSPECIALKEY:
+      if not (TWMKey(Message).CharCode in [VK_LEFT .. VK_DOWN]) then
         Message.Result := 1 else
-        inherited WndProc(Message)
+        inherited WndProc(Message);
+    WM_GETDLGCODE:
+      Message.Result := DLGC_WANTARROWS;
   else
     inherited WndProc(Message);
   end;
