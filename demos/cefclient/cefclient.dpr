@@ -33,8 +33,8 @@ type
     FResponse: TMemoryStream;
     procedure Output(const str: ustring);
   protected
-    function ProcessRequest(const Request: ICefRequest; var MimeType: ustring;
-      var ResponseLength: Integer): Boolean; override;
+    function ProcessRequest(const Request: ICefRequest; var redirectUrl: ustring;
+      const response: ICefresponse; var ResponseLength: Integer): Boolean; override;
     function ReadResponse(DataOut: Pointer; BytesToRead: Integer;
       var BytesRead: Integer): Boolean; override;
   public
@@ -90,9 +90,6 @@ var
   x: Integer;
   strPtr: array[0..MAX_URL_LENGTH-1] of WideChar;
   strLen, urloffset: Integer;
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-  cw: Word;
-{$ENDIF}
 begin
   if Wnd = editWnd then
     case message of
@@ -336,8 +333,8 @@ begin
   inherited;
 end;
 
-function TScheme.ProcessRequest(const Request: ICefRequest;
-  var MimeType: ustring; var ResponseLength: Integer): Boolean;
+function TScheme.ProcessRequest(const Request: ICefRequest; var redirectUrl: ustring;
+  const response: ICefresponse; var ResponseLength: Integer): Boolean;
 begin
   Lock;
   try
@@ -355,7 +352,7 @@ begin
     OutPut('</pre></body>');
     OutPut('</html>');
     FResponse.Seek(0, soFromBeginning);
-    MimeType := 'text/html';
+    response.MimeType := 'text/html';
     ResponseLength := FResponse.Size;
     Result := True;
   finally

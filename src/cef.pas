@@ -46,7 +46,7 @@ type
     const failedUrl: ustring; var errorText: ustring; out Result: TCefRetval) of object;
   TOnBeforeResourceLoad = procedure(Sender: TCustomChromium; const browser: ICefBrowser;
     const request: ICefRequest; var redirectUrl: ustring;
-    var resourceStream: ICefStreamReader; var mimeType: ustring;
+    var resourceStream: ICefStreamReader; const response: ICefResponse;
     loadFlags: Integer; out Result: TCefRetval) of object;
   TOnBeforeMenu = procedure(Sender: TCustomChromium; const browser: ICefBrowser;
     const menuInfo: PCefHandlerMenuInfo; out Result: TCefRetval) of object;
@@ -195,7 +195,7 @@ type
       const failedUrl: ustring; var errorText: ustring): TCefRetval; virtual;
     function doOnBeforeResourceLoad(const browser: ICefBrowser;
       const request: ICefRequest; var redirectUrl: ustring;
-      var resourceStream: ICefStreamReader; var mimeType: ustring;
+      var resourceStream: ICefStreamReader; const response: ICefResponse;
       loadFlags: Integer): TCefRetval; virtual;
     function doOnProtocolExecution(const browser: ICefBrowser;
       const url: ustring; var AllowOsExecution: Boolean): TCefRetval; virtual;
@@ -365,7 +365,7 @@ type
       const failedUrl: ustring; var errorText: ustring): TCefRetval; override;
     function doOnBeforeResourceLoad(const browser: ICefBrowser;
       const request: ICefRequest; var redirectUrl: ustring;
-      var resourceStream: ICefStreamReader; var mimeType: ustring;
+      var resourceStream: ICefStreamReader; const response: ICefResponse;
       loadFlags: Integer): TCefRetval; override;
     function doOnProtocolExecution(const browser: ICefBrowser;
       const url: ustring; var AllowOsExecution: Boolean): TCefRetval; override;
@@ -543,13 +543,13 @@ end;
 
 function TCustomChromium.doOnBeforeResourceLoad(const browser: ICefBrowser;
   const request: ICefRequest; var redirectUrl: ustring;
-  var resourceStream: ICefStreamReader; var mimeType: ustring;
+  var resourceStream: ICefStreamReader; const response: ICefResponse;
   loadFlags: Integer): TCefRetval;
 begin
   Result := RV_CONTINUE;
   if Assigned(FOnBeforeResourceLoad) then
     FOnBeforeResourceLoad(Self, browser, request, redirectUrl, resourceStream,
-      mimeType, loadFlags, Result);
+      response, loadFlags, Result);
 end;
 
 function TCustomChromium.doOnBeforeWindowClose(
@@ -963,12 +963,12 @@ end;
 
 function TCustomChromiumHandler.doOnBeforeResourceLoad(const browser: ICefBrowser;
   const request: ICefRequest; var redirectUrl: ustring;
-  var resourceStream: ICefStreamReader; var mimeType: ustring;
+  var resourceStream: ICefStreamReader; const response: ICefResponse;
   loadFlags: Integer): TCefRetval;
 begin
   if FCrm <> nil then
     Result := FCrm.doOnBeforeResourceLoad(browser, request, redirectUrl,
-      resourceStream, mimeType, loadFlags) else
+      resourceStream, response, loadFlags) else
     Result := RV_CONTINUE;
 end;
 

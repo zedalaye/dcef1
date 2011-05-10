@@ -43,7 +43,7 @@
 			<DCC_DependencyCheckOutputName>..\..\bin\guiclient.exe</DCC_DependencyCheckOutputName>
 			<DCC_ExeOutput>..\..\bin</DCC_ExeOutput>
 			<DCC_MapFile>3</DCC_MapFile>
-			<DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
+			<DCC_Define>DEBUG;madExcept;$(DCC_Define)</DCC_Define>
 		</PropertyGroup>
 		<ItemGroup>
 			<DelphiCompile Include="guiclient.dpr">
