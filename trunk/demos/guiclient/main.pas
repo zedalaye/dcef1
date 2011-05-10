@@ -383,7 +383,6 @@ begin
   MainForm.StatusBar.SimpleText := 'Downloading ... ' + IntToStr(FStream.Position div 1000) + ' Kb';
 end;
 
-
 initialization
   CefRegisterScheme('file', '', True, False, TFileScheme);
 

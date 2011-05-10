@@ -31,8 +31,8 @@ type
     FPath: string;
     FDataStream: TStream;
   protected
-    function ProcessRequest(const Request: ICefRequest; var MimeType: ustring;
-      var ResponseLength: Integer): Boolean; override;
+    function ProcessRequest(const Request: ICefRequest; var redirectUrl: ustring;
+      const response: ICefresponse; var ResponseLength: Integer): Boolean; override;
     function ReadResponse(DataOut: Pointer; BytesToRead: Integer;
       var BytesRead: Integer): Boolean; override;
   public
@@ -235,7 +235,8 @@ begin
 end;
 
 function TFileScheme.ProcessRequest(const Request: ICefRequest;
-  var MimeType: ustring; var ResponseLength: Integer): Boolean;
+  var redirectUrl: ustring; const response: ICefresponse;
+  var ResponseLength: Integer): Boolean;
 var
   rec: TSearchRec;
   reg: TRegistry;
@@ -243,31 +244,31 @@ var
   i: Integer;
   rc: TResourceStream;
 
-procedure OutPut(const str: string);
-{$IFDEF UNICODE}
-var
-  rb: rbstring;
-{$ENDIF}
-begin
-{$IFDEF UNICODE}
-  rb := rbstring(str);
-  FDataStream.Write(rb[1], Length(rb))
-{$ELSE}
-  FDataStream.Write(str[1], Length(str))
-{$ENDIF}
-end;
+  procedure OutPut(const str: string);
+  {$IFDEF UNICODE}
+  var
+    rb: rbstring;
+  {$ENDIF}
+  begin
+  {$IFDEF UNICODE}
+    rb := rbstring(str);
+    FDataStream.Write(rb[1], Length(rb))
+  {$ELSE}
+    FDataStream.Write(str[1], Length(str))
+  {$ENDIF}
+  end;
 
-procedure OutputUTF8(const str: string);
-var
-  rb: rbstring;
-begin
-{$IFDEF UNICODE}
-  rb := utf8string(str);
-{$ELSE}
-  rb := UTF8Encode(str);
-{$ENDIF}
-  FDataStream.Write(rb[1], Length(rb))
-end;
+  procedure OutputUTF8(const str: string);
+  var
+    rb: rbstring;
+  begin
+  {$IFDEF UNICODE}
+    rb := utf8string(str);
+  {$ELSE}
+    rb := UTF8Encode(str);
+  {$ENDIF}
+    FDataStream.Write(rb[1], Length(rb))
+  end;
 
 begin
   Result := True;
@@ -275,6 +276,8 @@ begin
   FPath := ParseFileUrl(Request.Url);
   if FindFirst(FPath, 0, rec) = 0 then
   begin
+    response.Status := 200;
+    response.StatusText := 'OK';
     ResponseLength := rec.Size;
     FindClose(rec);
 
@@ -282,16 +285,18 @@ begin
     try
       reg.RootKey := HKEY_CLASSES_ROOT;
       if reg.OpenKey(ExtractFileExt(FPath), False) then
-        MimeType := reg.ReadString('Content Type');
+        response.MimeType := reg.ReadString('Content Type');
     finally
       reg.Free;
     end;
-    if MimeType = '' then
-      MimeType := 'application/octet-stream';
+    if response.MimeType = '' then
+      response.MimeType := 'application/octet-stream';
     FDataStream := TFileStream.Create(FPath, fmOpenRead);
   end else
   if DirectoryExists(FPath) then
   begin
+    response.Status := 200;
+    response.StatusText := 'OK';
     Items := TObjectList.Create(True);
     try
       FPath := IncludeTrailingPathDelimiter(FPath);
@@ -319,7 +324,7 @@ begin
         OutPut(TFileInfo(Items[i]).Display);
 
       FDataStream.Seek(0, soFromBeginning);
-      MimeType := 'text/html';
+      response.MimeType := 'text/html';
       ResponseLength := FDataStream.Size;
     finally
       Items.Free;
@@ -327,13 +332,16 @@ begin
     Exit;
   end else
   begin
+    response.Status := 404;
+    response.StatusText := 'Not found';
+
     // error
     FDataStream := TMemoryStream.Create;
 
     OutputUTF8('<html><head><meta http-equiv="content-type" content="text/html; '+
       'charset=UTF-8"/></head><body><h1>'+ FPath+'</h1><h2>not found</h2></body></html>');
     ResponseLength := FDataStream.Size;
-    MimeType := 'text/html';
+    response.MimeType := 'text/html';
     FDataStream.Seek(0, soFromBeginning);
   end;
 end;
