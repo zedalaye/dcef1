@@ -675,12 +675,14 @@ type
   );
 
   // Key event modifiers.
-  TCefHandlerKeyEventModifiers = (
-    KEY_SHIFT = 1 shl 0,
-    KEY_CTRL  = 1 shl 1,
-    KEY_ALT   = 1 shl 2,
-    KEY_META  = 1 shl 3
+  TCefHandlerKeyEventModifier = (
+    KEY_SHIFT,
+    KEY_CTRL,
+    KEY_ALT,
+    KEY_META
   );
+
+  TCefHandlerKeyEventModifiers = set of TCefHandlerKeyEventModifier;
 
   // Structure representing a rectangle.
 
@@ -2827,6 +2829,14 @@ type
     procedure OnError(const requester: ICefWebUrlRequest; errorCode: TCefHandlerErrorcode);
   end;
 
+  ICefCookieVisitor = interface(ICefBase)
+  ['{8378CF1B-84AB-4FDB-9B86-34DDABCCC402}']
+    function visit(const name, value, domain, path: ustring; secure, httponly,
+      hasExpires: Boolean; const creation, lastAccess, expires: TCefTime;
+      count, total: Integer; out deleteCookie: Boolean): Boolean;
+  end;
+
+
   TCefBaseOwn = class(TInterfacedObject, ICefBase)
   private
     FData: Pointer;
@@ -3465,7 +3475,6 @@ type
     constructor Create(const method: TTaskMethod{$IFNDEF DELPHI12_UP}; const Browser: ICefBrowser{$ENDIF}); reintroduce;
   end;
 
-
 {$IFDEF DELPHI14_UP}
   TCefRTTIExtension = class(TCefv8HandlerOwn)
   private
@@ -3512,9 +3521,36 @@ type
       const setter: TCefFastV8AccessorSetterProc); reintroduce;
   end;
 
-  ECefException = class(Exception)
-
+  TCefCookieVisitorOwn = class(TCefBaseOwn, ICefCookieVisitor)
+  protected
+    function visit(const name, value, domain, path: ustring; secure, httponly,
+      hasExpires: Boolean; const creation, lastAccess, expires: TCefTime;
+      count, total: Integer; out deleteCookie: Boolean): Boolean; virtual;
+  public
+    constructor Create; virtual;
   end;
+
+  TCefCookieVisitorProc = {$IFDEF DELPHI12_UP} reference to {$ENDIF} function(
+    const name, value, domain, path: ustring; secure, httponly,
+    hasExpires: Boolean; const creation, lastAccess, expires: TCefTime;
+    count, total: Integer; out deleteCookie: Boolean): Boolean;
+
+  TCefFastCookieVisitor = class(TCefCookieVisitorOwn)
+  private
+    FVisitor: TCefCookieVisitorProc;
+  protected
+    function visit(const name, value, domain, path: ustring; secure, httponly,
+      hasExpires: Boolean; const creation, lastAccess, expires: TCefTime;
+      count, total: Integer; out deleteCookie: Boolean): Boolean; override;
+  public
+    constructor Create(const visitor: TCefCookieVisitorProc); reintroduce;
+  end;
+
+
+  ECefException = class(Exception)
+  end;
+
+
 
 procedure CefLoadLibDefault;
 procedure CefLoadLib(const Cache: ustring = ''; const UserAgent: ustring = '';
@@ -4748,6 +4784,21 @@ function cef_v8_accessor_put(self: PCefV8Accessor; const name: PCefString;
 begin
   Result := Ord(TCefV8AccessorOwn(CefGetObject(self)).Put(CefString(name),
     TCefv8ValueRef.UnWrap(obj), TCefv8ValueRef.UnWrap(value)));
+end;
+
+{ cef_cookie_visitor }
+
+function cef_cookie_visitor_visit(self: PCefCookieVisitor; const cookie: PCefCookie;
+  count, total: Integer; deleteCookie: PInteger): Integer; stdcall;
+var
+  delete: Boolean;
+begin
+  delete := False;
+  Result := Ord(TCefCookieVisitorOwn(CefGetObject(self)).visit(CefString(@cookie.name),
+    CefString(@cookie.value), CefString(@cookie.domain), CefString(@cookie.path),
+    cookie.secure, cookie.httponly, cookie.has_expires, cookie.creation, cookie.last_access,
+    cookie.expires, count, total, delete));
+  deleteCookie^ := Ord(delete);
 end;
 
 { TCefBaseOwn }
@@ -8482,6 +8533,37 @@ begin
   if Assigned(FSetter)  then
     Result := FSetter(name, obj, value) else
     Result := False;
+end;
+
+{ TCefCookieVisitorOwn }
+
+constructor TCefCookieVisitorOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefCookieVisitor));
+  PCefCookieVisitor(FData)^.visit := @cef_cookie_visitor_visit;
+end;
+
+function TCefCookieVisitorOwn.visit(const name, value, domain, path: ustring;
+  secure, httponly, hasExpires: Boolean; const creation, lastAccess, expires: TCefTime;
+  count, total: Integer; out deleteCookie: Boolean): Boolean;
+begin
+  Result := True;
+end;
+
+{ TCefFastCookieVisitor }
+
+constructor TCefFastCookieVisitor.Create(const visitor: TCefCookieVisitorProc);
+begin
+  inherited Create;
+  FVisitor := visitor;
+end;
+
+function TCefFastCookieVisitor.visit(const name, value, domain, path: ustring;
+  secure, httponly, hasExpires: Boolean; const creation, lastAccess,
+  expires: TCefTime; count, total: Integer; out deleteCookie: Boolean): Boolean;
+begin
+  Result := FVisitor(name, value, domain, path, secure, httponly, hasExpires,
+    creation, lastAccess, expires, count, total, deleteCookie);
 end;
 
 initialization
