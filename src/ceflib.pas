@@ -1742,7 +1742,7 @@ type
     // |object| is the This() object from V8's AccessorInfo structure. Return true
     // (1) if handled.
 
-    set_: function(self: PCefV8Accessor; const name: PCefString;
+    put: function(self: PCefV8Accessor; const name: PCefString;
       obj: PCefv8Value; value: PCefv8Value): Integer; stdcall;
   end;
 
@@ -2604,6 +2604,12 @@ type
       var retval: ICefV8Value; var exception: ustring): Boolean;
   end;
 
+  ICefV8Accessor = interface(ICefBase)
+    ['{DCA6D4A2-726A-4E24-AA64-5E8C731D868A}']
+    function Get(const name: ustring; const obj: ICefv8Value; out value: ICefv8Value): Boolean;
+    function Put(const name: ustring; const obj: ICefv8Value; const value: ICefv8Value): Boolean;
+  end;
+
   ICefTask = interface(ICefBase)
     ['{0D965470-4A86-47CE-BD39-A8770021AD7E}']
     procedure Execute(threadId: TCefThreadId);
@@ -2980,6 +2986,13 @@ type
     constructor CreateForData(data: Pointer; size: Cardinal);
   end;
 
+
+  TCefFastV8AccessorGetterProc = {$IFDEF DELPHI12_UP} reference to{$ENDIF} function(
+    const name: ustring; const obj: ICefv8Value; out value: ICefv8Value): Boolean;
+
+  TCefFastV8AccessorSetterProc = {$IFDEF DELPHI12_UP}reference to {$ENDIF} function(
+    const name: ustring; const obj, value: ICefv8Value): Boolean;
+
   TCefv8ValueRef = class(TCefBaseRef, ICefv8Value)
   protected
     function IsUndefined: Boolean;
@@ -3026,6 +3039,10 @@ type
     class function CreateDouble(value: Double): ICefv8Value;
     class function CreateString(const str: ustring): ICefv8Value;
     class function CreateObject(const UserData: ICefv8Value): ICefv8Value;
+    class function CreateObjectWithAccessor(const UserData: ICefv8Value; const Accessor: ICefV8Accessor): ICefv8Value;
+    class function CreateObjectWithAccessorProc(const UserData: ICefv8Value;
+      const getter: TCefFastV8AccessorGetterProc;
+      const setter: TCefFastV8AccessorSetterProc): ICefv8Value;
     class function CreateArray: ICefv8Value;
     class function CreateFunction(const name: ustring; const handler: ICefv8Handler): ICefv8Value;
   end;
@@ -3474,6 +3491,26 @@ type
       {$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}; SyncMainThread: Boolean{$ENDIF});
   end;
 {$ENDIF}
+
+  TCefV8AccessorOwn = class(TCefBaseOwn, ICefV8Accessor)
+  protected
+    function Get(const name: ustring; const obj: ICefv8Value; out value: ICefv8Value): Boolean; virtual;
+    function Put(const name: ustring; const obj, value: ICefv8Value): Boolean; virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TCefFastV8Accessor = class(TCefV8AccessorOwn)
+  private
+    FGetter: TCefFastV8AccessorGetterProc;
+    FSetter: TCefFastV8AccessorSetterProc;
+  protected
+    function Get(const name: ustring; const obj: ICefv8Value; out value: ICefv8Value): Boolean; override;
+    function Put(const name: ustring; const obj, value: ICefv8Value): Boolean; override;
+  public
+    constructor Create(const getter: TCefFastV8AccessorGetterProc;
+      const setter: TCefFastV8AccessorSetterProc); reintroduce;
+  end;
 
   ECefException = class(Exception)
 
@@ -4691,6 +4728,26 @@ begin
   TCefWebUrlRequestClientOwn(CefGetObject(self)).OnError(
     TCefWebUrlRequestRef.UnWrap(requester),
     errorCode);
+end;
+
+{ cef_v8_accessor }
+
+function cef_v8_accessor_get(self: PCefV8Accessor; const name: PCefString;
+      obj: PCefv8Value; out retval: PCefv8Value): Integer; stdcall;
+var
+  ret: ICefv8Value;
+begin
+  Result := Ord(TCefV8AccessorOwn(CefGetObject(self)).Get(CefString(name),
+    TCefv8ValueRef.UnWrap(obj), ret));
+  retval := CefGetData(ret);
+end;
+
+
+function cef_v8_accessor_put(self: PCefV8Accessor; const name: PCefString;
+      obj: PCefv8Value; value: PCefv8Value): Integer; stdcall;
+begin
+  Result := Ord(TCefV8AccessorOwn(CefGetObject(self)).Put(CefString(name),
+    TCefv8ValueRef.UnWrap(obj), TCefv8ValueRef.UnWrap(value)));
 end;
 
 { TCefBaseOwn }
@@ -6400,6 +6457,20 @@ end;
 class function TCefv8ValueRef.CreateObject(const UserData: ICefv8Value): ICefv8Value;
 begin
   Result := Create(cef_v8value_create_object(CefGetData(UserData))) as ICefv8Value;
+end;
+
+class function TCefv8ValueRef.CreateObjectWithAccessor(
+  const UserData: ICefv8Value; const Accessor: ICefV8Accessor): ICefv8Value;
+begin
+  Result := Create(cef_v8value_create_object_with_accessor(CefGetData(UserData), CefGetData(Accessor)));
+end;
+
+class function TCefv8ValueRef.CreateObjectWithAccessorProc(
+  const UserData: ICefv8Value; const getter: TCefFastV8AccessorGetterProc;
+  const setter: TCefFastV8AccessorSetterProc): ICefv8Value;
+begin
+  Result := CreateObjectWithAccessor(UserData,
+    TCefFastV8Accessor.Create(getter, setter) as ICefV8Accessor);
 end;
 
 class function TCefv8ValueRef.CreateString(const str: ustring): ICefv8Value;
@@ -8365,6 +8436,53 @@ begin
     Exit(False);
 end;
 {$ENDIF}
+
+{ TCefV8AccessorOwn }
+
+constructor TCefV8AccessorOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefV8Accessor));
+  PCefV8Accessor(FData)^.get  := @cef_v8_accessor_get;
+  PCefV8Accessor(FData)^.put := @cef_v8_accessor_put;
+end;
+
+function TCefV8AccessorOwn.Get(const name: ustring; const obj: ICefv8Value;
+  out value: ICefv8Value): Boolean;
+begin
+  Result := False;
+end;
+
+function TCefV8AccessorOwn.Put(const name: ustring; const obj,
+  value: ICefv8Value): Boolean;
+begin
+  Result := False;
+end;
+
+{ TCefFastV8Accessor }
+
+constructor TCefFastV8Accessor.Create(
+  const getter: TCefFastV8AccessorGetterProc;
+  const setter: TCefFastV8AccessorSetterProc);
+begin
+  FGetter := getter;
+  FSetter := setter;
+end;
+
+function TCefFastV8Accessor.Get(const name: ustring; const obj: ICefv8Value;
+  out value: ICefv8Value): Boolean;
+begin
+  if Assigned(FGetter)  then
+    Result := FGetter(name, obj, value) else
+    Result := False;
+end;
+
+function TCefFastV8Accessor.Put(const name: ustring; const obj,
+  value: ICefv8Value): Boolean;
+begin
+  if Assigned(FSetter)  then
+    Result := FSetter(name, obj, value) else
+    Result := False;
+end;
 
 initialization
   IsMultiThread := True;
