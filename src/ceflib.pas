@@ -2832,7 +2832,7 @@ type
   ICefCookieVisitor = interface(ICefBase)
   ['{8378CF1B-84AB-4FDB-9B86-34DDABCCC402}']
     function visit(const name, value, domain, path: ustring; secure, httponly,
-      hasExpires: Boolean; const creation, lastAccess, expires: TCefTime;
+      hasExpires: Boolean; const creation, lastAccess, expires: TDateTime;
       count, total: Integer; out deleteCookie: Boolean): Boolean;
   end;
 
@@ -3524,7 +3524,7 @@ type
   TCefCookieVisitorOwn = class(TCefBaseOwn, ICefCookieVisitor)
   protected
     function visit(const name, value, domain, path: ustring; secure, httponly,
-      hasExpires: Boolean; const creation, lastAccess, expires: TCefTime;
+      hasExpires: Boolean; const creation, lastAccess, expires: TDateTime;
       count, total: Integer; out deleteCookie: Boolean): Boolean; virtual;
   public
     constructor Create; virtual;
@@ -3532,7 +3532,7 @@ type
 
   TCefCookieVisitorProc = {$IFDEF DELPHI12_UP} reference to {$ENDIF} function(
     const name, value, domain, path: ustring; secure, httponly,
-    hasExpires: Boolean; const creation, lastAccess, expires: TCefTime;
+    hasExpires: Boolean; const creation, lastAccess, expires: TDateTime;
     count, total: Integer; out deleteCookie: Boolean): Boolean;
 
   TCefFastCookieVisitor = class(TCefCookieVisitorOwn)
@@ -3540,7 +3540,7 @@ type
     FVisitor: TCefCookieVisitorProc;
   protected
     function visit(const name, value, domain, path: ustring; secure, httponly,
-      hasExpires: Boolean; const creation, lastAccess, expires: TCefTime;
+      hasExpires: Boolean; const creation, lastAccess, expires: TDateTime;
       count, total: Integer; out deleteCookie: Boolean): Boolean; override;
   public
     constructor Create(const visitor: TCefCookieVisitorProc); reintroduce;
@@ -3585,6 +3585,16 @@ procedure CefPostDelayedTask(ThreadId: TCefThreadId; const task: ICefTask; delay
 function CefGetData(const i: ICefBase): Pointer;
 function CefParseUrl(const url: ustring; var parts: TCefUrlParts): Boolean;
 
+function CefVisitAllCookies(const visitor: ICefCookieVisitor): Boolean; overload;
+function CefVisitAllCookies(const visitor: TCefCookieVisitorProc): Boolean; overload;
+function CefVisitUrlCookies(const url: ustring; includeHttpOnly: Boolean; const visitor: ICefCookieVisitor): Boolean; overload;
+function CefVisitUrlCookies(const url: ustring; includeHttpOnly: Boolean; const visitor: TCefCookieVisitorProc): Boolean; overload;
+
+// must be run on the io thread
+function CefSetCookie(const url: ustring; const name, value, domain, path: ustring; secure, httponly,
+    hasExpires: Boolean; const creation, lastAccess, expires: TDateTime): Boolean;
+function CefDeleteCookies(const url, cookieName: ustring): Boolean;
+
 var
   CefLibrary: string = 'libcef.dll';
   CefCache: ustring = '';
@@ -3596,6 +3606,14 @@ var
   CefExtraPluginPaths: ustring = '';
 
 implementation
+
+function TzSpecificLocalTimeToSystemTime(
+  lpTimeZoneInformation: PTimeZoneInformation;
+  lpLocalTime, lpUniversalTime: PSystemTime): BOOL; stdcall; external 'kernel32.dll';
+
+function SystemTimeToTzSpecificLocalTime(
+  lpTimeZoneInformation: PTimeZoneInformation;
+  lpUniversalTime, lpLocalTime: PSystemTime): BOOL; stdcall; external 'kernel32.dll';
 
 type
   TSHSyncProcessRequest = class
@@ -4034,6 +4052,102 @@ begin
   FillChar(parts, sizeof(parts), 0);
   u := CefString(url);
   Result := cef_parse_url(@u, parts) <> 0;
+end;
+
+function CefTimeToSystemTime(const dt: TCefTime): TSystemTime;
+begin
+  Result.wYear := dt.year;
+  Result.wMonth := dt.month;
+  Result.wDayOfWeek := dt.day_of_week;
+  Result.wDay := dt.day_of_month;
+  Result.wHour := dt.hour;
+  Result.wMinute := dt.minute;
+  Result.wSecond := dt.second;
+  Result.wMilliseconds := dt.millisecond;
+end;
+
+function SystemTimeToCefTime(const dt: TSystemTime): TCefTime;
+begin
+  Result.year := dt.wYear;
+  Result.month := dt.wMonth;
+  Result.day_of_week := dt.wDayOfWeek;
+  Result.day_of_month := dt.wDay;
+  Result.hour := dt.wHour;
+  Result.minute := dt.wMinute;
+  Result.second := dt.wSecond;
+  Result.millisecond := dt.wMilliseconds;
+end;
+
+function CefTimeToDateTime(const dt: TCefTime): TDateTime;
+var
+  st: TSystemTime;
+begin
+  st := CefTimeToSystemTime(dt);
+  SystemTimeToTzSpecificLocalTime(nil, @st, @st);
+  Result := SystemTimeToDateTime(st);
+end;
+
+function DateTimeToCefTime(dt: TDateTime): TCefTime;
+var
+  st: TSystemTime;
+begin
+  DateTimeToSystemTime(dt, st);
+  TzSpecificLocalTimeToSystemTime(nil, @st, @st);
+  Result := SystemTimeToCefTime(st);
+end;
+
+function CefVisitAllCookies(const visitor: ICefCookieVisitor): Boolean;
+begin
+  Result := cef_visit_all_cookies(CefGetData(visitor)) <> 0;
+end;
+
+function CefVisitAllCookies(const visitor: TCefCookieVisitorProc): Boolean;
+begin
+  Result := CefVisitAllCookies(TCefFastCookieVisitor.Create(visitor) as ICefCookieVisitor)
+end;
+
+function CefVisitUrlCookies(const url: ustring; includeHttpOnly: Boolean; const visitor: ICefCookieVisitor): Boolean;
+var
+  str: TCefString;
+begin
+  str := CefString(url);
+  Result := cef_visit_url_cookies(@str, Ord(includeHttpOnly), CefGetData(visitor)) <> 0;
+end;
+
+function CefVisitUrlCookies(const url: ustring; includeHttpOnly: Boolean; const visitor: TCefCookieVisitorProc): Boolean;
+begin
+  Result := CefVisitUrlCookies(url, includeHttpOnly, TCefFastCookieVisitor.Create(visitor) as ICefCookieVisitor);
+end;
+
+function CefSetCookie(const url: ustring; const name, value, domain, path: ustring; secure, httponly,
+  hasExpires: Boolean; const creation, lastAccess, expires: TDateTime): Boolean;
+var
+  str: TCefString;
+  cook: TCefCookie;
+begin
+  str := CefString(url);
+  cook.name := CefString(name);
+  cook.value := CefString(value);
+  cook.domain := CefString(domain);
+  cook.path := CefString(path);
+  cook.secure := secure;
+  cook.httponly := httponly;
+  cook.creation := DateTimeToCefTime(creation);
+  cook.last_access := DateTimeToCefTime(lastAccess);
+  cook.has_expires := hasExpires;
+  if hasExpires then
+    cook.expires := DateTimeToCefTime(expires) else
+    FillChar(cook.expires, SizeOf(TCefTime), 0);
+  Result := cef_set_cookie(@str, @cook) <> 0;
+end;
+
+function CefDeleteCookies(const url, cookieName: ustring): Boolean;
+var
+  u, c: TCefString;
+begin
+  u := CefString(url);
+  c := CefString(cookieName);
+  Result := cef_delete_cookies(@u, @c) <> 0;
 end;
 
 { cef_base }
@@ -4792,12 +4906,16 @@ function cef_cookie_visitor_visit(self: PCefCookieVisitor; const cookie: PCefCoo
   count, total: Integer; deleteCookie: PInteger): Integer; stdcall;
 var
   delete: Boolean;
+  exp: TDateTime;
 begin
   delete := False;
+  if cookie.has_expires then
+    exp := CefTimeToDateTime(cookie.expires) else
+    exp := 0;
   Result := Ord(TCefCookieVisitorOwn(CefGetObject(self)).visit(CefString(@cookie.name),
     CefString(@cookie.value), CefString(@cookie.domain), CefString(@cookie.path),
-    cookie.secure, cookie.httponly, cookie.has_expires, cookie.creation, cookie.last_access,
-    cookie.expires, count, total, delete));
+    cookie.secure, cookie.httponly, cookie.has_expires, CefTimeToDateTime(cookie.creation),
+    CefTimeToDateTime(cookie.last_access), exp, count, total, delete));
   deleteCookie^ := Ord(delete);
 end;
 
@@ -8544,7 +8662,7 @@ begin
 end;
 
 function TCefCookieVisitorOwn.visit(const name, value, domain, path: ustring;
-  secure, httponly, hasExpires: Boolean; const creation, lastAccess, expires: TCefTime;
+  secure, httponly, hasExpires: Boolean; const creation, lastAccess, expires: TDateTime;
   count, total: Integer; out deleteCookie: Boolean): Boolean;
 begin
   Result := True;
@@ -8560,7 +8678,7 @@ end;
 
 function TCefFastCookieVisitor.visit(const name, value, domain, path: ustring;
   secure, httponly, hasExpires: Boolean; const creation, lastAccess,
-  expires: TCefTime; count, total: Integer; out deleteCookie: Boolean): Boolean;
+  expires: TDateTime; count, total: Integer; out deleteCookie: Boolean): Boolean;
 begin
   Result := FVisitor(name, value, domain, path, secure, httponly, hasExpires,
     creation, lastAccess, expires, count, total, deleteCookie);
