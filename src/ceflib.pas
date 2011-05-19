@@ -2990,10 +2990,10 @@ type
     function Eof: Boolean;
   public
     class function UnWrap(data: Pointer): ICefStreamReader;
-    constructor CreateForFile(const filename: ustring);
-    constructor CreateForCustomStream(const stream: ICefCustomStreamReader);
-    constructor CreateForStream(const stream: TSTream; owned: Boolean);
-    constructor CreateForData(data: Pointer; size: Cardinal);
+    class function CreateForFile(const filename: ustring): ICefStreamReader;
+    class function CreateForCustomStream(const stream: ICefCustomStreamReader): ICefStreamReader;
+    class function CreateForStream(const stream: TSTream; owned: Boolean): ICefStreamReader;
+    class function CreateForData(data: Pointer; size: Cardinal): ICefStreamReader;
   end;
 
 
@@ -3296,8 +3296,9 @@ type
     function MoveToNextAttribute: Boolean;
     function MoveToCarryingElement: Boolean;
   public
-    constructor Create(const stream: ICefStreamReader;
-      encodingType: TCefXmlEncodingType; const URI: ustring); reintroduce; virtual;
+    class function UnWrap(data: Pointer): ICefXmlReader;
+    class function CreateForStream(const stream: ICefStreamReader;
+      encodingType: TCefXmlEncodingType; const URI: ustring): ICefXmlReader;
   end;
 
   TCefZipReaderRef = class(TCefBaseRef, ICefZipReader)
@@ -3315,7 +3316,8 @@ type
     function Tell: LongInt;
     function Eof: Boolean;
   public
-    constructor Create(const stream: ICefStreamReader); reintroduce; virtual;
+    class function UnWrap(data: Pointer): ICefZipReader;
+    class function CreateForStream(const stream: ICefStreamReader): ICefZipReader;
   end;
 
   TCefDomVisitorOwn = class(TCefBaseOwn, ICefDomVisitor)
@@ -5575,9 +5577,12 @@ var
   u, f: TCefString;
 begin
   f := CefString(filename);
-  strm := TCefStreamReaderRef.Create(cef_stream_reader_create_for_file(@f)) as ICefStreamReader;
-  u := CefString(url);
-  PCefFrame(FData)^.load_stream(PCefFrame(FData), strm.Wrap, @u);
+  strm := TCefStreamReaderRef.UnWrap(cef_stream_reader_create_for_file(@f));
+  if strm <> nil then
+  begin
+    u := CefString(url);
+    PCefFrame(FData)^.load_stream(PCefFrame(FData), strm.Wrap, @u);
+  end;
 end;
 
 procedure TCefFrameRef.LoadRequest(const request: ICefRequest);
@@ -6052,29 +6057,29 @@ end;
 
 { TCefStreamReaderRef }
 
-constructor TCefStreamReaderRef.CreateForCustomStream(
-  const stream: ICefCustomStreamReader);
+class function TCefStreamReaderRef.CreateForCustomStream(
+  const stream: ICefCustomStreamReader): ICefStreamReader;
 begin
-  inherited Create(cef_stream_reader_create_for_handler(stream.Wrap))
+  Result := UnWrap(cef_stream_reader_create_for_handler(stream.Wrap))
 end;
 
-constructor TCefStreamReaderRef.CreateForData(data: Pointer; size: Cardinal);
+class function TCefStreamReaderRef.CreateForData(data: Pointer; size: Cardinal): ICefStreamReader;
 begin
-  inherited Create(cef_stream_reader_create_for_data(data, size))
+  Result := UnWrap(cef_stream_reader_create_for_data(data, size))
 end;
 
-constructor TCefStreamReaderRef.CreateForFile(const filename: ustring);
+class function TCefStreamReaderRef.CreateForFile(const filename: ustring): ICefStreamReader;
 var
   f: TCefString;
 begin
   f := CefString(filename);
-  inherited Create(cef_stream_reader_create_for_file(@f))
+  Result := UnWrap(cef_stream_reader_create_for_file(@f))
 end;
 
-constructor TCefStreamReaderRef.CreateForStream(const stream: TSTream;
-  owned: Boolean);
+class function TCefStreamReaderRef.CreateForStream(const stream: TSTream;
+  owned: Boolean): ICefStreamReader;
 begin
-  CreateForCustomStream(TCefCustomStreamReader.Create(stream, owned) as ICefCustomStreamReader);
+  Result := CreateForCustomStream(TCefCustomStreamReader.Create(stream, owned) as ICefCustomStreamReader);
 end;
 
 function TCefStreamReaderRef.Eof: Boolean;
@@ -6591,17 +6596,17 @@ end;
 
 class function TCefv8ValueRef.CreateArray: ICefv8Value;
 begin
-  Result := Create(cef_v8value_create_array) as ICefv8Value;
+  Result := UnWrap(cef_v8value_create_array);
 end;
 
 class function TCefv8ValueRef.CreateBool(value: Boolean): ICefv8Value;
 begin
-  Result := Create(cef_v8value_create_bool(Ord(value))) as ICefv8Value;
+  Result := UnWrap(cef_v8value_create_bool(Ord(value)));
 end;
 
 class function TCefv8ValueRef.CreateDouble(value: Double): ICefv8Value;
 begin
-  Result := Create(cef_v8value_create_double(value)) as ICefv8Value;
+  Result := UnWrap(cef_v8value_create_double(value));
 end;
 
 class function TCefv8ValueRef.CreateFunction(const name: ustring;
@@ -6610,28 +6615,28 @@ var
   n: TCefString;
 begin
   n := CefString(name);
-  Result := Create(cef_v8value_create_function(@n, CefGetData(handler))) as ICefv8Value;
+  Result := UnWrap(cef_v8value_create_function(@n, CefGetData(handler)));
 end;
 
 class function TCefv8ValueRef.CreateInt(value: Integer): ICefv8Value;
 begin
-  Result := Create(cef_v8value_create_int(value)) as ICefv8Value;
+  Result := UnWrap(cef_v8value_create_int(value));
 end;
 
 class function TCefv8ValueRef.CreateNull: ICefv8Value;
 begin
-  Result := Create(cef_v8value_create_null) as ICefv8Value;
+  Result := UnWrap(cef_v8value_create_null);
 end;
 
 class function TCefv8ValueRef.CreateObject(const UserData: ICefv8Value): ICefv8Value;
 begin
-  Result := Create(cef_v8value_create_object(CefGetData(UserData))) as ICefv8Value;
+  Result := UnWrap(cef_v8value_create_object(CefGetData(UserData)));
 end;
 
 class function TCefv8ValueRef.CreateObjectWithAccessor(
   const UserData: ICefv8Value; const Accessor: ICefV8Accessor): ICefv8Value;
 begin
-  Result := Create(cef_v8value_create_object_with_accessor(CefGetData(UserData), CefGetData(Accessor)));
+  Result := UnWrap(cef_v8value_create_object_with_accessor(CefGetData(UserData), CefGetData(Accessor)));
 end;
 
 class function TCefv8ValueRef.CreateObjectWithAccessorProc(
@@ -6647,12 +6652,12 @@ var
   s: TCefString;
 begin
   s := CefString(str);
-  Result := Create(cef_v8value_create_string(@s)) as ICefv8Value;
+  Result := UnWrap(cef_v8value_create_string(@s));
 end;
 
 class function TCefv8ValueRef.CreateUndefined: ICefv8Value;
 begin
-  Result := Create(cef_v8value_create_undefined) as ICefv8Value;
+  Result := UnWrap(cef_v8value_create_undefined);
 end;
 
 function TCefv8ValueRef.DeleteValueByIndex(index: Integer): Boolean;
@@ -7067,13 +7072,13 @@ begin
   Result := PCefXmlReader(FData).close(FData) <> 0;
 end;
 
-constructor TCefXmlReaderRef.Create(const stream: ICefStreamReader;
-  encodingType: TCefXmlEncodingType; const URI: ustring);
+class function TCefXmlReaderRef.CreateForStream(const stream: ICefStreamReader;
+  encodingType: TCefXmlEncodingType; const URI: ustring): ICefXmlReader;
 var
   u: TCefString;
 begin
   u := CefString(URI);
-  inherited Create(cef_xml_reader_create(stream.Wrap, encodingType, @u));
+  Result := UnWrap(cef_xml_reader_create(stream.Wrap, encodingType, @u));
 end;
 
 function TCefXmlReaderRef.GetAttributeByIndex(index: Integer): ustring;
@@ -7234,6 +7239,17 @@ begin
   Result := PCefXmlReader(FData).move_to_next_node(FData) <> 0;
 end;
 
+class function TCefXmlReaderRef.UnWrap(data: Pointer): ICefXmlReader;
+begin
+  if data <> nil then
+  begin
+    Result := Create(data) as ICefXmlReader;
+    if Assigned(PCefBase(Data)^.release) then
+      PCefBase(Data)^.release(PCefBase(Data));
+  end else
+    Result := nil;
+end;
+
 { TCefZipReaderRef }
 
 function TCefZipReaderRef.Close: Boolean;
@@ -7246,9 +7262,9 @@ begin
   Result := PCefZipReader(FData).close_file(FData) <> 0;
 end;
 
-constructor TCefZipReaderRef.Create(const stream: ICefStreamReader);
+class function TCefZipReaderRef.CreateForStream(const stream: ICefStreamReader): ICefZipReader;
 begin
-  inherited Create(cef_zip_reader_create(stream.Wrap));
+  Result := UnWrap(cef_zip_reader_create(stream.Wrap));
 end;
 
 function TCefZipReaderRef.Eof: Boolean;
@@ -7307,6 +7323,17 @@ end;
 function TCefZipReaderRef.Tell: LongInt;
 begin
   Result := PCefZipReader(FData).tell(FData);
+end;
+
+class function TCefZipReaderRef.UnWrap(data: Pointer): ICefZipReader;
+begin
+  if data <> nil then
+  begin
+    Result := Create(data) as ICefZipReader;
+    if Assigned(PCefBase(Data)^.release) then
+      PCefBase(Data)^.release(PCefBase(Data));
+  end else
+    Result := nil;
 end;
 
 { TCefFastTask }
