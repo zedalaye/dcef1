@@ -2836,29 +2836,26 @@ type
       count, total: Integer; out deleteCookie: Boolean): Boolean;
   end;
 
-
   TCefBaseOwn = class(TInterfacedObject, ICefBase)
   private
     FData: Pointer;
     FCriticaSection: TRTLCriticalSection;
   protected
-    function Wrap: Pointer;
     procedure Lock;
     procedure Unlock;
   public
+    function Wrap: Pointer;
     constructor CreateData(size: Cardinal); virtual;
     destructor Destroy; override;
-    property Data: Pointer read Wrap;
   end;
 
   TCefBaseRef = class(TInterfacedObject, ICefBase)
   private
     FData: Pointer;
-  protected
-    function Wrap: Pointer;
   public
     constructor Create(data: Pointer); virtual;
     destructor Destroy; override;
+    function Wrap: Pointer;
     class function UnWrap(data: Pointer): ICefBase;
   end;
 
@@ -2946,7 +2943,7 @@ type
     procedure RemoveElements;
   public
     class function UnWrap(data: Pointer): ICefPostData;
-    constructor Create(data: Pointer = nil); override;
+    class function New: ICefPostData;
   end;
 
   TCefPostDataElementRef = class(TCefBaseRef, ICefPostDataElement)
@@ -2960,7 +2957,7 @@ type
     function GetBytes(size: Cardinal; bytes: Pointer): Cardinal;
   public
     class function UnWrap(data: Pointer): ICefPostDataElement;
-    constructor Create(data: Pointer = nil); override;
+    class function New: ICefPostDataElement;
   end;
 
   TCefRequestRef = class(TCefBaseRef, ICefRequest)
@@ -2979,7 +2976,7 @@ type
     procedure SetFirstPartyForCookies(const url: ustring);
   public
     class function UnWrap(data: Pointer): ICefRequest;
-    constructor Create(data: Pointer = nil); override;
+    class function New: ICefRequest;
   end;
 
   TCefStreamReaderRef = class(TCefBaseRef, ICefStreamReader)
@@ -3548,11 +3545,8 @@ type
     constructor Create(const visitor: TCefCookieVisitorProc); reintroduce;
   end;
 
-
   ECefException = class(Exception)
   end;
-
-
 
 procedure CefLoadLibDefault;
 procedure CefLoadLib(const Cache: ustring = ''; const UserAgent: ustring = '';
@@ -3747,12 +3741,12 @@ var
   cef_string_userfree_free: procedure(str: PCefStringUserFree); cdecl;
 
 // Convenience macros for copying values.
-function cef_string_wide_copy(const src: PWideChar; src_len: Cardinal;  output: PCefStringWide): Integer; //inline;
+function cef_string_wide_copy(const src: PWideChar; src_len: Cardinal;  output: PCefStringWide): Integer;
 begin
   Result := cef_string_wide_set(src, src_len, output, ord(True))
 end;
 
-function cef_string_utf8_copy(const src: PAnsiChar; src_len: Cardinal; output: PCefStringUtf8): Integer; //inline;
+function cef_string_utf8_copy(const src: PAnsiChar; src_len: Cardinal; output: PCefStringUtf8): Integer;
 begin
   Result := cef_string_utf8_set(src, src_len, output, ord(True))
 end;
@@ -4034,14 +4028,14 @@ var
   // only be called from the thread that created the object.
   cef_zip_reader_create: function(stream: PCefStreamReader): PCefZipReader; cdecl;
 
-function CefGetData(const i: ICefBase): Pointer;
+function CefGetData(const i: ICefBase): Pointer; {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF}
 begin
   if i <> nil then
     Result := i.Wrap else
     Result := nil;
 end;
 
-function CefGetObject(ptr: Pointer): TObject;
+function CefGetObject(ptr: Pointer): TObject; {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF}
 begin
   Dec(PByte(ptr), SizeOf(Pointer));
   Result := TObject(PPointer(ptr)^);
@@ -4685,7 +4679,7 @@ end;
 function cef_scheme_handler_factory_create(self: PCefSchemeHandlerFactory): PCefSchemeHandler; stdcall;
 begin
   with TCefSchemeHandlerFactoryOwn(CefGetObject(self)) do
-    Result := New.Wrap;
+    Result := CefGetData(New);
 end;
 
 { cef_scheme_handler }
@@ -5233,9 +5227,8 @@ end;
 
 constructor TCefBaseRef.Create(data: Pointer);
 begin
+  Assert(data <> nil);
   FData := data;
-  if Assigned(PCefBase(FData)^.add_ref) then
-    PCefBase(FData)^.add_ref(PCefBase(FData));
 end;
 
 destructor TCefBaseRef.Destroy;
@@ -5248,11 +5241,7 @@ end;
 class function TCefBaseRef.UnWrap(data: Pointer): ICefBase;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefBase;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefBase else
     Result := nil;
 end;
 
@@ -5501,11 +5490,7 @@ end;
 class function TCefBrowserRef.UnWrap(data: Pointer): ICefBrowser;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefBrowser;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefBrowser else
     Result := nil;
 end;
 
@@ -5581,13 +5566,13 @@ begin
   if strm <> nil then
   begin
     u := CefString(url);
-    PCefFrame(FData)^.load_stream(PCefFrame(FData), strm.Wrap, @u);
+    PCefFrame(FData)^.load_stream(PCefFrame(FData), CefGetData(strm), @u);
   end;
 end;
 
 procedure TCefFrameRef.LoadRequest(const request: ICefRequest);
 begin
-  PCefFrame(FData)^.load_request(PCefFrame(FData), request.Wrap);
+  PCefFrame(FData)^.load_request(PCefFrame(FData), CefGetData(request));
 end;
 
 procedure TCefFrameRef.LoadStream(const stream: TStream; Owned: Boolean; const url: ustring);
@@ -5596,8 +5581,11 @@ var
   u: TCefString;
 begin
   strm := TCefStreamReaderRef.CreateForStream(stream, Owned) as ICefStreamReader;
-  u := CefString(url);
-  PCefFrame(FData)^.load_stream(PCefFrame(FData), strm.Wrap, @u);
+  if strm  <> nil then
+  begin
+    u := CefString(url);
+    PCefFrame(FData)^.load_stream(PCefFrame(FData), CefGetData(strm), @u);
+  end;
 end;
 
 procedure TCefFrameRef.LoadString(const str, url: ustring);
@@ -5660,11 +5648,7 @@ end;
 class function TCefFrameRef.UnWrap(data: Pointer): ICefFrame;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefFrame;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefFrame else
     Result := nil;
 end;
 
@@ -5741,14 +5725,7 @@ end;
 function TCefPostDataRef.AddElement(
   const element: ICefPostDataElement): Integer;
 begin
-  Result := PCefPostData(FData)^.add_element(PCefPostData(FData), element.Wrap);
-end;
-
-constructor TCefPostDataRef.Create(data: Pointer);
-begin
-  if data <> nil then
-    inherited Create(data) else
-    inherited Create(cef_post_data_create);
+  Result := PCefPostData(FData)^.add_element(PCefPostData(FData), CefGetData(element));
 end;
 
 function TCefPostDataRef.GetCount: Cardinal;
@@ -5761,10 +5738,15 @@ begin
   Result := TCefPostDataElementRef.UnWrap(PCefPostData(FData)^.get_elements(PCefPostData(FData), Index))
 end;
 
+class function TCefPostDataRef.New: ICefPostData;
+begin
+  Result := UnWrap(cef_post_data_create);
+end;
+
 function TCefPostDataRef.RemoveElement(
   const element: ICefPostDataElement): Integer;
 begin
-  Result := PCefPostData(FData)^.remove_element(PCefPostData(FData), element.Wrap);
+  Result := PCefPostData(FData)^.remove_element(PCefPostData(FData), CefGetData(element));
 end;
 
 procedure TCefPostDataRef.RemoveElements;
@@ -5775,22 +5757,11 @@ end;
 class function TCefPostDataRef.UnWrap(data: Pointer): ICefPostData;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefPostData;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefPostData else
     Result := nil;
 end;
 
 { TCefPostDataElementRef }
-
-constructor TCefPostDataElementRef.Create(data: Pointer);
-begin
-  if data <> nil then
-    inherited Create(data) else
-    inherited Create(cef_post_data_element_create);
-end;
 
 function TCefPostDataElementRef.GetBytes(size: Cardinal;
   bytes: Pointer): Cardinal;
@@ -5811,6 +5782,11 @@ end;
 function TCefPostDataElementRef.GetType: TCefPostDataElementType;
 begin
   Result := PCefPostDataElement(FData)^.get_type(PCefPostDataElement(FData));
+end;
+
+class function TCefPostDataElementRef.New: ICefPostDataElement;
+begin
+  Result := UnWrap(cef_post_data_element_create);
 end;
 
 procedure TCefPostDataElementRef.SetToBytes(size: Cardinal; bytes: Pointer);
@@ -5834,11 +5810,7 @@ end;
 class function TCefPostDataElementRef.UnWrap(data: Pointer): ICefPostDataElement;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefPostDataElement;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefPostDataElement else
     Result := nil;
 end;
 
@@ -5967,13 +5939,6 @@ end;
 
 { TCefRequestRef }
 
-constructor TCefRequestRef.Create(data: Pointer);
-begin
-  if data <> nil then
-    inherited Create(data) else
-    inherited Create(cef_request_create);
-end;
-
 function TCefRequestRef.GetFirstPartyForCookies: ustring;
 begin
   Result := CefStringFreeAndGet(PCefRequest(FData).get_first_party_for_cookies(PCefRequest(FData)));
@@ -6002,6 +5967,11 @@ end;
 function TCefRequestRef.GetUrl: ustring;
 begin
   Result := CefStringFreeAndGet(PCefRequest(FData)^.get_url(PCefRequest(FData)))
+end;
+
+class function TCefRequestRef.New: ICefRequest;
+begin
+  Result := UnWrap(cef_request_create);
 end;
 
 procedure TCefRequestRef.SetFirstPartyForCookies(const url: ustring);
@@ -6033,7 +6003,7 @@ end;
 procedure TCefRequestRef.SetPostData(const value: ICefPostData);
 begin
   if value <> nil then
-    PCefRequest(FData)^.set_post_data(PCefRequest(FData), value.Wrap);
+    PCefRequest(FData)^.set_post_data(PCefRequest(FData), CefGetData(value));
 end;
 
 procedure TCefRequestRef.SetUrl(const value: ustring);
@@ -6047,11 +6017,7 @@ end;
 class function TCefRequestRef.UnWrap(data: Pointer): ICefRequest;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefRequest;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefRequest else
     Result := nil;
 end;
 
@@ -6060,7 +6026,7 @@ end;
 class function TCefStreamReaderRef.CreateForCustomStream(
   const stream: ICefCustomStreamReader): ICefStreamReader;
 begin
-  Result := UnWrap(cef_stream_reader_create_for_handler(stream.Wrap))
+  Result := UnWrap(cef_stream_reader_create_for_handler(CefGetData(stream)))
 end;
 
 class function TCefStreamReaderRef.CreateForData(data: Pointer; size: Cardinal): ICefStreamReader;
@@ -6105,11 +6071,7 @@ end;
 class function TCefStreamReaderRef.UnWrap(data: Pointer): ICefStreamReader;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefStreamReader;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefStreamReader else
     Result := nil;
 end;
 
@@ -6424,25 +6386,16 @@ end;
 
 function CefString(const str: ustring): TCefString;
 begin
-//  FillChar(Result, SizeOf(Result), 0);
-//  cef_string_to_utf16(PWideChar(str), Length(str), @Result);
   Result.str := PChar16(PWideChar(str));
   Result.length := Length(str);
   Result.dtor := nil;
 end;
 
-function CefString(const str: PCefString): ustring; overload;
-//var
-//  w: TCefStringWide;
+function CefString(const str: PCefString): ustring;
 begin
   if str <> nil then
     SetString(Result, str.str, str.length) else
     Result := '';
-//  FillChar(w, SizeOf(w), 0);
-//  if (str <> nil) then
-//    cef_string_to_wide(str.str, str.length, @w);
-//  Result := w.str;
-//  cef_string_wide_clear(@w);
 end;
 
 procedure _free_string(str: PChar16); stdcall;
@@ -6507,7 +6460,7 @@ begin
     @s,
     @h,
     Ord(isStandard),
-    (TCefSchemeHandlerFactoryOwn.Create(handler, SyncMainThread) as ICefBase).Wrap) <> 0;
+    CefGetData(TCefSchemeHandlerFactoryOwn.Create(handler, SyncMainThread) as ICefBase)) <> 0;
 end;
 
 function CefRegisterExtension(const name, code: ustring;
@@ -6518,7 +6471,7 @@ begin
   CefLoadLibDefault;
   n := CefString(name);
   c := CefString(code);
-  Result := cef_register_extension(@n, @c, handler.Wrap) <> 0;
+  Result := cef_register_extension(@n, @c, CefGetData(handler)) <> 0;
 end;
 
 function CefCurrentlyOn(ThreadId: TCefThreadId): Boolean;
@@ -6528,12 +6481,12 @@ end;
 
 procedure CefPostTask(ThreadId: TCefThreadId; const task: ICefTask);
 begin
-  cef_post_task(ThreadId, task.Wrap);
+  cef_post_task(ThreadId, CefGetData(task));
 end;
 
 procedure CefPostDelayedTask(ThreadId: TCefThreadId; const task: ICefTask; delayMs: Integer);
 begin
-  cef_post_delayed_task(ThreadId, task.Wrap, delayMs);
+  cef_post_delayed_task(ThreadId, CefGetData(task), delayMs);
 end;
 
 { TCefSchemeHandlerFactoryOwn }
@@ -6844,7 +6797,7 @@ end;
 
 function TCefv8ValueRef.IsSame(const that: ICefv8Value): Boolean;
 begin
-  Result := PCefV8Value(FData)^.is_same(PCefV8Value(FData), that.Wrap) <> 0;
+  Result := PCefV8Value(FData)^.is_same(PCefV8Value(FData), CefGetData(that)) <> 0;
 end;
 
 function TCefv8ValueRef.IsString: Boolean;
@@ -6884,11 +6837,7 @@ end;
 class function TCefv8ValueRef.UnWrap(data: Pointer): ICefv8Value;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefv8Value;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefv8Value else
     Result := nil;
 end;
 
@@ -6940,11 +6889,7 @@ end;
 class function TCefv8HandlerRef.UnWrap(data: Pointer): ICefv8Handler;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefv8Handler;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefv8Handler else
     Result := nil;
 end;
 
@@ -7078,7 +7023,7 @@ var
   u: TCefString;
 begin
   u := CefString(URI);
-  Result := UnWrap(cef_xml_reader_create(stream.Wrap, encodingType, @u));
+  Result := UnWrap(cef_xml_reader_create(CefGetData(stream), encodingType, @u));
 end;
 
 function TCefXmlReaderRef.GetAttributeByIndex(index: Integer): ustring;
@@ -7242,11 +7187,7 @@ end;
 class function TCefXmlReaderRef.UnWrap(data: Pointer): ICefXmlReader;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefXmlReader;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefXmlReader else
     Result := nil;
 end;
 
@@ -7264,7 +7205,7 @@ end;
 
 class function TCefZipReaderRef.CreateForStream(const stream: ICefStreamReader): ICefZipReader;
 begin
-  Result := UnWrap(cef_zip_reader_create(stream.Wrap));
+  Result := UnWrap(cef_zip_reader_create(CefGetData(stream)));
 end;
 
 function TCefZipReaderRef.Eof: Boolean;
@@ -7328,11 +7269,7 @@ end;
 class function TCefZipReaderRef.UnWrap(data: Pointer): ICefZipReader;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefZipReader;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefZipReader else
     Result := nil;
 end;
 
@@ -7427,11 +7364,7 @@ end;
 class function TCefv8ContextRef.UnWrap(data: Pointer): ICefv8Context;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefv8Context;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefv8Context else
     Result := nil;
 end;
 
@@ -7553,11 +7486,7 @@ end;
 class function TCefDomDocumentRef.UnWrap(data: Pointer): ICefDomDocument;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefDomDocument;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefDomDocument else
     Result := nil;
 end;
 
@@ -7569,7 +7498,7 @@ var
   et: TCefString;
 begin
   et := CefString(eventType);
-  PCefDomNode(FData)^.add_event_listener(PCefDomNode(FData), @et, listener.Wrap, Ord(useCapture));
+  PCefDomNode(FData)^.add_event_listener(PCefDomNode(FData), @et, CefGetData(listener), Ord(useCapture));
 end;
 
 procedure TCefDomNodeRef.AddEventListenerProc(const eventType: ustring; useCapture: Boolean;
@@ -7676,7 +7605,7 @@ end;
 
 function TCefDomNodeRef.IsSame(const that: ICefDomNode): Boolean;
 begin
-  Result := PCefDomNode(FData)^.is_same(PCefDomNode(FData), that.Wrap) <> 0;
+  Result := PCefDomNode(FData)^.is_same(PCefDomNode(FData), CefGetData(that)) <> 0;
 end;
 
 function TCefDomNodeRef.IsText: Boolean;
@@ -7705,11 +7634,7 @@ end;
 class function TCefDomNodeRef.UnWrap(data: Pointer): ICefDomNode;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefDomNode;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefDomNode else
     Result := nil;
 end;
 
@@ -7772,11 +7697,7 @@ end;
 class function TCefDomEventRef.UnWrap(data: Pointer): ICefDomEvent;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefDomEvent;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefDomEvent else
     Result := nil;
 end;
 
@@ -7854,11 +7775,7 @@ end;
 class function TCefResponseRef.UnWrap(data: Pointer): ICefResponse;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefResponse;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefResponse else
     Result := nil;
 end;
 
@@ -7922,7 +7839,7 @@ end;
 class function TCefWebUrlRequestRef.New(const request: ICefRequest;
   const client: ICefWebUrlRequestClient): ICefWebUrlRequest;
 begin
-  Result := UnWrap(cef_web_urlrequest_create(request.Wrap, client.Wrap));
+  Result := UnWrap(cef_web_urlrequest_create(CefGetData(request), CefGetData(client)));
 end;
 
 function TCefWebUrlRequestRef.GetState: TCefWebUrlRequestState;
@@ -7933,11 +7850,7 @@ end;
 class function TCefWebUrlRequestRef.UnWrap(data: Pointer): ICefWebUrlRequest;
 begin
   if data <> nil then
-  begin
-    Result := Create(data) as ICefWebUrlRequest;
-    if Assigned(PCefBase(Data)^.release) then
-      PCefBase(Data)^.release(PCefBase(Data));
-  end else
+    Result := Create(data) as ICefWebUrlRequest else
     Result := nil;
 end;
 
