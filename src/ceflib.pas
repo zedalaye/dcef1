@@ -534,24 +534,23 @@ const
 
 type
   // V8 access control values.
-  TCefV8AccessControl = (
-    V8_ACCESS_CONTROL_DEFAULT,
-    V8_ACCESS_CONTROL_ALL_CAN_READ,
-    V8_ACCESS_CONTROL_ALL_CAN_WRITE,
-    V8_ACCESS_CONTROL_PROHIBITS_OVERWRITING
-  );
-  TCefV8AccessControls = set of TCefV8AccessControl;
+  TCefV8AccessControls = Integer;
+const
+  V8_ACCESS_CONTROL_DEFAULT               = 0;
+  V8_ACCESS_CONTROL_ALL_CAN_READ          = 1;
+  V8_ACCESS_CONTROL_ALL_CAN_WRITE         = 1 shl 1;
+  V8_ACCESS_CONTROL_PROHIBITS_OVERWRITING = 1 shl 2;
 
+type
   // V8 property attribute values.
-  TCefV8PropertyAttribute = (
-    V8_PROPERTY_ATTRIBUTE_NONE,       // Writeable, Enumerable, Configurable
-    V8_PROPERTY_ATTRIBUTE_READONLY,   // Not writeable
-    V8_PROPERTY_ATTRIBUTE_DONTENUM,   // Not enumerable
-    V8_PROPERTY_ATTRIBUTE_DONTDELETE  // Not configurable
-  );
+  TCefV8PropertyAttributes = Integer;
+const
+  V8_PROPERTY_ATTRIBUTE_NONE       = 0;       // Writeable, Enumerable, Configurable
+  V8_PROPERTY_ATTRIBUTE_READONLY   = 1 shl 0;  // Not writeable
+  V8_PROPERTY_ATTRIBUTE_DONTENUM   = 1 shl 1;  // Not enumerable
+  V8_PROPERTY_ATTRIBUTE_DONTDELETE = 1 shl 2;  // Not configurable
 
-  TCefV8PropertyAttributes = set of TCefV8PropertyAttribute;
-
+type
   // Structure representing menu information.
   TCefHandlerMenuInfo = record
     // Values from the cef_handler_menutypebits_t enumeration.
@@ -575,47 +574,49 @@ type
 
   // The TCefHandlerMenuInfo typeFlags value will be a combination of the
   // following values.
-  TCefHandlerMenuTypeBits = (
-    // No node is selected
-    MENUTYPE_NONE = $0,
-    // The top page is selected
-    MENUTYPE_PAGE = $1,
-    // A subframe page is selected
-    MENUTYPE_FRAME = $2,
-    // A link is selected
-    MENUTYPE_LINK = $4,
-    // An image is selected
-    MENUTYPE_IMAGE = $8,
-    // There is a textual or mixed selection that is selected
-    MENUTYPE_SELECTION = $10,
-    // An editable element is selected
-    MENUTYPE_EDITABLE = $20,
-    // A misspelled word is selected
-    MENUTYPE_MISSPELLED_WORD = $40,
-    // A video node is selected
-    MENUTYPE_VIDEO = $80,
-    // A video node is selected
-    MENUTYPE_AUDIO = $100
-  );
+  TCefHandlerMenuTypeBits =  Integer;
+const
+  // No node is selected
+  MENUTYPE_NONE = $0;
+  // The top page is selected
+  MENUTYPE_PAGE = $1;
+  // A subframe page is selected
+  MENUTYPE_FRAME = $2;
+  // A link is selected
+  MENUTYPE_LINK = $4;
+  // An image is selected
+  MENUTYPE_IMAGE = $8;
+  // There is a textual or mixed selection that is selected
+  MENUTYPE_SELECTION = $10;
+  // An editable element is selected
+  MENUTYPE_EDITABLE = $20;
+  // A misspelled word is selected
+  MENUTYPE_MISSPELLED_WORD = $40;
+  // A video node is selected
+  MENUTYPE_VIDEO = $80;
+  // A video node is selected
+  MENUTYPE_AUDIO = $100;
 
+type
   // The TCefHandlerMenuInfo editFlags value will be a combination of the
   // following values.
-  TCefHandlerMenuCapabilityBits = (
+  TCefHandlerMenuCapabilityBits = Integer;
+const
     // Values from WebContextMenuData::EditFlags in WebContextMenuData.h
-    MENU_CAN_DO_NONE = $0,
-    MENU_CAN_UNDO = $1,
-    MENU_CAN_REDO = $2,
-    MENU_CAN_CUT = $4,
-    MENU_CAN_COPY = $8,
-    MENU_CAN_PASTE = $10,
-    MENU_CAN_DELETE = $20,
-    MENU_CAN_SELECT_ALL = $40,
-    MENU_CAN_TRANSLATE = $80,
+    MENU_CAN_DO_NONE = $0;
+    MENU_CAN_UNDO = $1;
+    MENU_CAN_REDO = $2;
+    MENU_CAN_CUT = $4;
+    MENU_CAN_COPY = $8;
+    MENU_CAN_PASTE = $10;
+    MENU_CAN_DELETE = $20;
+    MENU_CAN_SELECT_ALL = $40;
+    MENU_CAN_TRANSLATE = $80;
     // Values unique to CEF
-    MENU_CAN_GO_FORWARD = $10000000,
-    MENU_CAN_GO_BACK = $20000000
-  );
+    MENU_CAN_GO_FORWARD = $10000000;
+    MENU_CAN_GO_BACK = $20000000;
 
+type
   // Supported menu ID values.
   TCefHandlerMenuId = (
     MENU_ID_NAV_BACK = 10,
@@ -646,16 +647,19 @@ type
     PDE_TYPE_FILE
   );
 
-  TCefWebUrlRequestFlags = (
-    WUR_FLAG_NONE = 0,
-    WUR_FLAG_SKIP_CACHE = $1,
-    WUR_FLAG_ALLOW_CACHED_CREDENTIALS = $2,
-    WUR_FLAG_ALLOW_COOKIES = $4,
-    WUR_FLAG_REPORT_UPLOAD_PROGRESS = $8,
-    WUR_FLAG_REPORT_LOAD_TIMING = $10,
-    WUR_FLAG_REPORT_RAW_HEADERS = $20
-  );
 
+type
+  TCefWebUrlRequestFlags = Integer;
+const
+    WUR_FLAG_NONE = 0;
+    WUR_FLAG_SKIP_CACHE = $1;
+    WUR_FLAG_ALLOW_CACHED_CREDENTIALS = $2;
+    WUR_FLAG_ALLOW_COOKIES = $4;
+    WUR_FLAG_REPORT_UPLOAD_PROGRESS = $8;
+    WUR_FLAG_REPORT_LOAD_TIMING = $10;
+    WUR_FLAG_REPORT_RAW_HEADERS = $20;
+
+type
   TCefWebUrlRequestState = (
     WUR_STATE_UNSENT = 0,
     WUR_STATE_STARTED = 1,
@@ -675,17 +679,15 @@ type
   );
 
   // Key event modifiers.
-  TCefHandlerKeyEventModifier = (
-    KEY_SHIFT,
-    KEY_CTRL,
-    KEY_ALT,
-    KEY_META
-  );
+  TCefHandlerKeyEventModifiers = Integer;
+const
+  KEY_SHIFT = 1 shl 0;
+  KEY_CTRL  = 1 shl 1;
+  KEY_ALT   = 1 shl 2;
+  KEY_META  = 1 shl 3;
 
-  TCefHandlerKeyEventModifiers = set of TCefHandlerKeyEventModifier;
-
+type
   // Structure representing a rectangle.
-
   PCefRect = ^TCefRect;
   TCefRect = record
     x: Integer;
@@ -813,29 +815,30 @@ type
   );
 
   // DOM event category flags.
-  TCefDomEventCategory = (
-    DOM_EVENT_CATEGORY_UNKNOWN = $0,
-    DOM_EVENT_CATEGORY_UI = $1,
-    DOM_EVENT_CATEGORY_MOUSE = $2,
-    DOM_EVENT_CATEGORY_MUTATION = $4,
-    DOM_EVENT_CATEGORY_KEYBOARD = $8,
-    DOM_EVENT_CATEGORY_TEXT = $10,
-    DOM_EVENT_CATEGORY_COMPOSITION = $20,
-    DOM_EVENT_CATEGORY_DRAG = $40,
-    DOM_EVENT_CATEGORY_CLIPBOARD = $80,
-    DOM_EVENT_CATEGORY_MESSAGE = $100,
-    DOM_EVENT_CATEGORY_WHEEL = $200,
-    DOM_EVENT_CATEGORY_BEFORE_TEXT_INSERTED = $400,
-    DOM_EVENT_CATEGORY_OVERFLOW = $800,
-    DOM_EVENT_CATEGORY_PAGE_TRANSITION = $1000,
-    DOM_EVENT_CATEGORY_POPSTATE = $2000,
-    DOM_EVENT_CATEGORY_PROGRESS = $4000,
-    DOM_EVENT_CATEGORY_XMLHTTPREQUEST_PROGRESS = $8000,
-    DOM_EVENT_CATEGORY_WEBKIT_ANIMATION = $10000,
-    DOM_EVENT_CATEGORY_WEBKIT_TRANSITION = $20000,
-    DOM_EVENT_CATEGORY_BEFORE_LOAD = $40000
-  );
+  TCefDomEventCategory = Integer;
+const
+  DOM_EVENT_CATEGORY_UNKNOWN = $0;
+  DOM_EVENT_CATEGORY_UI = $1;
+  DOM_EVENT_CATEGORY_MOUSE = $2;
+  DOM_EVENT_CATEGORY_MUTATION = $4;
+  DOM_EVENT_CATEGORY_KEYBOARD = $8;
+  DOM_EVENT_CATEGORY_TEXT = $10;
+  DOM_EVENT_CATEGORY_COMPOSITION = $20;
+  DOM_EVENT_CATEGORY_DRAG = $40;
+  DOM_EVENT_CATEGORY_CLIPBOARD = $80;
+  DOM_EVENT_CATEGORY_MESSAGE = $100;
+  DOM_EVENT_CATEGORY_WHEEL = $200;
+  DOM_EVENT_CATEGORY_BEFORE_TEXT_INSERTED = $400;
+  DOM_EVENT_CATEGORY_OVERFLOW = $800;
+  DOM_EVENT_CATEGORY_PAGE_TRANSITION = $1000;
+  DOM_EVENT_CATEGORY_POPSTATE = $2000;
+  DOM_EVENT_CATEGORY_PROGRESS = $4000;
+  DOM_EVENT_CATEGORY_XMLHTTPREQUEST_PROGRESS = $8000;
+  DOM_EVENT_CATEGORY_WEBKIT_ANIMATION = $10000;
+  DOM_EVENT_CATEGORY_WEBKIT_TRANSITION = $20000;
+  DOM_EVENT_CATEGORY_BEFORE_LOAD = $40000;
 
+type
   // DOM event processing phases.
   TCefDomEventPhase = (
     DOM_EVENT_PHASE_UNKNOWN = 0,
