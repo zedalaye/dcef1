@@ -776,16 +776,19 @@ begin
 end;
 
 procedure TCustomChromium.ReCreateBrowser;
+var
+  url: string;
 begin
-  if FBrowserHandle <> 0 then
+  if (FBrowser <> nil) and (FBrowserHandle <> 0) then
   begin
+    url := FBrowser.MainFrame.Url;
     SendMessage(FBrowserHandle, WM_CLOSE, 0, 0);
     SendMessage(FBrowserHandle, WM_DESTROY, 0, 0);
     FBrowserHandle := 0;
     FBrowser := nil;
 
     CreateBrowser;
-    Load(FDefaultUrl);
+    Load(url);
   end;
 end;
 
