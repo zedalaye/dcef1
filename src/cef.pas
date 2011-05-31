@@ -169,6 +169,7 @@ type
     FUserStyleSheetLocation: ustring;
     FDefaultEncoding: ustring;
     FFontOptions: TChromiumFontOptions;
+    procedure CreateBrowser;
   protected
     procedure WndProc(var Message: TMessage); override;
     procedure Loaded; override;
@@ -282,6 +283,7 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure Load(const url: ustring);
+    procedure ReCreateBrowser;
   end;
 
   TChromium = class(TCustomChromium)
@@ -446,12 +448,11 @@ begin
   FBrowser := nil;
 end;
 
-procedure TCustomChromium.CreateWindowHandle(const Params: TCreateParams);
+procedure TCustomChromium.CreateBrowser;
 var
   info: TCefWindowInfo;
   rect: TRect;
 begin
-  inherited;
   if not (csDesigning in ComponentState) then
   begin
     FillChar(info, SizeOf(info), 0);
@@ -470,6 +471,12 @@ begin
     FBrowserHandle := FBrowser.GetWindowHandle;
 {$ENDIF}
   end;
+end;
+
+procedure TCustomChromium.CreateWindowHandle(const Params: TCreateParams);
+begin
+  inherited;
+  CreateBrowser;
 end;
 
 destructor TCustomChromium.Destroy;
@@ -766,6 +773,20 @@ procedure TCustomChromium.Loaded;
 begin
   inherited;
   Load(FDefaultUrl);
+end;
+
+procedure TCustomChromium.ReCreateBrowser;
+begin
+  if FBrowserHandle <> 0 then
+  begin
+    SendMessage(FBrowserHandle, WM_CLOSE, 0, 0);
+    SendMessage(FBrowserHandle, WM_DESTROY, 0, 0);
+    FBrowserHandle := 0;
+    FBrowser := nil;
+
+    CreateBrowser;
+    Load(FDefaultUrl);
+  end;
 end;
 
 procedure TCustomChromium.Resize;
