@@ -283,7 +283,7 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure Load(const url: ustring);
-    procedure ReCreateBrowser;
+    procedure ReCreateBrowser(const url: string);
   end;
 
   TChromium = class(TCustomChromium)
@@ -775,13 +775,10 @@ begin
   Load(FDefaultUrl);
 end;
 
-procedure TCustomChromium.ReCreateBrowser;
-var
-  url: string;
+procedure TCustomChromium.ReCreateBrowser(const url: string);
 begin
   if (FBrowser <> nil) and (FBrowserHandle <> 0) then
   begin
-    url := FBrowser.MainFrame.Url;
     SendMessage(FBrowserHandle, WM_CLOSE, 0, 0);
     SendMessage(FBrowserHandle, WM_DESTROY, 0, 0);
     FBrowserHandle := 0;
