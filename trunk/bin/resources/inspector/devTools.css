@@ -587,6 +587,11 @@ table.heapshot-help {
     border-spacing: 12px 2px;
 }
 
+div.retaining-paths-view td.path-column div:hover {
+    text-decoration: underline;
+    color: blue;
+}
+
 /* inspector.css */
 
 /*
@@ -680,9 +685,9 @@ body.inactive #toolbar {
     border-bottom: 1px solid rgb(64%, 64%, 64%);
 }
 
-body.detached.platform-mac-leopard #toolbar,
-body.detached.platform-mac-snowleopard #toolbar {
-    background: transparent !important;
+body.detached.platform-mac-leopard:not(.remote) #toolbar,
+body.detached.platform-mac-snowleopard:not(.remote) #toolbar {
+    background: transparent;
 }
 
 body.attached #toolbar {
@@ -722,22 +727,22 @@ body.attached.inactive #toolbar {
     display: inline-block;
     width: 32px;
     height: 32px;
-    -webkit-background-size: 100% auto;
+    background-image: url(Images/toolbarIcons.png);
 }
 
-body.attached .toolbar-icon,
-#toolbar-dropdown .toolbar-icon {
+.toolbar-small .toolbar-icon {
     width: 24px;
     height: 24px;
     vertical-align: middle;
+    background-image: url(Images/toolbarIconsSmall.png);
 }
 
 .toolbar-item:active .toolbar-icon {
-    background-position: 0 32px;
+    background-position-y: 32px;
 }
 
-body.attached .toolbar-item:active .toolbar-icon {
-    background-position: 0 24px;
+.toolbar-small .toolbar-item:active .toolbar-icon {
+    background-position-y: 24px;
 }
 
 .toolbar-label {
@@ -750,10 +755,11 @@ body.attached .toolbar-item:active .toolbar-icon {
     text-shadow: none;
 }
 
-body.attached .toolbar-label,
-#toolbar-dropdown .toolbar-label {
+.toolbar-small .toolbar-label {
     display: inline-block;
     margin-left: 3px;
+    position: relative;
+    top: 2px;
 }
 
 body.attached #search-toolbar-label {
@@ -842,10 +848,6 @@ body.detached.platform-mac-snowleopard #toolbar-dropdown {
     margin-right: 0.5em;
 }
 
-#toolbar-dropdown .toolbar-item:active .toolbar-icon {
-    background-position: 0 24px;
-}
-
 .scrollable-content {
     position: static;
     height: 100%;
@@ -902,35 +904,63 @@ body.attached #search {
 }
 
 .toolbar-item.elements .toolbar-icon {
-    background-image: url(Images/elementsIcon.png);
+    background-position-x: 0;
 }
 
 .toolbar-item.resources .toolbar-icon {
-    background-image: url(Images/resourcesIcon.png);
+    background-position-x: -32px;
+}
+
+.toolbar-small .toolbar-item.resources .toolbar-icon {
+    background-position-x: -24px;
 }
 
 .toolbar-item.network .toolbar-icon {
-    background-image: url(Images/networkIcon.png);
+    background-position-x: -64px;
+}
+
+.toolbar-small .toolbar-item.network .toolbar-icon {
+    background-position-x: -48px;
 }
 
 .toolbar-item.scripts .toolbar-icon {
-    background-image: url(Images/scriptsIcon.png);
+    background-position-x: -96px;
+}
+
+.toolbar-small .toolbar-item.scripts .toolbar-icon {
+    background-position-x: -72px;
 }
 
 .toolbar-item.timeline .toolbar-icon {
-    background-image: url(Images/timelineIcon.png);
+    background-position-x: -128px;
+}
+
+.toolbar-small .toolbar-item.timeline .toolbar-icon {
+    background-position-x: -96px;
 }
 
 .toolbar-item.profiles .toolbar-icon {
-    background-image: url(Images/profilesIcon.png);
+    background-position-x: -160px;
+}
+
+.toolbar-small .toolbar-item.profiles .toolbar-icon {
+    background-position-x: -120px;
 }
 
 .toolbar-item.audits .toolbar-icon {
-    background-image: url(Images/auditsIcon.png);
+    background-position-x: -192px;
+}
+
+.toolbar-small .toolbar-item.audits .toolbar-icon {
+    background-position-x: -144px;
 }
 
 .toolbar-item.console .toolbar-icon {
-    background-image: url(Images/consoleIcon.png);
+    background-position-x: -224px;
+}
+
+.toolbar-small .toolbar-item.console .toolbar-icon {
+    background-position-x: -168px;
 }
 
 #close-button-left, #close-button-right {
@@ -940,7 +970,7 @@ body.attached #search {
     background-position: 0 0;
     background-color: transparent;
     border: 0 none transparent;
-    margin-top: 9px;
+    margin-top: 4px;
 }
 
 #close-button-left:hover, #close-button-right:hover {
@@ -969,6 +999,10 @@ body.platform-mac .toolbar-item.close-right {
 
 body:not(.platform-mac) .toolbar-item.close-left {
     display: none;
+}
+
+.toolbar-item.close-left {
+    margin-top: 5px;
 }
 
 #main {
@@ -1084,14 +1118,6 @@ button.status-bar-item.toggled-on .glyph {
     background-color: rgb(66, 129, 235);
 }
 
-button.status-bar-item.toggled-1 .glyph {
-    background-color: rgb(66, 129, 235);
-}
-
-button.status-bar-item.toggled-2 .glyph {
-    background-color: purple;   
-}
-
 button.status-bar-item:disabled {
     opacity: 0.5;
     background-position: 0 0 !important;
@@ -1114,12 +1140,16 @@ select.status-bar-item:active {
     -webkit-border-image: url(Images/statusbarMenuButtonSelected.png) 0 17 0 2;
 }
 
+.status-bar-item > .glyph {
+    -webkit-mask-image: url(Images/statusbarButtonGlyphs.png);
+}
+
 #dock-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/undockButtonGlyph.png);
+    -webkit-mask-position: 0 -48px;
 }
 
 body.detached #dock-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/dockButtonGlyph.png);
+    -webkit-mask-position: -32px -24px;
 }
 
 body.port-qt #dock-status-bar-item {
@@ -1127,11 +1157,11 @@ body.port-qt #dock-status-bar-item {
 }
 
 #console-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/consoleButtonGlyph.png);
+    -webkit-mask-position: -64px -24px;
 }
 
 .clear-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/clearConsoleButtonGlyph.png);
+    -webkit-mask-position: -64px 0;
 }
 
 #counters {
@@ -1622,6 +1652,10 @@ body.platform-linux .monospace, body.platform-linux .source-code {
     display: inline-block;
 }
 
+#elements-content .dom-shadow-root {
+    color: rgb(90, 90, 90);
+}
+
 #elements-sidebar {
     position: absolute;
     top: 0;
@@ -1796,6 +1830,10 @@ body.platform-linux .monospace, body.platform-linux .source-code {
 
 .outline-disclosure li.parent {
     text-indent: -12px
+}
+
+.outline-disclosure li .webkit-html-tag.shadow {
+    opacity: 0.7;
 }
 
 .outline-disclosure li .webkit-html-tag.close {
@@ -2337,8 +2375,16 @@ li.editing .swatch, li.editing .enabled-button,  li.editing-sub-part .delete-but
     display: block;
     margin-top: 4px;
     margin-bottom: 4px;
-    margin-left: 25px;
-    margin-right: 10px;
+    margin-left: 23px;
+    margin-right: 8px;
+}
+
+#breakpoint-condition-input {
+    display: block;
+    margin-left: 0;
+    margin-right: 0;
+    outline: none !important;
+    border: 1px solid rgb(66%, 66%, 66%);
 }
 
 .pane.expanded:nth-last-of-type(1) {
@@ -2391,8 +2437,13 @@ body.platform-windows .sidebar-pane-subtitle {
     padding-right: 2px;
 }
 
+.metrics .hovered > .label {
+    border: 1px solid black;
+}
+
 .metrics .position {
     border: 1px rgb(66%, 66%, 66%) dotted;
+    background-color: white;
     display: inline-block;
     text-align: center;
     padding: 3px;
@@ -2401,15 +2452,21 @@ body.platform-windows .sidebar-pane-subtitle {
 
 .metrics .margin {
     border: 1px dashed;
+    background-color: white;
     display: inline-block;
     text-align: center;
     vertical-align: middle;
     padding: 3px;
     margin: 3px;
+}
+
+.metrics .margin.hovered {
+    background-color: rgb(139, 182, 221);
 }
 
 .metrics .border {
     border: 1px black solid;
+    background-color: white;
     display: inline-block;
     text-align: center;
     vertical-align: middle;
@@ -2417,18 +2474,28 @@ body.platform-windows .sidebar-pane-subtitle {
     margin: 3px;
 }
 
+.metrics .border.hovered {
+    background-color: rgb(157, 193, 226);
+}
+
 .metrics .padding {
     border: 1px grey dashed;
+    background-color: white;
     display: inline-block;
     text-align: center;
     vertical-align: middle;
     padding: 3px;
     margin: 3px;
+}
+
+.metrics .padding.hovered {
+    background-color: rgb(173, 204, 231);
 }
 
 .metrics .content {
     position: static;
     border: 1px grey solid;
+    background-color: white;
     display: inline-block;
     text-align: center;
     vertical-align: middle;
@@ -2437,6 +2504,10 @@ body.platform-windows .sidebar-pane-subtitle {
     min-width: 80px;
     text-align: center;
     overflow: visible;
+}
+
+.metrics .content.hovered {
+    background-color: rgb(190, 214, 236);
 }
 
 .metrics .content span {
@@ -3100,15 +3171,31 @@ body.inactive .panel-enabler-view button:not(.status-bar-item), .panel-enabler-v
 }
 
 button.enable-toggle-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/enableOutlineButtonGlyph.png);
+    -webkit-mask-position: -192px 0;
 }
 
 button.enable-toggle-status-bar-item.toggled-on .glyph {
-    -webkit-mask-image: url(Images/enableSolidButtonGlyph.png);
+    -webkit-mask-position: -96px -24px;
 }
 
 .scripts-pause-on-exceptions-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/pauseOnExceptionButtonGlyph.png);
+    -webkit-mask-position: -256px 0;
+}
+
+.scripts-pause-on-exceptions-status-bar-item.toggled-all .glyph {
+    background-color: rgb(66, 129, 235);
+}
+
+.scripts-pause-on-exceptions-status-bar-item.toggled-uncaught .glyph {
+    background-color: purple;   
+}
+
+.scripts-toggle-pretty-print-status-bar-item .glyph {
+    -webkit-mask-position: -256px -24px;
+}
+
+.scripts-toggle-pretty-print-status-bar-item.toggled .glyph {
+    background-color: rgb(66, 129, 235);
 }
 
 #scripts-status-bar {
@@ -3164,12 +3251,13 @@ button.enable-toggle-status-bar-item.toggled-on .glyph {
 }
 
 .toggle-breakpoints .glyph {
-    -webkit-mask-image: url(Images/breakpointsActivateButtonGlyph.png);
+    -webkit-mask-image: url(Images/statusbarButtonGlyphs.png);
+    -webkit-mask-position: -32px 0;
     background-color: rgb(96, 96, 96) !important;
 }
 
 .toggle-breakpoints.toggled-on .glyph {
-    -webkit-mask-image: url(Images/breakpointsDeactivateButtonGlyph.png);
+    -webkit-mask-position: 0 -24px;
 }
 
 #scripts-debugger-status {
@@ -3237,7 +3325,7 @@ button.enable-toggle-status-bar-item.toggled-on .glyph {
 }
 
 .resources-larger-resources-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/largerResourcesButtonGlyph.png);
+    -webkit-mask-position: -224px 0;
 }
 
 #resources-filter, #console-filter.console-filter-top {
@@ -4519,7 +4607,7 @@ body.inactive li.selected .bubble.search-matches {
 }
 
 .timeline-filter-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/largerResourcesButtonGlyph.png);
+    -webkit-mask-position: -224px 0;
 }
 
 .timeline-filter-status-bar-item.toggled-on .glyph {
@@ -4527,7 +4615,7 @@ body.inactive li.selected .bubble.search-matches {
 }
 
 .garbage-collect-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/garbageCollectButtonGlyph.png);
+    -webkit-mask-position: -128px -24px;
 }
 
 .timeline-records-counter, .storage-application-cache-status, .storage-application-cache-connectivity {
@@ -4659,45 +4747,45 @@ button.enable-toggle-status-bar-item .glyph {
 }
 
 .record-profile-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/recordButtonGlyph.png);
+    -webkit-mask-position: -288px 0;
 }
 
 .record-profile-status-bar-item.toggled-on .glyph {
-    -webkit-mask-image: url(Images/recordToggledButtonGlyph.png);
+    -webkit-mask-position: -288px -24px;
     background-color: rgb(216, 0, 0) !important;
 }
 
 /* FIXME: should have its own glyph. */
 .heap-snapshot-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/focusButtonGlyph.png);
+    -webkit-mask-position: -96px 0;
 }
 
 .node-search-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/nodeSearchButtonGlyph.png);
+    -webkit-mask-position: -224px -24px;
 }
 
 .percent-time-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/percentButtonGlyph.png);
+    -webkit-mask-position: -192px -24px;
 }
 
 .focus-profile-node-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/focusButtonGlyph.png);
+    -webkit-mask-position: -96px 0;
 }
 
 .exclude-profile-node-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/excludeButtonGlyph.png);
+    -webkit-mask-position: -128px 0;
 }
 
 .reset-profile-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/reloadButtonGlyph.png);
+    -webkit-mask-position: 0 0;
 }
 
 .delete-storage-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/excludeButtonGlyph.png);
+    -webkit-mask-position: -128px 0;
 }
 
 .refresh-storage-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/reloadButtonGlyph.png);
+    -webkit-mask-position: 0 0;
 }
 
 ol.breakpoint-list {
@@ -4898,10 +4986,6 @@ a.worker-item {
 
 .styles-section .header .subtitle a {
     color: inherit;
-}
-
-.styles-section a::before {
-    content: attr(data-uncopyable);
 }
 
 .styles-section .properties {
@@ -5168,7 +5252,7 @@ a.worker-item:hover {
 /* networkPanel.css */
 
 .network-larger-resources-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/largerResourcesButtonGlyph.png);
+    -webkit-mask-position: -224px 0;
 }
 
 .network-sidebar .data-grid {
@@ -5883,6 +5967,22 @@ a.worker-item:hover {
     display: none;
 }
 
+.resource-headers-view .outline-disclosure li .header-toggle {
+    display: none;
+}
+
+.resource-headers-view .outline-disclosure li.expanded .header-toggle {
+    display: inline;
+    margin-left: 30px;
+    font-weight: normal;
+    color: rgb(45%, 45%, 45%);
+}
+
+.resource-headers-view .outline-disclosure li .header-toggle:hover {
+    color: rgb(20%, 20%, 45%);
+    cursor: pointer;
+}
+
 .resource-headers-view .outline-disclosure .header-name {
     color: rgb(33%, 33%, 33%);
     display: inline-block;
@@ -5898,6 +5998,11 @@ a.worker-item:hover {
     white-space: pre-wrap;
     word-break: break-all;
     margin-top: 1px;
+}
+
+.resource-headers-view .outline-disclosure li.headers-text {
+    text-indent: 0;
+    margin-left: -2px;
 }
 
 .resource-headers-view .outline-disclosure .raw-form-data {

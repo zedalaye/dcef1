@@ -202,7 +202,9 @@ return null;
 return this.parentNode.enclosingNodeOrSelfWithClass(className);
 }
 
-Element.prototype.query = function(query) 
+Node.SHADOW_ROOT_NODE = 14;
+
+Element.prototype.query = function(query)
 {
 return this.ownerDocument.evaluate(query, this, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
 }
@@ -263,6 +265,12 @@ curWindow = curWindow.parent;
 }
 
 return elementOffset;
+}
+
+Element.prototype.setTextAndTitle = function(text)
+{
+this.textContent = text;
+this.title = text;
 }
 
 KeyboardEvent.prototype.__defineGetter__("data", function()
@@ -423,6 +431,14 @@ var result = this.replace(/^(https|http|file):\/\//i, "");
 if (baseURLDomain)
 result = result.replace(new RegExp("^" + baseURLDomain.escapeForRegExp(), "i"), "");
 return result;
+}
+
+String.prototype.removeURLFragment = function()
+{
+var fragmentIndex = this.indexOf("#");
+if (fragmentIndex == -1)
+fragmentIndex = this.length;
+return this.substring(0, fragmentIndex);
 }
 
 function isNodeWhitespace()
@@ -734,46 +750,6 @@ Array.convert = function(list)
 return Array.prototype.slice.call(list);
 }
 
-function binarySearch(object, array, comparator)
-{
-var first = 0;
-var last = array.length - 1;
-
-while (first <= last) {
-var mid = (first + last) >> 1;
-var c = comparator(object, array[mid]);
-if (c > 0)
-first = mid + 1;
-else if (c < 0)
-last = mid - 1;
-else
-return mid;
-}
-
-
-return -(first + 1);
-}
-
-Object.defineProperty(Array.prototype, "binaryIndexOf", { value: function(value, comparator)
-{
-var result = binarySearch(value, this, comparator);
-return result >= 0 ? result : -1;
-}});
-
-function insertionIndexForObjectInListSortedByFunction(anObject, aList, aFunction)
-{
-var index = binarySearch(anObject, aList, aFunction);
-if (index < 0)
-
-return -index - 1;
-else {
-
-while (index > 0 && aFunction(anObject, aList[index - 1]) === 0)
-index--;
-return index;        
-}
-}
-
 String.sprintf = function(format)
 {
 return String.vsprintf(format, Array.prototype.slice.call(arguments, 1));
@@ -1041,13 +1017,48 @@ regex += "[" + char + "]";
 return new RegExp(regex, "i" + (extraFlags || ""));
 }
 
-function offerFileForDownload(contents)
+
+
+
+
+function binarySearch(object, array, comparator)
 {
-var builder = new BlobBuilder();
-builder.append(contents);
-var blob = builder.getBlob("application/octet-stream");
-var url = window.webkitURL.createObjectURL(blob);
-window.open(url);
+var first = 0;
+var last = array.length - 1;
+
+while (first <= last) {
+var mid = (first + last) >> 1;
+var c = comparator(object, array[mid]);
+if (c > 0)
+first = mid + 1;
+else if (c < 0)
+last = mid - 1;
+else
+return mid;
+}
+
+
+return -(first + 1);
+}
+
+Object.defineProperty(Array.prototype, "binaryIndexOf", { value: function(value, comparator)
+{
+var result = binarySearch(value, this, comparator);
+return result >= 0 ? result : -1;
+}});
+
+function insertionIndexForObjectInListSortedByFunction(anObject, aList, aFunction)
+{
+var index = binarySearch(anObject, aList, aFunction);
+if (index < 0)
+
+return -index - 1;
+else {
+
+while (index > 0 && aFunction(anObject, aList[index - 1]) === 0)
+index--;
+return index;        
+}
 }
 
 
@@ -1942,26 +1953,6 @@ return event.pageX >= left && event.pageX <= left + this.arrowToggleWidth && thi
 
 
 
-
-;(function preloadImages()
-{
-(new Image()).src = "Images/clearConsoleButtonGlyph.png";
-(new Image()).src = "Images/consoleButtonGlyph.png";
-(new Image()).src = "Images/dockButtonGlyph.png";
-(new Image()).src = "Images/enableOutlineButtonGlyph.png";
-(new Image()).src = "Images/enableSolidButtonGlyph.png";
-(new Image()).src = "Images/excludeButtonGlyph.png";
-(new Image()).src = "Images/focusButtonGlyph.png";
-(new Image()).src = "Images/largerResourcesButtonGlyph.png";
-(new Image()).src = "Images/nodeSearchButtonGlyph.png";
-(new Image()).src = "Images/pauseOnExceptionButtonGlyph.png";
-(new Image()).src = "Images/percentButtonGlyph.png";
-(new Image()).src = "Images/recordButtonGlyph.png";
-(new Image()).src = "Images/recordToggledButtonGlyph.png";
-(new Image()).src = "Images/reloadButtonGlyph.png";
-(new Image()).src = "Images/undockButtonGlyph.png";
-})();
-
 var WebInspector = {
 resources: {},
 missingLocalizedStrings: {},
@@ -2085,19 +2076,13 @@ this._panelHistory.setPanel(panelName);
 }
 },
 
-createDOMBreakpointsSidebarPane: function()
-{
-var pane = new WebInspector.NativeBreakpointsSidebarPane(WebInspector.UIString("DOM Breakpoints"));
-function breakpointAdded(event)
-{
-pane.addBreakpointItem(new WebInspector.BreakpointItem(event.data));
-}
-WebInspector.breakpointManager.addEventListener(WebInspector.BreakpointManager.Events.DOMBreakpointAdded, breakpointAdded);
-return pane;
-},
-
 _createPanels: function()
 {
+if (WebInspector.WorkerManager.isWorkerFrontend()) {
+this.panels.scripts = new WebInspector.ScriptsPanel();
+this.panels.console = new WebInspector.ConsolePanel();
+return;
+}
 var hiddenPanels = (InspectorFrontendHost.hiddenPanels() || "").split(',');
 if (hiddenPanels.indexOf("elements") === -1)
 this.panels.elements = new WebInspector.ElementsPanel();
@@ -2143,6 +2128,9 @@ dockToggleButton.title = WebInspector.UIString("Dock to main window.");
 }
 
 
+
+if (WebInspector.toolbar)
+WebInspector.toolbar.attached = x;
 
 if (WebInspector.searchController)
 WebInspector.searchController.updateSearchLabel();
@@ -2230,7 +2218,7 @@ else
 errorWarningElement.title = null;
 },
 
-highlightDOMNode: function(nodeId)
+highlightDOMNode: function(nodeId, mode)
 {
 if ("_hideDOMNodeHighlightTimeout" in this) {
 clearTimeout(this._hideDOMNodeHighlightTimeout);
@@ -2242,9 +2230,9 @@ return;
 
 this._highlightedDOMNodeId = nodeId;
 if (nodeId)
-DOMAgent.highlightDOMNode(nodeId);
+DOMAgent.highlightNode(nodeId, mode || "all");
 else
-DOMAgent.hideDOMNodeHighlight();
+DOMAgent.hideNodeHighlight();
 },
 
 highlightDOMNodeForTwoSeconds: function(nodeId)
@@ -2288,7 +2276,7 @@ return this.resourceTreeModel.resourceForURL(url);
 
 openLinkExternallyLabel: function()
 {
-return WebInspector.UIString("Open Link in New Window");
+return WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Open link in new tab" : "Open Link in New Tab");
 }
 }
 
@@ -2327,6 +2315,7 @@ WebInspector.doLoadedDone();
 }
 return;
 }
+WebInspector.WorkerManager.loaded();
 WebInspector.doLoadedDone();
 }
 
@@ -2341,6 +2330,8 @@ if (flavor)
 document.body.addStyleClass("platform-" + flavor);
 var port = WebInspector.port;
 document.body.addStyleClass("port-" + port);
+if (WebInspector.socket)
+document.body.addStyleClass("remote");
 
 WebInspector.settings = new WebInspector.Settings();
 
@@ -2358,7 +2349,6 @@ this.resourceTreeModel = new WebInspector.ResourceTreeModel();
 this.domAgent = new WebInspector.DOMAgent();
 
 InspectorBackend.registerDomainDispatcher("Inspector", this);
-InspectorBackend.registerDomainDispatcher("Page", this);
 
 this.resourceCategories = {
 documents: new WebInspector.ResourceCategory("documents", WebInspector.UIString("Documents"), "rgb(47,102,236)"),
@@ -2374,13 +2364,14 @@ other: new WebInspector.ResourceCategory("other", WebInspector.UIString("Other")
 this.cssModel = new WebInspector.CSSStyleModel();
 this.debuggerModel = new WebInspector.DebuggerModel();
 
-this.breakpointManager = new WebInspector.BreakpointManager();
 this.searchController = new WebInspector.SearchController();
+this.domBreakpointsSidebarPane = new WebInspector.DOMBreakpointsSidebarPane();
 
 this.panels = {};
 this._createPanels();
 this._panelHistory = new WebInspector.PanelHistory();
 this.toolbar = new WebInspector.Toolbar();
+this.toolbar.attached = WebInspector.attached;
 
 this.panelOrder = [];
 for (var panelName in this.panels)
@@ -2421,6 +2412,9 @@ this.extensionServer.initExtensions();
 if (WebInspector.settings.monitoringXHREnabled)
 ConsoleAgent.setMonitoringXHREnabled(true);
 ConsoleAgent.enable(this.console.setConsoleMessageExpiredCount.bind(this.console));
+
+DatabaseAgent.enable();
+DOMStorageAgent.enable();
 
 WebInspector.showPanel(WebInspector.settings.lastActivePanel);
 
@@ -2581,7 +2575,7 @@ if (inResourcesPanel && resource) {
 WebInspector.panels.resources.showResource(resource);
 WebInspector.showPanel("resources");
 } else
-PageAgent.openInInspectedWindow(resource ? resource.url : resourceURL);
+PageAgent.open(resourceURL, true);
 }
 
 WebInspector._registerShortcuts = function()
@@ -2602,6 +2596,9 @@ shortcut.shortcutToString("g", shortcut.Modifiers.Meta | shortcut.Modifiers.Shif
 ];
 section.addRelatedKeys(keys, WebInspector.UIString("Find next/previous"));
 }
+
+var goToShortcut = WebInspector.GoToLineDialog.createShortcut();
+section.addKey(goToShortcut.name, WebInspector.UIString("Go to Line"));
 }
 
 WebInspector.documentKeyDown = function(event)
@@ -2629,7 +2626,7 @@ return;
 }
 }
 
-if (this.currentPanel && this.currentPanel.handleShortcut) {
+if (this.currentPanel) {
 this.currentPanel.handleShortcut(event);
 if (event.handled) {
 event.preventDefault();
@@ -2705,13 +2702,13 @@ break;
 
 case "U+0052": 
 if ((event.metaKey && isMac) || (event.ctrlKey && !isMac)) {
-PageAgent.reloadPage(event.shiftKey);
+PageAgent.reload(event.shiftKey);
 event.preventDefault();
 }
 break;
 case "F5":
 if (!isMac)
-PageAgent.reloadPage(event.ctrlKey || event.shiftKey);
+PageAgent.reload(event.ctrlKey || event.shiftKey);
 break;
 }
 }
@@ -2898,34 +2895,6 @@ this.currentPanel = this.panels.scripts;
 WebInspector.debuggerModel.enableDebugger();
 }
 
-WebInspector.domContentEventFired = function(time)
-{
-this.panels.audits.mainResourceDOMContentTime = time;
-if (this.panels.network)
-this.panels.network.mainResourceDOMContentTime = time;
-this.extensionServer.notifyPageDOMContentLoaded((time - WebInspector.mainResource.startTime) * 1000);
-this.mainResourceDOMContentTime = time;
-}
-
-WebInspector.loadEventFired = function(time)
-{
-this.panels.audits.mainResourceLoadTime = time;
-this.panels.network.mainResourceLoadTime = time;
-this.panels.resources.loadEventFired();
-this.extensionServer.notifyPageLoaded((time - WebInspector.mainResource.startTime) * 1000);
-this.mainResourceLoadTime = time;
-}
-
-WebInspector.searchingForNodeWasEnabled = function()
-{
-this.panels.elements.searchingForNodeWasEnabled();
-}
-
-WebInspector.searchingForNodeWasDisabled = function()
-{
-this.panels.elements.searchingForNodeWasDisabled();
-}
-
 WebInspector.reset = function()
 {
 this.debuggerModel.reset();
@@ -2946,13 +2915,6 @@ this.extensionServer.notifyInspectorReset();
 WebInspector.bringToFront = function()
 {
 InspectorFrontendHost.bringToFront();
-}
-
-WebInspector.inspectedURLChanged = function(url)
-{
-InspectorFrontendHost.inspectedURLChanged(url);
-this.settings.inspectedURLChanged(url);
-this.extensionServer.notifyInspectedURLChanged();
 }
 
 WebInspector.didCreateWorker = function()
@@ -3222,6 +3184,9 @@ WebInspector.linkifyURLAsNode = function(url, linkText, classes, isExternal, too
     else if (typeof tooltipText !== "string" || tooltipText.length)
         a.title = tooltipText;
     a.textContent = linkText;
+    a.style.maxWidth = "100%";
+    if (isExternal)
+        a.setAttribute("target", "_blank");
 
     return a;
 }
@@ -3316,6 +3281,10 @@ WebInspector.addMainEventListeners = function(doc)
 
 WebInspector.frontendReused = function()
 {
+    ConsoleAgent.enable(this.console.setConsoleMessageExpiredCount.bind(this.console));
+    DatabaseAgent.enable();
+    DOMStorageAgent.enable();
+
     this.networkManager.frontendReused();
     this.resourceTreeModel.frontendReused();
     WebInspector.panels.network.clear();
@@ -3353,14 +3322,35 @@ WebInspector.isMac = function()
     return this._isMac;
 }
 
+WebInspector.useLowerCaseMenuTitles = function()
+{
+    return WebInspector.platform === "windows" && Preferences.useLowerCaseMenuTitlesOnWindows;
+}
+
 WebInspector.isBeingEdited = function(element)
 {
     return element.__editing;
 }
 
+WebInspector.markBeingEdited = function(element, value)
+{
+    if (value) {
+        if (element.__editing)
+            return false;
+        element.__editing = true;
+        WebInspector.__editingCount = (WebInspector.__editingCount || 0) + 1;
+    } else {
+        if (!element.__editing)
+            return false;
+        delete element.__editing;
+        --WebInspector.__editingCount;
+    }
+    return true;
+}
+
 WebInspector.isEditingAnyField = function()
 {
-    return this.__editing;
+    return !!WebInspector.__editingCount;
 }
 
 // Available config fields (all optional):
@@ -3372,10 +3362,8 @@ WebInspector.isEditingAnyField = function()
 // multiline: Boolean - whether the edited element is multiline
 WebInspector.startEditing = function(element, config)
 {
-    if (element.__editing)
+    if (!WebInspector.markBeingEdited(element, true))
         return;
-    element.__editing = true;
-    WebInspector.__editing = true;
 
     config = config || {};
     var committedCallback = config.commitHandler;
@@ -3403,8 +3391,7 @@ WebInspector.startEditing = function(element, config)
     }
 
     function cleanUpAfterEditing() {
-        delete this.__editing;
-        delete WebInspector.__editing;
+        WebInspector.markBeingEdited(element, false);
 
         this.removeStyleClass("editing");
         this.tabIndex = oldTabIndex;
@@ -3446,7 +3433,7 @@ WebInspector.startEditing = function(element, config)
             event.ctrlKey && !event.shiftKey && !event.metaKey && !event.altKey;
         if (isEnterKey(event) && (event.isMetaOrCtrlForTest || !config.multiline || isMetaOrCtrl))
             return "commit";
-        else if (event.keyCode === WebInspector.KeyboardShortcut.Keys.Esc.code)
+        else if (event.keyCode === WebInspector.KeyboardShortcut.Keys.Esc.code || event.keyIdentifier === "U+001B")
             return "cancel";
         else if (event.keyIdentifier === "U+0009") // Tab key
             return "move-" + (event.shiftKey ? "backward" : "forward");
@@ -3593,106 +3580,176 @@ InspectorBackendStub = function()
     this._pendingResponsesCount = 0;
     this._callbacks = {};
     this._domainDispatchers = {};
-    this._registerDelegate('{"id": 0, "domain": "Inspector", "command": "didEvaluateForTestInFrontend", "arguments": {"testCallId": {"optional": false, "type": "number"},"jsonResult": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Page", "command": "addScriptToEvaluateOnLoad", "arguments": {"scriptSource": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Page", "command": "removeAllScriptsToEvaluateOnLoad", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Page", "command": "reloadPage", "arguments": {"ignoreCache": {"optional": true , "type": "boolean"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Page", "command": "openInInspectedWindow", "arguments": {"url": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Page", "command": "setUserAgentOverride", "arguments": {"userAgent": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Page", "command": "getCookies", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Page", "command": "deleteCookie", "arguments": {"cookieName": {"optional": false, "type": "string"},"domain": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Runtime", "command": "evaluate", "arguments": {"expression": {"optional": false, "type": "string"},"objectGroup": {"optional": false, "type": "string"},"includeCommandLineAPI": {"optional": true , "type": "boolean"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Runtime", "command": "evaluateOn", "arguments": {"objectId": {"optional": false, "type": "string"},"expression": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Runtime", "command": "getProperties", "arguments": {"objectId": {"optional": false, "type": "string"},"ignoreHasOwnProperty": {"optional": false, "type": "boolean"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Runtime", "command": "setPropertyValue", "arguments": {"objectId": {"optional": false, "type": "string"},"propertyName": {"optional": false, "type": "string"},"expression": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Runtime", "command": "releaseObject", "arguments": {"objectId": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Runtime", "command": "releaseObjectGroup", "arguments": {"objectGroup": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Console", "command": "enable", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Console", "command": "disable", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Console", "command": "clearConsoleMessages", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Console", "command": "setMonitoringXHREnabled", "arguments": {"enabled": {"optional": false, "type": "boolean"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Console", "command": "addInspectedNode", "arguments": {"nodeId": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Network", "command": "enable", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Network", "command": "disable", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Network", "command": "getCachedResources", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Network", "command": "getResourceContent", "arguments": {"frameId": {"optional": false, "type": "string"},"url": {"optional": false, "type": "string"},"base64Encode": {"optional": true , "type": "boolean"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Network", "command": "setExtraHeaders", "arguments": {"headers": {"optional": false, "type": "object"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Database", "command": "getDatabaseTableNames", "arguments": {"databaseId": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Database", "command": "executeSQL", "arguments": {"databaseId": {"optional": false, "type": "number"},"query": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOMStorage", "command": "getDOMStorageEntries", "arguments": {"storageId": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOMStorage", "command": "setDOMStorageItem", "arguments": {"storageId": {"optional": false, "type": "number"},"key": {"optional": false, "type": "string"},"value": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOMStorage", "command": "removeDOMStorageItem", "arguments": {"storageId": {"optional": false, "type": "number"},"key": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "ApplicationCache", "command": "getApplicationCaches", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "getDocument", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "getChildNodes", "arguments": {"nodeId": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "querySelector", "arguments": {"nodeId": {"optional": false, "type": "number"},"selectors": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "querySelectorAll", "arguments": {"nodeId": {"optional": false, "type": "number"},"selectors": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "setNodeName", "arguments": {"nodeId": {"optional": false, "type": "number"},"name": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "setNodeValue", "arguments": {"nodeId": {"optional": false, "type": "number"},"value": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "removeNode", "arguments": {"nodeId": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "setAttribute", "arguments": {"elementId": {"optional": false, "type": "number"},"name": {"optional": false, "type": "string"},"value": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "removeAttribute", "arguments": {"elementId": {"optional": false, "type": "number"},"name": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "getEventListenersForNode", "arguments": {"nodeId": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "copyNode", "arguments": {"nodeId": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "getOuterHTML", "arguments": {"nodeId": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "setOuterHTML", "arguments": {"nodeId": {"optional": false, "type": "number"},"outerHTML": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "performSearch", "arguments": {"query": {"optional": false, "type": "string"},"runSynchronously": {"optional": false, "type": "boolean"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "cancelSearch", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "pushNodeToFrontend", "arguments": {"objectId": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "setSearchingForNode", "arguments": {"enabled": {"optional": false, "type": "boolean"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "highlightDOMNode", "arguments": {"nodeId": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "hideDOMNodeHighlight", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "highlightFrame", "arguments": {"frameId": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "hideFrameHighlight", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "pushNodeByPathToFrontend", "arguments": {"path": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "DOM", "command": "resolveNode", "arguments": {"nodeId": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "CSS", "command": "getStylesForNode", "arguments": {"nodeId": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "CSS", "command": "getComputedStyleForNode", "arguments": {"nodeId": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "CSS", "command": "getInlineStyleForNode", "arguments": {"nodeId": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "CSS", "command": "getAllStyleSheets", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "CSS", "command": "getStyleSheet", "arguments": {"styleSheetId": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "CSS", "command": "getStyleSheetText", "arguments": {"styleSheetId": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "CSS", "command": "setStyleSheetText", "arguments": {"styleSheetId": {"optional": false, "type": "string"},"text": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "CSS", "command": "setPropertyText", "arguments": {"styleId": {"optional": false, "type": "object"},"propertyIndex": {"optional": false, "type": "number"},"text": {"optional": false, "type": "string"},"overwrite": {"optional": false, "type": "boolean"}}}');
-    this._registerDelegate('{"id": 0, "domain": "CSS", "command": "toggleProperty", "arguments": {"styleId": {"optional": false, "type": "object"},"propertyIndex": {"optional": false, "type": "number"},"disable": {"optional": false, "type": "boolean"}}}');
-    this._registerDelegate('{"id": 0, "domain": "CSS", "command": "setRuleSelector", "arguments": {"ruleId": {"optional": false, "type": "object"},"selector": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "CSS", "command": "addRule", "arguments": {"contextNodeId": {"optional": false, "type": "number"},"selector": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "CSS", "command": "getSupportedCSSProperties", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Timeline", "command": "start", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Timeline", "command": "stop", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "enable", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "disable", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "setBreakpointsActive", "arguments": {"active": {"optional": false, "type": "boolean"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "setBreakpointByUrl", "arguments": {"url": {"optional": false, "type": "string"},"lineNumber": {"optional": false, "type": "number"},"columnNumber": {"optional": true , "type": "number"},"condition": {"optional": true , "type": "string"},"enabled": {"optional": true , "type": "boolean"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "setBreakpoint", "arguments": {"sourceId": {"optional": false, "type": "string"},"lineNumber": {"optional": false, "type": "number"},"columnNumber": {"optional": true , "type": "number"},"condition": {"optional": true , "type": "string"},"enabled": {"optional": true , "type": "boolean"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "removeBreakpoint", "arguments": {"breakpointId": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "continueToLocation", "arguments": {"sourceId": {"optional": false, "type": "string"},"lineNumber": {"optional": false, "type": "number"},"columnNumber": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "stepOver", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "stepInto", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "stepOut", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "pause", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "resume", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "editScriptSource", "arguments": {"sourceID": {"optional": false, "type": "string"},"newContent": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "getScriptSource", "arguments": {"sourceID": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "setPauseOnExceptionsState", "arguments": {"pauseOnExceptionsState": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Debugger", "command": "evaluateOnCallFrame", "arguments": {"callFrameId": {"optional": false, "type": "string"},"expression": {"optional": false, "type": "string"},"objectGroup": {"optional": false, "type": "string"},"includeCommandLineAPI": {"optional": true , "type": "boolean"}}}');
-    this._registerDelegate('{"id": 0, "domain": "BrowserDebugger", "command": "setDOMBreakpoint", "arguments": {"nodeId": {"optional": false, "type": "number"},"type": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "BrowserDebugger", "command": "removeDOMBreakpoint", "arguments": {"nodeId": {"optional": false, "type": "number"},"type": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "BrowserDebugger", "command": "setEventListenerBreakpoint", "arguments": {"eventName": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "BrowserDebugger", "command": "removeEventListenerBreakpoint", "arguments": {"eventName": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "BrowserDebugger", "command": "setXHRBreakpoint", "arguments": {"url": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "BrowserDebugger", "command": "removeXHRBreakpoint", "arguments": {"url": {"optional": false, "type": "string"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Profiler", "command": "enable", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Profiler", "command": "disable", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Profiler", "command": "isEnabled", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Profiler", "command": "start", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Profiler", "command": "stop", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Profiler", "command": "getProfileHeaders", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Profiler", "command": "getProfile", "arguments": {"type": {"optional": false, "type": "string"},"uid": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Profiler", "command": "removeProfile", "arguments": {"type": {"optional": false, "type": "string"},"uid": {"optional": false, "type": "number"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Profiler", "command": "clearProfiles", "arguments": {}}');
-    this._registerDelegate('{"id": 0, "domain": "Profiler", "command": "takeHeapSnapshot", "arguments": {"detailed": {"optional": false, "type": "boolean"}}}');
-    this._registerDelegate('{"id": 0, "domain": "Profiler", "command": "collectGarbage", "arguments": {}}');
+    this._eventArgs = {};
+    this._registerDelegate('{"method": "Page.addScriptToEvaluateOnLoad", "params": {"scriptSource": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Page.removeAllScriptsToEvaluateOnLoad", "id": 0}');
+    this._registerDelegate('{"method": "Page.reload", "params": {"ignoreCache": {"optional": true , "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "Page.open", "params": {"url": {"optional": false, "type": "string"},"newWindow": {"optional": true , "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "Page.getCookies", "id": 0}');
+    this._registerDelegate('{"method": "Page.deleteCookie", "params": {"cookieName": {"optional": false, "type": "string"},"domain": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Page.getResourceTree", "id": 0}');
+    this._registerDelegate('{"method": "Page.getResourceContent", "params": {"frameId": {"optional": false, "type": "string"},"url": {"optional": false, "type": "string"},"base64Encode": {"optional": true , "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "Runtime.evaluate", "params": {"expression": {"optional": false, "type": "string"},"objectGroup": {"optional": true , "type": "string"},"includeCommandLineAPI": {"optional": true , "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "Runtime.evaluateOn", "params": {"objectId": {"optional": false, "type": "string"},"expression": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Runtime.getProperties", "params": {"objectId": {"optional": false, "type": "string"},"ignoreHasOwnProperty": {"optional": false, "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "Runtime.setPropertyValue", "params": {"objectId": {"optional": false, "type": "string"},"propertyName": {"optional": false, "type": "string"},"expression": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Runtime.releaseObject", "params": {"objectId": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Runtime.releaseObjectGroup", "params": {"objectGroup": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Console.enable", "id": 0}');
+    this._registerDelegate('{"method": "Console.disable", "id": 0}');
+    this._registerDelegate('{"method": "Console.clearConsoleMessages", "id": 0}');
+    this._registerDelegate('{"method": "Console.setMonitoringXHREnabled", "params": {"enabled": {"optional": false, "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "Console.addInspectedNode", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "Network.enable", "id": 0}');
+    this._registerDelegate('{"method": "Network.disable", "id": 0}');
+    this._registerDelegate('{"method": "Network.setUserAgentOverride", "params": {"userAgent": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Network.setExtraHeaders", "params": {"headers": {"optional": false, "type": "object"}}, "id": 0}');
+    this._registerDelegate('{"method": "Database.enable", "id": 0}');
+    this._registerDelegate('{"method": "Database.disable", "id": 0}');
+    this._registerDelegate('{"method": "Database.getDatabaseTableNames", "params": {"databaseId": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "Database.executeSQL", "params": {"databaseId": {"optional": false, "type": "number"},"query": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOMStorage.enable", "id": 0}');
+    this._registerDelegate('{"method": "DOMStorage.disable", "id": 0}');
+    this._registerDelegate('{"method": "DOMStorage.getDOMStorageEntries", "params": {"storageId": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOMStorage.setDOMStorageItem", "params": {"storageId": {"optional": false, "type": "number"},"key": {"optional": false, "type": "string"},"value": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOMStorage.removeDOMStorageItem", "params": {"storageId": {"optional": false, "type": "number"},"key": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "ApplicationCache.getApplicationCaches", "id": 0}');
+    this._registerDelegate('{"method": "DOM.getDocument", "id": 0}');
+    this._registerDelegate('{"method": "DOM.getChildNodes", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.querySelector", "params": {"nodeId": {"optional": false, "type": "number"},"selectors": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.querySelectorAll", "params": {"nodeId": {"optional": false, "type": "number"},"selectors": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.setNodeName", "params": {"nodeId": {"optional": false, "type": "number"},"name": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.setNodeValue", "params": {"nodeId": {"optional": false, "type": "number"},"value": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.removeNode", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.setAttribute", "params": {"nodeId": {"optional": false, "type": "number"},"name": {"optional": false, "type": "string"},"value": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.removeAttribute", "params": {"nodeId": {"optional": false, "type": "number"},"name": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.getEventListenersForNode", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.copyNode", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.getOuterHTML", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.setOuterHTML", "params": {"nodeId": {"optional": false, "type": "number"},"outerHTML": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.performSearch", "params": {"query": {"optional": false, "type": "string"},"runSynchronously": {"optional": true , "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.cancelSearch", "id": 0}');
+    this._registerDelegate('{"method": "DOM.pushNodeToFrontend", "params": {"objectId": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.setInspectModeEnabled", "params": {"enabled": {"optional": false, "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.highlightNode", "params": {"nodeId": {"optional": false, "type": "number"},"mode": {"optional": true , "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.hideNodeHighlight", "id": 0}');
+    this._registerDelegate('{"method": "DOM.highlightFrame", "params": {"frameId": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.hideFrameHighlight", "id": 0}');
+    this._registerDelegate('{"method": "DOM.pushNodeByPathToFrontend", "params": {"path": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.resolveNode", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "CSS.getStylesForNode", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "CSS.getComputedStyleForNode", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "CSS.getInlineStyleForNode", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "CSS.getAllStyleSheets", "id": 0}');
+    this._registerDelegate('{"method": "CSS.getStyleSheet", "params": {"styleSheetId": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "CSS.getStyleSheetText", "params": {"styleSheetId": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "CSS.setStyleSheetText", "params": {"styleSheetId": {"optional": false, "type": "string"},"text": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "CSS.setPropertyText", "params": {"styleId": {"optional": false, "type": "object"},"propertyIndex": {"optional": false, "type": "number"},"text": {"optional": false, "type": "string"},"overwrite": {"optional": false, "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "CSS.toggleProperty", "params": {"styleId": {"optional": false, "type": "object"},"propertyIndex": {"optional": false, "type": "number"},"disable": {"optional": false, "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "CSS.setRuleSelector", "params": {"ruleId": {"optional": false, "type": "object"},"selector": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "CSS.addRule", "params": {"contextNodeId": {"optional": false, "type": "number"},"selector": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "CSS.getSupportedCSSProperties", "id": 0}');
+    this._registerDelegate('{"method": "Timeline.start", "id": 0}');
+    this._registerDelegate('{"method": "Timeline.stop", "id": 0}');
+    this._registerDelegate('{"method": "Debugger.enable", "id": 0}');
+    this._registerDelegate('{"method": "Debugger.disable", "id": 0}');
+    this._registerDelegate('{"method": "Debugger.setBreakpointsActive", "params": {"active": {"optional": false, "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "Debugger.setBreakpointByUrl", "params": {"url": {"optional": false, "type": "string"},"lineNumber": {"optional": false, "type": "number"},"columnNumber": {"optional": true , "type": "number"},"condition": {"optional": true , "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Debugger.setBreakpoint", "params": {"location": {"optional": false, "type": "object"},"condition": {"optional": true , "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Debugger.removeBreakpoint", "params": {"breakpointId": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Debugger.continueToLocation", "params": {"location": {"optional": false, "type": "object"}}, "id": 0}');
+    this._registerDelegate('{"method": "Debugger.stepOver", "id": 0}');
+    this._registerDelegate('{"method": "Debugger.stepInto", "id": 0}');
+    this._registerDelegate('{"method": "Debugger.stepOut", "id": 0}');
+    this._registerDelegate('{"method": "Debugger.pause", "id": 0}');
+    this._registerDelegate('{"method": "Debugger.resume", "id": 0}');
+    this._registerDelegate('{"method": "Debugger.editScriptSource", "params": {"sourceID": {"optional": false, "type": "string"},"scriptSource": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Debugger.getScriptSource", "params": {"sourceID": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Debugger.setPauseOnExceptions", "params": {"state": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Debugger.evaluateOnCallFrame", "params": {"callFrameId": {"optional": false, "type": "string"},"expression": {"optional": false, "type": "string"},"objectGroup": {"optional": true , "type": "string"},"includeCommandLineAPI": {"optional": true , "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOMDebugger.setDOMBreakpoint", "params": {"nodeId": {"optional": false, "type": "number"},"type": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOMDebugger.removeDOMBreakpoint", "params": {"nodeId": {"optional": false, "type": "number"},"type": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOMDebugger.setEventListenerBreakpoint", "params": {"eventName": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOMDebugger.removeEventListenerBreakpoint", "params": {"eventName": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOMDebugger.setXHRBreakpoint", "params": {"url": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOMDebugger.removeXHRBreakpoint", "params": {"url": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Profiler.enable", "id": 0}');
+    this._registerDelegate('{"method": "Profiler.disable", "id": 0}');
+    this._registerDelegate('{"method": "Profiler.isEnabled", "id": 0}');
+    this._registerDelegate('{"method": "Profiler.start", "id": 0}');
+    this._registerDelegate('{"method": "Profiler.stop", "id": 0}');
+    this._registerDelegate('{"method": "Profiler.getProfileHeaders", "id": 0}');
+    this._registerDelegate('{"method": "Profiler.getProfile", "params": {"type": {"optional": false, "type": "string"},"uid": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "Profiler.removeProfile", "params": {"type": {"optional": false, "type": "string"},"uid": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "Profiler.clearProfiles", "id": 0}');
+    this._registerDelegate('{"method": "Profiler.takeHeapSnapshot", "params": {"detailed": {"optional": false, "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "Profiler.collectGarbage", "id": 0}');
+    this._registerDelegate('{"method": "Worker.sendMessageToWorker", "params": {"workerId": {"optional": false, "type": "number"},"message": {"optional": false, "type": "object"}}, "id": 0}');
+    this._eventArgs["Inspector.frontendReused"] = [];
+    this._eventArgs["Inspector.bringToFront"] = [];
+    this._eventArgs["Inspector.disconnectFromBackend"] = [];
+    this._eventArgs["Inspector.reset"] = [];
+    this._eventArgs["Inspector.showPanel"] = ["panel"];
+    this._eventArgs["Inspector.startUserInitiatedDebugging"] = [];
+    this._eventArgs["Inspector.evaluateForTestInFrontend"] = ["testCallId","script"];
+    this._eventArgs["Inspector.inspect"] = ["object","hints"];
+    this._eventArgs["Inspector.didCreateWorker"] = ["id","url","isShared"];
+    this._eventArgs["Inspector.didDestroyWorker"] = ["id"];
+    this._eventArgs["Page.domContentEventFired"] = ["timestamp"];
+    this._eventArgs["Page.loadEventFired"] = ["timestamp"];
+    this._eventArgs["Page.frameNavigated"] = ["frame","loaderId"];
+    this._eventArgs["Page.frameDetached"] = ["frameId"];
+    this._eventArgs["Console.messageAdded"] = ["messageObj"];
+    this._eventArgs["Console.messageRepeatCountUpdated"] = ["count"];
+    this._eventArgs["Console.messagesCleared"] = [];
+    this._eventArgs["Network.requestWillBeSent"] = ["identifier","frameId","loaderId","documentURL","request","timestamp","stackTrace","redirectResponse"];
+    this._eventArgs["Network.resourceMarkedAsCached"] = ["identifier"];
+    this._eventArgs["Network.responseReceived"] = ["identifier","timestamp","type","response"];
+    this._eventArgs["Network.dataReceived"] = ["identifier","timestamp","dataLength","encodedDataLength"];
+    this._eventArgs["Network.loadingFinished"] = ["identifier","timestamp"];
+    this._eventArgs["Network.loadingFailed"] = ["identifier","timestamp","errorText","canceled"];
+    this._eventArgs["Network.resourceLoadedFromMemoryCache"] = ["frameId","loaderId","documentURL","timestamp","resource"];
+    this._eventArgs["Network.initialContentSet"] = ["identifier","content","type"];
+    this._eventArgs["Network.webSocketWillSendHandshakeRequest"] = ["identifier","timestamp","request"];
+    this._eventArgs["Network.webSocketHandshakeResponseReceived"] = ["identifier","timestamp","response"];
+    this._eventArgs["Network.webSocketCreated"] = ["identifier","url"];
+    this._eventArgs["Network.webSocketClosed"] = ["identifier","timestamp"];
+    this._eventArgs["Database.addDatabase"] = ["database"];
+    this._eventArgs["Database.sqlTransactionSucceeded"] = ["transactionId","columnNames","values"];
+    this._eventArgs["Database.sqlTransactionFailed"] = ["transactionId","sqlError"];
+    this._eventArgs["DOMStorage.addDOMStorage"] = ["storage"];
+    this._eventArgs["DOMStorage.updateDOMStorage"] = ["storageId"];
+    this._eventArgs["ApplicationCache.updateApplicationCacheStatus"] = ["status"];
+    this._eventArgs["ApplicationCache.updateNetworkState"] = ["isNowOnline"];
+    this._eventArgs["DOM.documentUpdated"] = [];
+    this._eventArgs["DOM.setChildNodes"] = ["parentId","nodes"];
+    this._eventArgs["DOM.attributesUpdated"] = ["id","attributes"];
+    this._eventArgs["DOM.characterDataModified"] = ["id","newValue"];
+    this._eventArgs["DOM.childNodeCountUpdated"] = ["id","newValue"];
+    this._eventArgs["DOM.childNodeInserted"] = ["parentId","prevId","node"];
+    this._eventArgs["DOM.childNodeRemoved"] = ["parentId","id"];
+    this._eventArgs["DOM.searchResults"] = ["nodeIds"];
+    this._eventArgs["DOM.shadowRootUpdated"] = ["hostId","shadowRoot"];
+    this._eventArgs["Timeline.started"] = [];
+    this._eventArgs["Timeline.stopped"] = [];
+    this._eventArgs["Timeline.eventRecorded"] = ["record"];
+    this._eventArgs["Debugger.debuggerWasEnabled"] = [];
+    this._eventArgs["Debugger.debuggerWasDisabled"] = [];
+    this._eventArgs["Debugger.scriptParsed"] = ["sourceID","url","startLine","startColumn","endLine","endColumn","isContentScript"];
+    this._eventArgs["Debugger.scriptFailedToParse"] = ["url","data","firstLine","errorLine","errorMessage"];
+    this._eventArgs["Debugger.breakpointResolved"] = ["breakpointId","location"];
+    this._eventArgs["Debugger.paused"] = ["details"];
+    this._eventArgs["Debugger.resumed"] = [];
+    this._eventArgs["Profiler.profilerWasEnabled"] = [];
+    this._eventArgs["Profiler.profilerWasDisabled"] = [];
+    this._eventArgs["Profiler.addProfileHeader"] = ["header"];
+    this._eventArgs["Profiler.addHeapSnapshotChunk"] = ["uid","chunk"];
+    this._eventArgs["Profiler.finishHeapSnapshot"] = ["uid"];
+    this._eventArgs["Profiler.setRecordingProfile"] = ["isProfiling"];
+    this._eventArgs["Profiler.resetProfiles"] = [];
+    this._eventArgs["Profiler.reportHeapSnapshotProgress"] = ["done","total"];
+    this._eventArgs["Worker.workerCreated"] = ["workerId"];
+    this._eventArgs["Worker.dispatchMessageFromWorker"] = ["workerId","message"];
 }
 
 InspectorBackendStub.prototype = {
@@ -3703,13 +3760,13 @@ InspectorBackendStub.prototype = {
         return callbackId;
     },
 
-    _registerDelegate: function(commandInfo)
+    _registerDelegate: function(requestString)
     {
-        var commandObject = JSON.parse(commandInfo);
-        var agentName = commandObject.domain + "Agent";
+        var domainAndFunction = JSON.parse(requestString).method.split(".");
+        var agentName = domainAndFunction[0] + "Agent";
         if (!window[agentName])
             window[agentName] = {};
-        window[agentName][commandObject.command] = this.sendMessageToBackend.bind(this, commandInfo);
+        window[agentName][domainAndFunction[1]] = this.sendMessageToBackend.bind(this, requestString);
     },
 
     sendMessageToBackend: function()
@@ -3717,33 +3774,37 @@ InspectorBackendStub.prototype = {
         var args = Array.prototype.slice.call(arguments);
         var request = JSON.parse(args.shift());
         var callback = (args.length && typeof args[args.length - 1] === "function") ? args.pop() : 0;
+        var domainAndMethod = request.method.split(".");
+        var agentMethod = domainAndMethod[0] + "Agent." + domainAndMethod[1];
 
-        for (var key in request.arguments) {
-            var typeName = request.arguments[key].type;
-            var optionalFlag = request.arguments[key].optional;
+        if (request.params) {
+            for (var key in request.params) {
+                var typeName = request.params[key].type;
+                var optionalFlag = request.params[key].optional;
 
-            if (args.length === 0 && !optionalFlag) {
-                console.error("Protocol Error: Invalid number of arguments for '" + request.domain + "Agent." + request.command + "' call. It should have the next arguments '" + JSON.stringify(request.arguments) + "'.");
-                return;
+                if (args.length === 0 && !optionalFlag) {
+                    console.error("Protocol Error: Invalid number of arguments for method '" + agentMethod + "' call. It should have the next arguments '" + JSON.stringify(request.params) + "'.");
+                    return;
+                }
+
+                var value = args.shift();
+                if (optionalFlag && typeof value === "undefined") {
+                    delete request.params[key];
+                    continue;
+                }
+
+                if (typeof value !== typeName) {
+                    console.error("Protocol Error: Invalid type of argument '" + key + "' for method '" + agentMethod + "' call. It should be '" + typeName + "' but it is '" + typeof value + "'.");
+                    return;
+                }
+
+                request.params[key] = value;
             }
-
-            var value = args.shift();
-            if (optionalFlag && typeof value === "undefined") {
-                delete request.arguments[key];
-                continue;
-            }
-
-            if (typeof value !== typeName) {
-                console.error("Protocol Error: Invalid type of argument '" + key + "' for '" + request.domain + "Agent." + request.command + "' call. It should be '" + typeName + "' but it is '" + typeof value + "'.");
-                return;
-            }
-
-            request.arguments[key] = value;
         }
 
         if (args.length === 1 && !callback) {
             if (typeof args[0] !== "undefined") {
-                console.error("Protocol Error: Optional callback argument for '" + request.domain + "Agent." + request.command + "' call should be a function but its type is '" + typeof args[0] + "'.");
+                console.error("Protocol Error: Optional callback argument for method '" + agentMethod + "' call should be a function but its type is '" + typeof args[0] + "'.");
                 return;
             }
         }
@@ -3752,9 +3813,13 @@ InspectorBackendStub.prototype = {
         if (window.dumpInspectorProtocolMessages)
             console.log("frontend: " + JSON.stringify(request));
 
-        var message = JSON.stringify(request);
-
         ++this._pendingResponsesCount;
+        this.sendMessageObjectToBackend(request);
+    },
+
+    sendMessageObjectToBackend: function(messageObject)
+    {
+        var message = JSON.stringify(messageObject);
         InspectorFrontendHost.sendMessageToBackend(message);
     },
 
@@ -3770,58 +3835,64 @@ InspectorBackendStub.prototype = {
 
         var messageObject = (typeof message === "string") ? JSON.parse(message) : message;
 
-        if ("requestId" in messageObject) { // just a response for some request
-            if (messageObject.protocolErrors)
+        if ("id" in messageObject) { // just a response for some request
+            if (messageObject.error && messageObject.error.code !== -32000)
                 this.reportProtocolError(messageObject);
 
             var arguments = [];
-            if (messageObject.body) {
-                for (var key in messageObject.body)
-                    arguments.push(messageObject.body[key]);
+            if (messageObject.result) {
+                for (var key in messageObject.result)
+                    arguments.push(messageObject.result[key]);
             }
 
-            var callback = this._callbacks[messageObject.requestId];
+            var callback = this._callbacks[messageObject.id];
             if (callback) {
-                if (!messageObject.protocolErrors) {
-                    arguments.unshift(messageObject.error);
-                    callback.apply(null, arguments);
-                }
+                arguments.unshift(messageObject.error);
+                callback.apply(null, arguments);
                 --this._pendingResponsesCount;
-                delete this._callbacks[messageObject.requestId];
+                delete this._callbacks[messageObject.id];
             }
 
             if (this._scripts && !this._pendingResponsesCount)
                 this.runAfterPendingDispatches();
 
             return;
-        }
-
-        if (messageObject.type === "event") {
-            if (!(messageObject.domain in this._domainDispatchers)) {
-                console.error("Protocol Error: the message is for non-existing domain '" + messageObject.domain + "'");
+        } else {
+            var method = messageObject.method.split(".");
+            var domainName = method[0];
+            var functionName = method[1];
+            if (!(domainName in this._domainDispatchers)) {
+                console.error("Protocol Error: the message is for non-existing domain '" + domainName + "'");
                 return;
             }
-            var dispatcher = this._domainDispatchers[messageObject.domain];
-            if (!(messageObject.event in dispatcher)) {
-                console.error("Protocol Error: Attempted to dispatch an unimplemented method '" + messageObject.domain + "." + messageObject.event + "'");
+            var dispatcher = this._domainDispatchers[domainName];
+            if (!(functionName in dispatcher)) {
+                console.error("Protocol Error: Attempted to dispatch an unimplemented method '" + messageObject.method + "'");
                 return;
             }
 
-            var arguments = [];
-            if (messageObject.data) {
-                for (var key in messageObject.data)
-                    arguments.push(messageObject.data[key]);
+            if (!this._eventArgs[messageObject.method]) {
+                console.error("Protocol Error: Attempted to dispatch an unspecified method '" + messageObject.method + "'");
+                return;
             }
 
-            dispatcher[messageObject.event].apply(dispatcher, arguments);
+            var params = [];
+            if (messageObject.params) {
+                var paramNames = this._eventArgs[messageObject.method];
+                for (var i = 0; i < paramNames.length; ++i)
+                    params.push(messageObject.params[paramNames[i]]);
+            }
+
+            dispatcher[functionName].apply(dispatcher, params);
         }
     },
 
     reportProtocolError: function(messageObject)
     {
-        console.error("Protocol Error: InspectorBackend request with id = " + messageObject.requestId + " failed.");
-        for (var i = 0; i < messageObject.protocolErrors.length; ++i)
-            console.error("    " + messageObject.protocolErrors[i]);
+        var error = messageObject.error;
+        console.error(error.message + "(" + error.code + "): request with id = " + messageObject.id + " failed.");
+        for (var i = 0; i < error.data.length; ++i)
+            console.error("    " + error.data[i]);
     },
 
     runAfterPendingDispatches: function(script)
@@ -3961,6 +4032,20 @@ WebInspector.InspectorFrontendHostStub.prototype = {
     {
     },
 
+    saveAs: function(fileName, content)
+    {
+        var builder = new WebKitBlobBuilder();
+        builder.append(content);
+        var blob = builder.getBlob("application/octet-stream");
+    
+        var fr = new FileReader();
+        fr.onload = function(e) {
+            // Force download
+            window.location = this.result;
+        }
+        fr.readAsDataURL(blob);
+    },
+
     canAttachWindow: function()
     {
         return false;
@@ -4088,6 +4173,13 @@ WebInspector.Object.prototype = {
         delete this._listeners;
     },
 
+    hasEventListeners: function(eventType)
+    {
+        if (!("_listeners" in this) || !(eventType in this._listeners))
+            return false;
+        return true;
+    },
+
     dispatchEventToListeners: function(eventType, eventData)
     {
         if (!("_listeners" in this) || !(eventType in this._listeners))
@@ -4173,7 +4265,9 @@ var Preferences = {
     showCookiesTab: false,
     debugMode: false,
     heapProfilerPresent: false,
-    detailedHeapProfiles: false
+    detailedHeapProfiles: false,
+    saveAsAvailable: false,
+    useLowerCaseMenuTitlesOnWindows: false
 }
 
 WebInspector.Settings = function()
@@ -4187,7 +4281,7 @@ WebInspector.Settings = function()
     this.installApplicationSetting("lastActivePanel", "elements");
     this.installApplicationSetting("lastViewedScriptFile", "application");
     this.installApplicationSetting("monitoringXHREnabled", false);
-    this.installApplicationSetting("pauseOnExceptionState", WebInspector.ScriptsPanel.PauseOnExceptionsState.DontPauseOnExceptions);
+    this.installApplicationSetting("pauseOnExceptionStateString", WebInspector.ScriptsPanel.PauseOnExceptionsState.DontPauseOnExceptions);
     this.installApplicationSetting("resourcesLargeRows", true);
     this.installApplicationSetting("resourcesSortOptions", {timeOption: "responseTime", sizeOption: "transferSize"});
     this.installApplicationSetting("resourceViewTab", "content");
@@ -4196,13 +4290,8 @@ WebInspector.Settings = function()
     this.installApplicationSetting("watchExpressions", []);
     this.installApplicationSetting("breakpoints", []);
     this.installApplicationSetting("eventListenerBreakpoints", []);
+    this.installApplicationSetting("domBreakpoints", []);
     this.installApplicationSetting("xhrBreakpoints", []);
-
-    this.installProjectSetting("nativeBreakpoints", []);
-}
-
-WebInspector.Settings.Events = {
-    ProjectChanged: "project-changed"
 }
 
 WebInspector.Settings.prototype = {
@@ -4213,47 +4302,6 @@ WebInspector.Settings.prototype = {
 
         this.__defineGetter__(key, this._get.bind(this, key, defaultValue));
         this.__defineSetter__(key, this._set.bind(this, key));
-    },
-
-    installProjectSetting: function(key, defaultValue)
-    {
-        this.__defineGetter__(key, this._getProjectSetting.bind(this, key, defaultValue));
-        this.__defineSetter__(key, this._setProjectSetting.bind(this, key));
-    },
-
-    inspectedURLChanged: function(url)
-    {
-        var fragmentIndex = url.indexOf("#");
-        if (fragmentIndex !== -1)
-            url = url.substring(0, fragmentIndex);
-        this._projectId = url;
-        this.dispatchEventToListeners(WebInspector.Settings.Events.ProjectChanged);
-    },
-
-    get projectId()
-    {
-        return this._projectId;
-    },
-
-    findSettingForAllProjects: function(key)
-    {
-        var result = {};
-        if (window.localStorage == null)
-            return result;
-
-        var regexp = "^" + key + ":(.*)";
-        for (var i = 0; i < window.localStorage.length; ++i) {
-            var fullKey =  window.localStorage.key(i);
-            var match = fullKey.match(regexp);
-            if (!match)
-                continue;
-            try {
-                result[match[1]] = JSON.parse(window.localStorage[fullKey]);
-            } catch(e) {
-                window.localStorage.removeItem(fullKey);
-            }
-        }
-        return result;
     },
 
     _get: function(key, defaultValue)
@@ -4272,624 +4320,10 @@ WebInspector.Settings.prototype = {
     {
         if (window.localStorage != null)
             window.localStorage[key] = JSON.stringify(value);
-    },
-
-    _getProjectSetting: function(key, defaultValue)
-    {
-        return this._get(this._formatProjectKey(key), defaultValue);
-    },
-
-    _setProjectSetting: function(key, value)
-    {
-        return this._set(this._formatProjectKey(key), value);
-    },
-
-    _formatProjectKey: function(key)
-    {
-        return key + ":" + this._projectId;
     }
 }
 
 WebInspector.Settings.prototype.__proto__ = WebInspector.Object.prototype;
-
-/* CSSStyleModel.js */
-
-/*
- * Copyright (C) 2010 Google Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *
- *     * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- * copyright notice, this list of conditions and the following disclaimer
- * in the documentation and/or other materials provided with the
- * distribution.
- *     * Neither the name of Google Inc. nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
-WebInspector.CSSStyleModel = function()
-{
-}
-
-WebInspector.CSSStyleModel.parseRuleArrayPayload = function(ruleArray)
-{
-    var result = [];
-    for (var i = 0; i < ruleArray.length; ++i)
-        result.push(WebInspector.CSSRule.parsePayload(ruleArray[i]));
-    return result;
-}
-
-WebInspector.CSSStyleModel.prototype = {
-    getStylesAsync: function(nodeId, userCallback)
-    {
-        function callback(userCallback, error, payload)
-        {
-            if (error) {
-                if (userCallback)
-                    userCallback(null);
-                return;
-            }
-
-            var result = {};
-            if ("inlineStyle" in payload)
-                result.inlineStyle = WebInspector.CSSStyleDeclaration.parsePayload(payload.inlineStyle);
-
-            result.computedStyle = WebInspector.CSSStyleDeclaration.parsePayload(payload.computedStyle);
-            result.matchedCSSRules = WebInspector.CSSStyleModel.parseRuleArrayPayload(payload.matchedCSSRules);
-
-            result.styleAttributes = {};
-            var payloadStyleAttributes = payload.styleAttributes;
-            for (var i = 0; i < payloadStyleAttributes.length; ++i) {
-                var name = payloadStyleAttributes[i].name;
-                result.styleAttributes[name] = WebInspector.CSSStyleDeclaration.parsePayload(payloadStyleAttributes[i].style);
-            }
-
-            result.pseudoElements = [];
-            for (var i = 0; i < payload.pseudoElements.length; ++i) {
-                var entryPayload = payload.pseudoElements[i];
-                result.pseudoElements.push({ pseudoId: entryPayload.pseudoId, rules: WebInspector.CSSStyleModel.parseRuleArrayPayload(entryPayload.rules) });
-            }
-
-            result.inherited = [];
-            for (var i = 0; i < payload.inherited.length; ++i) {
-                var entryPayload = payload.inherited[i];
-                var entry = {};
-                if ("inlineStyle" in entryPayload)
-                    entry.inlineStyle = WebInspector.CSSStyleDeclaration.parsePayload(entryPayload.inlineStyle);
-                if ("matchedCSSRules" in entryPayload)
-                    entry.matchedCSSRules = WebInspector.CSSStyleModel.parseRuleArrayPayload(entryPayload.matchedCSSRules);
-                result.inherited.push(entry);
-            }
-
-            if (userCallback)
-                userCallback(result);
-        }
-
-        CSSAgent.getStylesForNode(nodeId, callback.bind(null, userCallback));
-    },
-
-    getComputedStyleAsync: function(nodeId, userCallback)
-    {
-        function callback(userCallback, error, stylePayload)
-        {
-            if (error)
-                userCallback(null);
-            else
-                userCallback(WebInspector.CSSStyleDeclaration.parsePayload(stylePayload));
-        }
-
-        CSSAgent.getComputedStyleForNode(nodeId, callback.bind(null, userCallback));
-    },
-
-    getInlineStyleAsync: function(nodeId, userCallback)
-    {
-        function callback(userCallback, error, stylePayload)
-        {
-            if (error)
-                userCallback(null);
-            else
-                userCallback(WebInspector.CSSStyleDeclaration.parsePayload(stylePayload));
-        }
-
-        CSSAgent.getInlineStyleForNode(nodeId, callback.bind(null, userCallback));
-    },
-
-    setRuleSelector: function(ruleId, nodeId, newSelector, successCallback, failureCallback)
-    {
-        function checkAffectsCallback(nodeId, successCallback, rulePayload, error, selectedNodeIds)
-        {
-            if (error)
-                return;
-            var doesAffectSelectedNode = (selectedNodeIds.indexOf(nodeId) >= 0);
-            var rule = WebInspector.CSSRule.parsePayload(rulePayload);
-            successCallback(rule, doesAffectSelectedNode);
-            this._styleSheetChanged(rule.id.styleSheetId, true);
-        }
-
-        function callback(nodeId, successCallback, failureCallback, error, newSelector, rulePayload)
-        {
-            // FIXME: looks like rulePayload is always null.
-            if (error)
-                failureCallback();
-            else
-                WebInspector.domAgent.querySelectorAll(nodeId, newSelector, checkAffectsCallback.bind(this, nodeId, successCallback, rulePayload));
-        }
-
-        CSSAgent.setRuleSelector(ruleId, newSelector, callback.bind(this, nodeId, successCallback, failureCallback, newSelector));
-    },
-
-    addRule: function(nodeId, selector, successCallback, failureCallback)
-    {
-        function checkAffectsCallback(nodeId, successCallback, rulePayload, error, selectedNodeIds)
-        {
-            var doesAffectSelectedNode = (selectedNodeIds.indexOf(nodeId) >= 0);
-            var rule = WebInspector.CSSRule.parsePayload(rulePayload);
-            successCallback(rule, doesAffectSelectedNode);
-            this._styleSheetChanged(rule.id.styleSheetId, true);
-        }
-
-        function callback(successCallback, failureCallback, selector, error, rulePayload)
-        {
-            if (error) {
-                // Invalid syntax for a selector
-                failureCallback();
-            } else
-                WebInspector.domAgent.querySelectorAll(nodeId, selector, checkAffectsCallback.bind(this, nodeId, successCallback, rulePayload));
-        }
-
-        CSSAgent.addRule(nodeId, selector, callback.bind(this, successCallback, failureCallback, selector));
-    },
-
-    _styleSheetChanged: function(styleSheetId, majorChange)
-    {
-        if (!majorChange || !styleSheetId)
-            return;
-
-        function callback(error, href, content)
-        {
-            if (error)
-                return;
-            var resource = WebInspector.resourceForURL(href);
-            if (resource && resource.type === WebInspector.Resource.Type.Stylesheet) {
-                resource.setContent(content, this._onRevert.bind(this, styleSheetId));
-                this.dispatchEventToListeners("stylesheet changed");
-            }
-        }
-        CSSAgent.getStyleSheetText(styleSheetId, callback.bind(this));
-    },
-
-    _onRevert: function(styleSheetId, contentToRevertTo)
-    {
-        function callback(error, success)
-        {
-            if (error)
-                return;
-            this._styleSheetChanged(styleSheetId, true);
-        }
-        CSSAgent.setStyleSheetText(styleSheetId, contentToRevertTo, callback.bind(this));
-    }
-}
-
-WebInspector.CSSStyleModel.prototype.__proto__ = WebInspector.Object.prototype;
-
-WebInspector.CSSStyleDeclaration = function(payload)
-{
-    this.id = payload.styleId;
-    this.width = payload.width;
-    this.height = payload.height;
-    this.range = payload.range;
-    this._shorthandValues = WebInspector.CSSStyleDeclaration.buildShorthandValueMap(payload.shorthandEntries);
-    this._livePropertyMap = {}; // LIVE properties (source-based or style-based) : { name -> CSSProperty }
-    this._allProperties = []; // ALL properties: [ CSSProperty ]
-    this._longhandProperties = {}; // shorthandName -> [ CSSProperty ]
-    this.__disabledProperties = {}; // DISABLED properties: { index -> CSSProperty }
-    var payloadPropertyCount = payload.cssProperties.length;
-
-    var propertyIndex = 0;
-    for (var i = 0; i < payloadPropertyCount; ++i) {
-        var property = new WebInspector.CSSProperty.parsePayload(this, i, payload.cssProperties[i]);
-        this._allProperties.push(property);
-        if (property.disabled)
-            this.__disabledProperties[i] = property;
-        if (!property.active && !property.styleBased)
-            continue;
-        var name = property.name;
-        this[propertyIndex] = name;
-        this._livePropertyMap[name] = property;
-
-        // Index longhand properties.
-        if (property.shorthand) { // only for parsed
-            var longhands = this._longhandProperties[property.shorthand];
-            if (!longhands) {
-                longhands = [];
-                this._longhandProperties[property.shorthand] = longhands;
-            }
-            longhands.push(property);
-        }
-        ++propertyIndex;
-    }
-    this.length = propertyIndex;
-    if ("cssText" in payload)
-        this.cssText = payload.cssText;
-}
-
-WebInspector.CSSStyleDeclaration.buildShorthandValueMap = function(shorthandEntries)
-{
-    var result = {};
-    for (var i = 0; i < shorthandEntries.length; ++i)
-        result[shorthandEntries[i].name] = shorthandEntries[i].value;
-    return result;
-}
-
-WebInspector.CSSStyleDeclaration.parsePayload = function(payload)
-{
-    return new WebInspector.CSSStyleDeclaration(payload);
-}
-
-WebInspector.CSSStyleDeclaration.prototype = {
-    get allProperties()
-    {
-        return this._allProperties;
-    },
-
-    getLiveProperty: function(name)
-    {
-        return this._livePropertyMap[name];
-    },
-
-    getPropertyValue: function(name)
-    {
-        var property = this._livePropertyMap[name];
-        return property ? property.value : "";
-    },
-
-    getPropertyPriority: function(name)
-    {
-        var property = this._livePropertyMap[name];
-        return property ? property.priority : "";
-    },
-
-    getPropertyShorthand: function(name)
-    {
-        var property = this._livePropertyMap[name];
-        return property ? property.shorthand : "";
-    },
-
-    isPropertyImplicit: function(name)
-    {
-        var property = this._livePropertyMap[name];
-        return property ? property.implicit : "";
-    },
-
-    styleTextWithShorthands: function()
-    {
-        var cssText = "";
-        var foundProperties = {};
-        for (var i = 0; i < this.length; ++i) {
-            var individualProperty = this[i];
-            var shorthandProperty = this.getPropertyShorthand(individualProperty);
-            var propertyName = (shorthandProperty || individualProperty);
-
-            if (propertyName in foundProperties)
-                continue;
-
-            if (shorthandProperty) {
-                var value = this.getShorthandValue(shorthandProperty);
-                var priority = this.getShorthandPriority(shorthandProperty);
-            } else {
-                var value = this.getPropertyValue(individualProperty);
-                var priority = this.getPropertyPriority(individualProperty);
-            }
-
-            foundProperties[propertyName] = true;
-
-            cssText += propertyName + ": " + value;
-            if (priority)
-                cssText += " !" + priority;
-            cssText += "; ";
-        }
-
-        return cssText;
-    },
-
-    getLonghandProperties: function(name)
-    {
-        return this._longhandProperties[name] || [];
-    },
-
-    getShorthandValue: function(shorthandProperty)
-    {
-        var property = this.getLiveProperty(shorthandProperty);
-        return property ? property.value : this._shorthandValues[shorthandProperty];
-    },
-
-    getShorthandPriority: function(shorthandProperty)
-    {
-        var priority = this.getPropertyPriority(shorthandProperty);
-        if (priority)
-            return priority;
-
-        var longhands = this._longhandProperties[shorthandProperty];
-        return longhands ? this.getPropertyPriority(longhands[0]) : null;
-    },
-
-    propertyAt: function(index)
-    {
-        return (index < this.allProperties.length) ? this.allProperties[index] : null;
-    },
-
-    pastLastSourcePropertyIndex: function()
-    {
-        for (var i = this.allProperties.length - 1; i >= 0; --i) {
-            var property = this.allProperties[i];
-            if (property.active || property.disabled)
-                return i + 1;
-        }
-        return 0;
-    },
-
-    newBlankProperty: function()
-    {
-        return new WebInspector.CSSProperty(this, this.pastLastSourcePropertyIndex(), "", "", "", "active", true, false, false, "");
-    },
-
-    insertPropertyAt: function(index, name, value, userCallback)
-    {
-        function callback(userCallback, error, payload)
-        {
-            if (!userCallback)
-                return;
-
-            if (error)
-                userCallback(null);
-            else {
-                userCallback(WebInspector.CSSStyleDeclaration.parsePayload(payload));
-                WebInspector.cssModel._styleSheetChanged(this.id.styleSheetId, true);
-            }
-        }
-
-        CSSAgent.setPropertyText(this.id, index, name + ": " + value + ";", false, callback.bind(null, userCallback));
-    },
-
-    appendProperty: function(name, value, userCallback)
-    {
-        this.insertPropertyAt(this.allProperties.length, name, value, userCallback);
-    }
-}
-
-WebInspector.CSSRule = function(payload)
-{
-    this.id = payload.ruleId;
-    this.selectorText = payload.selectorText;
-    this.sourceLine = payload.sourceLine;
-    this.sourceURL = payload.sourceURL;
-    this.origin = payload.origin;
-    this.style = WebInspector.CSSStyleDeclaration.parsePayload(payload.style);
-    this.style.parentRule = this;
-    this.selectorRange = payload.selectorRange;
-}
-
-WebInspector.CSSRule.parsePayload = function(payload)
-{
-    return new WebInspector.CSSRule(payload);
-}
-
-WebInspector.CSSRule.prototype = {
-    get isUserAgent()
-    {
-        return this.origin === "user-agent";
-    },
-
-    get isUser()
-    {
-        return this.origin === "user";
-    },
-
-    get isViaInspector()
-    {
-        return this.origin === "inspector";
-    },
-
-    get isRegular()
-    {
-        return this.origin === "";
-    }
-}
-
-WebInspector.CSSProperty = function(ownerStyle, index, name, value, priority, status, parsedOk, implicit, shorthand, text)
-{
-    this.ownerStyle = ownerStyle;
-    this.index = index;
-    this.name = name;
-    this.value = value;
-    this.priority = priority;
-    this.status = status;
-    this.parsedOk = parsedOk;
-    this.implicit = implicit;
-    this.shorthand = shorthand;
-    this.text = text;
-}
-
-WebInspector.CSSProperty.parsePayload = function(ownerStyle, index, payload)
-{
-    // The following default field values are used in the payload:
-    // priority: ""
-    // parsedOk: true
-    // implicit: false
-    // status: "style"
-    // shorthandName: ""
-    var result = new WebInspector.CSSProperty(
-        ownerStyle, index, payload.name, payload.value, payload.priority || "", payload.status || "style", ("parsedOk" in payload) ? payload.parsedOk : true, !!payload.implicit, payload.shorthandName || "", payload.text);
-    return result;
-}
-
-WebInspector.CSSProperty.prototype = {
-    get propertyText()
-    {
-        if (this.text !== undefined)
-            return this.text;
-
-        if (this.name === "")
-            return "";
-        return this.name + ": " + this.value + (this.priority ? " !" + this.priority : "") + ";";
-    },
-
-    get isLive()
-    {
-        return this.active || this.styleBased;
-    },
-
-    get active()
-    {
-        return this.status === "active";
-    },
-
-    get styleBased()
-    {
-        return this.status === "style";
-    },
-
-    get inactive()
-    {
-        return this.status === "inactive";
-    },
-
-    get disabled()
-    {
-        return this.status === "disabled";
-    },
-
-    // Replaces "propertyName: propertyValue [!important];" in the stylesheet by an arbitrary propertyText.
-    setText: function(propertyText, majorChange, userCallback)
-    {
-        function enabledCallback(style)
-        {
-            if (style)
-                WebInspector.cssModel._styleSheetChanged(style.id.styleSheetId, majorChange);
-            if (userCallback)
-                userCallback(style);
-        }
-
-        function callback(error, stylePayload)
-        {
-            if (!error && stylePayload) {
-                this.text = propertyText;
-                var style = WebInspector.CSSStyleDeclaration.parsePayload(stylePayload);
-                var newProperty = style.allProperties[this.index];
-
-                if (newProperty && this.disabled && !propertyText.match(/^\s*$/)) {
-                    newProperty.setDisabled(false, enabledCallback);
-                    return;
-                } else
-                    WebInspector.cssModel._styleSheetChanged(style.id.styleSheetId, majorChange);
-                if (userCallback)
-                    userCallback(style);
-            } else {
-                if (userCallback)
-                    userCallback(null);
-            }
-        }
-
-        if (!this.ownerStyle)
-            throw "No ownerStyle for property";
-
-        // An index past all the properties adds a new property to the style.
-        CSSAgent.setPropertyText(this.ownerStyle.id, this.index, propertyText, this.index < this.ownerStyle.pastLastSourcePropertyIndex(), callback.bind(this));
-    },
-
-    setValue: function(newValue, userCallback)
-    {
-        var text = this.name + ": " + newValue + (this.priority ? " !" + this.priority : "") + ";"
-        this.setText(text, userCallback);
-    },
-
-    setDisabled: function(disabled, userCallback)
-    {
-        if (!this.ownerStyle && userCallback)
-            userCallback(null);
-        if (disabled === this.disabled && userCallback)
-            userCallback(this.ownerStyle);
-
-        function callback(error, stylePayload)
-        {
-            if (!userCallback)
-                return;
-            if (error)
-                userCallback(null);
-            else {
-                var style = WebInspector.CSSStyleDeclaration.parsePayload(stylePayload);
-                userCallback(style);
-                WebInspector.cssModel._styleSheetChanged(this.ownerStyle.id.styleSheetId, false);
-            }
-        }
-
-        CSSAgent.toggleProperty(this.ownerStyle.id, this.index, disabled, callback.bind(this));
-    }
-}
-
-WebInspector.CSSStyleSheet = function(payload)
-{
-    this.id = payload.styleSheetId;
-    this.rules = [];
-    this.styles = {};
-    for (var i = 0; i < payload.rules.length; ++i) {
-        var rule = WebInspector.CSSRule.parsePayload(payload.rules[i]);
-        this.rules.push(rule);
-        if (rule.style)
-            this.styles[rule.style.id] = rule.style;
-    }
-    if ("text" in payload)
-        this._text = payload.text;
-}
-
-WebInspector.CSSStyleSheet.createForId = function(styleSheetId, userCallback)
-{
-    function callback(error, styleSheetPayload)
-    {
-        if (error)
-            userCallback(null);
-        else
-            userCallback(new WebInspector.CSSStyleSheet(styleSheetPayload));
-    }
-    CSSAgent.getStyleSheet(styleSheetId, callback.bind(this));
-}
-
-WebInspector.CSSStyleSheet.prototype = {
-    getText: function()
-    {
-        return this._text;
-    },
-
-    setText: function(newText, userCallback)
-    {
-        function callback(error, isChangeSuccessful)
-        {
-             if (userCallback)
-                 userCallback(isChangeSuccessful);
-             if (isChangeSuccessful)
-                 WebInspector.cssModel._styleSheetChanged(this.id, true);
-        }
-
-        CSSAgent.setStyleSheetText(this.id, newText, callback.bind(this));
-    }
-}
 
 /* Checkbox.js */
 
@@ -5892,7 +5326,7 @@ tabElement.addEventListener("click", this.selectTab.bind(this, id, true), false)
 this._tabsElement.appendChild(tabElement);
 this._contentElement.appendChild(view.element);
 
-this._tabs[id] = { tabElement: tabElement, view: view }
+this._tabs[id] = { tabElement: tabElement, view: view };
 },
 
 selectTab: function(id, userGesture)
@@ -5908,10 +5342,8 @@ delete this._currentTab;
 var tab = this._tabs[id];
 this._showTab(tab);
 this._currentTab = tab;
-if (userGesture) {
-var event = {tabId: id};
+var event = {tabId: id, view: tab.view, isUserGesture: userGesture};
 this.dispatchEventToListeners("tab-selected", event);
-}
 return true;
 },
 
@@ -6073,27 +5505,22 @@ instance._cancelCallback = cancelCallback;
 element.appendChild(message);
 },
 
-startAction: function(element, actionCallback, cancelCallback)
+showAndWaitFor: function(element, listenObject, listenEvent)
 {
 var instance = WebInspector.PleaseWaitMessage.prototype.instance;
 var message = instance.element;
-if (message.parentNode === element) {
-actionCallback();
+if (message.parentNode === element)
 return;
-}
 
-function doAction()
+listenObject.addEventListener(listenEvent, WebInspector.PleaseWaitMessage.prototype.unlistenAndHide.bind(instance, listenObject, listenEvent), instance);
+WebInspector.PleaseWaitMessage.prototype.show(element);
+},
+
+unlistenAndHide: function(listenObject, listenEvent)
 {
-try {
-actionCallback();
-} finally {
-if (message.parentNode)
-message.parentNode.removeChild(message);
-}
-}
-
-WebInspector.PleaseWaitMessage.prototype.show(element, cancelCallback);
-setTimeout(doAction, 0);
+var instance = WebInspector.PleaseWaitMessage.prototype.instance;
+listenObject.removeEventListener(listenEvent, WebInspector.PleaseWaitMessage.prototype.unlistenAndHide, instance);
+WebInspector.PleaseWaitMessage.prototype.hide();
 }
 };
 
@@ -6572,7 +5999,7 @@ WebInspector.ConsoleView.prototype = {
 _registerConsoleDomainDispatcher: function() {
 var console = this;
 var dispatcher = {
-consoleMessage: function(payload)
+messageAdded: function(payload)
 {
 var consoleMessage = new WebInspector.ConsoleMessage(
 payload.source,
@@ -6581,14 +6008,14 @@ payload.level,
 payload.line,
 payload.url,
 payload.repeatCount,
-payload.message,
+payload.text,
 payload.parameters,
 payload.stackTrace,
-payload.requestId);
+payload.networkIdentifier);
 console.addMessage(consoleMessage);
 },
 
-consoleMessageRepeatCountUpdated: function(count)
+messageRepeatCountUpdated: function(count)
 {
 var msg = console.previousMessage;
 var prevRepeatCount = msg.totalRepeatCount;
@@ -6607,7 +6034,7 @@ console.addMessage(msgCopy);
 }
 },
 
-consoleMessagesCleared: function()
+messagesCleared: function()
 {
 console.clearMessages();
 },
@@ -6825,9 +6252,9 @@ return;
 
 this.evalInInspectedWindow(expressionString, "completion", true, evaluated.bind(this));
 
-function evaluated(result)
+function evaluated(result, wasThrown)
 {
-if (!result)
+if (wasThrown)
 return;
 result.getAllProperties(evaluatedProperties.bind(this));
 }
@@ -6899,8 +6326,8 @@ WebInspector.settings.monitoringXHREnabled = !WebInspector.settings.monitoringXH
 ConsoleAgent.setMonitoringXHREnabled(WebInspector.settings.monitoringXHREnabled);
 }.bind(this);
 var contextMenu = new WebInspector.ContextMenu();
-contextMenu.appendCheckboxItem(WebInspector.UIString("XMLHttpRequest logging"), itemAction, WebInspector.settings.monitoringXHREnabled)
-contextMenu.appendItem(WebInspector.UIString("Clear Console"), this.requestClearMessages.bind(this));
+contextMenu.appendCheckboxItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "XMLHttpRequest logging" : "XMLHttpRequest Logging"), itemAction, WebInspector.settings.monitoringXHREnabled)
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Clear console" : "Clear Console"), this.requestClearMessages.bind(this));
 contextMenu.show(event);
 },
 
@@ -7001,10 +6428,10 @@ if (!expression) {
 expression = "this";
 }
 
-function evalCallback(error, result)
+function evalCallback(error, result, wasThrown)
 {
 if (!error)
-callback(WebInspector.RemoteObject.fromPayload(result));
+callback(WebInspector.RemoteObject.fromPayload(result), wasThrown);
 }
 RuntimeAgent.evaluate(expression, objectGroup, includeCommandLineAPI, evalCallback);
 },
@@ -7027,7 +6454,7 @@ var commandMessage = new WebInspector.ConsoleCommand(str);
 this.addMessage(commandMessage);
 
 var self = this;
-function printResult(result)
+function printResult(result, wasThrown)
 {
 self.prompt.history.push(str);
 self.prompt.historyOffset = 0;
@@ -7035,7 +6462,7 @@ self.prompt.text = "";
 
 WebInspector.settings.consoleHistory = self.prompt.history.slice(-30);
 
-self.addMessage(new WebInspector.ConsoleCommandResult(result, commandMessage));
+self.addMessage(new WebInspector.ConsoleCommandResult(result, wasThrown, commandMessage));
 }
 this.evalInInspectedWindow(str, "console", true, printResult);
 },
@@ -7064,7 +6491,7 @@ elem.appendChild(document.createTextNode(val));
 
 _formatobject: function(obj, elem)
 {
-elem.appendChild(new WebInspector.ObjectPropertiesSection(obj, obj.description, null, true).element);
+elem.appendChild(new WebInspector.ObjectPropertiesSection(obj, obj.description).element);
 },
 
 _formatnode: function(object, elem)
@@ -7158,7 +6585,7 @@ this._requestId = requestId;
 if (stackTrace && stackTrace.length) {
 var topCallFrame = stackTrace[0];
 if (!this.url)
-this.url = topCallFrame.scriptName;
+this.url = topCallFrame.url;
 if (!this.line)
 this.line = topCallFrame.lineNumber;
 }
@@ -7390,7 +6817,7 @@ var functionName = frame.functionName || WebInspector.UIString("(anonymous funct
 messageTextElement.appendChild(document.createTextNode(functionName));
 content.appendChild(messageTextElement);
 
-var urlElement = WebInspector.linkifyResourceAsNode(frame.scriptName, "scripts", frame.lineNumber, "console-message-url");
+var urlElement = WebInspector.linkifyResourceAsNode(frame.url, "scripts", frame.lineNumber, "console-message-url");
 content.appendChild(urlElement);
 
 var treeElement = new TreeElement(content);
@@ -7415,9 +6842,6 @@ var sourceString;
 switch (this.source) {
 case WebInspector.ConsoleMessage.MessageSource.HTML:
 sourceString = "HTML";
-break;
-case WebInspector.ConsoleMessage.MessageSource.WML:
-sourceString = "WML";
 break;
 case WebInspector.ConsoleMessage.MessageSource.XML:
 sourceString = "XML";
@@ -7494,10 +6918,10 @@ return false;
 var l = this._stackTrace;
 var r = msg._stackTrace;
 for (var i = 0; i < l.length; i++) {
-if (l[i].scriptName !== r[i].scriptName ||
+if (l[i].url !== r[i].url ||
 l[i].functionName !== r[i].functionName ||
 l[i].lineNumber !== r[i].lineNumber ||
-l[i].column !== r[i].column)
+l[i].columnNumber !== r[i].columnNumber)
 return false;
 }
 }
@@ -7514,33 +6938,32 @@ return (this.source === msg.source)
 
 
 WebInspector.ConsoleMessage.MessageSource = {
-HTML: 0,
-WML: 1,
-XML: 2,
-JS: 3,
-CSS: 4,
-Other: 5
+HTML: "html",
+XML: "xml",
+JS: "javascript",
+CSS: "css",
+Other: "other"
 }
 
 WebInspector.ConsoleMessage.MessageType = {
-Log: 0,
-Object: 1,
-Trace: 2,
-StartGroup: 3,
-StartGroupCollapsed: 4,
-EndGroup: 5,
-Assert: 6,
-UncaughtException: 7,
-NetworkError:8,
-Result: 9
+Log: "log",
+Object: "other",
+Trace: "trace",
+StartGroup: "startGroup",
+StartGroupCollapsed: "startGroupCollapsed",
+EndGroup: "endGroup",
+Assert: "assert",
+UncaughtException: "uncaughtException",
+NetworkError: "networkError",
+Result: "result"
 }
 
 WebInspector.ConsoleMessage.MessageLevel = {
-Tip: 0,
-Log: 1,
-Warning: 2,
-Error: 3,
-Debug: 4
+Tip: "tip",
+Log: "log",
+Warning: "warning",
+Error: "error",
+Debug: "debug"
 }
 
 WebInspector.ConsoleCommand = function(command)
@@ -7564,9 +6987,9 @@ return element;
 }
 }
 
-WebInspector.ConsoleCommandResult = function(result, originatingCommand)
+WebInspector.ConsoleCommandResult = function(result, wasThrown, originatingCommand)
 {
-var level = (result.isError() ? WebInspector.ConsoleMessage.MessageLevel.Error : WebInspector.ConsoleMessage.MessageLevel.Log);
+var level = (wasThrown ? WebInspector.ConsoleMessage.MessageLevel.Error : WebInspector.ConsoleMessage.MessageLevel.Log);
 this.originatingCommand = originatingCommand;
 WebInspector.ConsoleMessage.call(this, WebInspector.ConsoleMessage.MessageSource.JS, WebInspector.ConsoleMessage.MessageType.Result, level, -1, null, 1, null, [result]);
 }
@@ -7646,6 +7069,8 @@ this.element.addStyleClass("panel");
 this.element.addStyleClass(name);
 this._panelName = name;
 
+this._shortcuts = {};
+
 WebInspector.settings.installApplicationSetting(this._sidebarWidthSettingName(), undefined);
 }
 
@@ -7686,6 +7111,7 @@ WebInspector.currentFocusElement = this.defaultFocusedElement;
 
 this.restoreSidebarWidth();
 this._restoreScrollPositions();
+WebInspector.extensionServer.notifyPanelShown(this.name);
 },
 
 hide: function()
@@ -7698,6 +7124,7 @@ this._statusBarItemContainer.parentNode.removeChild(this._statusBarItemContainer
 delete this._statusBarItemContainer;
 if ("_toolbarItem" in this)
 this._toolbarItem.removeStyleClass("toggled-on");
+WebInspector.extensionServer.notifyPanelHidden(this.name);
 },
 
 reset: function()
@@ -7847,7 +7274,7 @@ showFirstResult = true;
 
 if (currentView !== this.visibleView) {
 this.showView(currentView);
-WebInspector.focusSearchField();
+WebInspector.searchController.focusSearchField();
 }
 
 if (showFirstResult)
@@ -7880,7 +7307,7 @@ showLastResult = true;
 
 if (currentView !== this.visibleView) {
 this.showView(currentView);
-WebInspector.focusSearchField();
+WebInspector.searchController.focusSearchField();
 }
 
 if (showLastResult)
@@ -8028,6 +7455,31 @@ var container = elements[i];
 if (container._scrollTop)
 container.scrollTop = container._scrollTop;
 }
+},
+
+handleShortcut: function(event)
+{
+var shortcutKey = WebInspector.KeyboardShortcut.makeKeyFromEvent(event);
+var handler = this._shortcuts[shortcutKey];
+if (handler) {
+handler(event);
+event.handled = true;
+}
+},
+
+registerShortcuts: function(shortcuts)
+{
+this._shortcuts = shortcuts || {};
+var goToLineShortcut = WebInspector.GoToLineDialog.createShortcut();
+this._shortcuts[goToLineShortcut.key] = this._showGoToLineDialog.bind(this);
+},
+
+_showGoToLineDialog: function(e)
+{
+var view = this.visibleView;
+WebInspector.GoToLineDialog.show(view);
+if (view)
+WebInspector.GoToLineDialog.show(view);
 }
 }
 
@@ -8190,15 +7642,16 @@ this._dividersLabelBarElement.style.top = dividersTop + "px";
 
 
 
-WebInspector.Resource = function(identifier, url)
+WebInspector.Resource = function(identifier, url, loaderId)
 {
 this.identifier = identifier;
 this.url = url;
+this.loaderId = loaderId;
 this._startTime = -1;
 this._endTime = -1;
 this._category = WebInspector.resourceCategories.other;
 this._pendingContentCallbacks = [];
-this._responseHeadersSize = 0;
+this.history = [];
 }
 
 
@@ -8264,6 +7717,93 @@ default:
 return "other";
 }
 }
+}
+
+WebInspector.Resource._domainModelBindings = [];
+
+WebInspector.Resource.registerDomainModelBinding = function(type, binding)
+{
+WebInspector.Resource._domainModelBindings[type] = binding;
+}
+
+
+WebInspector.Resource._resourceRevisionRegistry = function()
+{
+if (!WebInspector.Resource._resourceRevisionRegistryObject) {
+if (window.localStorage) {
+var resourceHistory = window.localStorage["resource-history"];
+try {
+WebInspector.Resource._resourceRevisionRegistryObject = resourceHistory ? JSON.parse(resourceHistory) : {};
+} catch (e) {
+WebInspector.Resource._resourceRevisionRegistryObject = {};
+}
+} else
+WebInspector.Resource._resourceRevisionRegistryObject = {};
+}
+return WebInspector.Resource._resourceRevisionRegistryObject;
+}
+
+WebInspector.Resource.restoreRevisions = function()
+{
+var registry = WebInspector.Resource._resourceRevisionRegistry();
+var filteredRegistry = {};
+for (var url in registry) {
+var historyItems = registry[url];
+var resource = WebInspector.resourceForURL(url);
+
+var filteredHistoryItems = [];
+for (var i = 0; historyItems && i < historyItems.length; ++i) {
+var historyItem = historyItems[i];
+if (resource && historyItem.loaderId === resource.loaderId) {
+resource.addRevision(window.localStorage[historyItem.key], new Date(historyItem.timestamp), true);
+filteredHistoryItems.push(historyItem);
+filteredRegistry[url] = filteredHistoryItems;
+} else
+delete window.localStorage[historyItem.key];
+}
+}
+WebInspector.Resource._resourceRevisionRegistryObject = filteredRegistry;
+
+function persist()
+{
+window.localStorage["resource-history"] = JSON.stringify(filteredRegistry);
+}
+
+
+setTimeout(persist, 0);}
+
+WebInspector.Resource.persistRevision = function(resource)
+{
+if (!window.localStorage)
+return;
+
+var url = resource.url;
+var loaderId = resource.loaderId;
+var timestamp = resource._contentTimestamp.getTime();
+var key = "resource-history|" + url + "|" + loaderId + "|" + timestamp;
+var content = resource._content;
+
+var registry = WebInspector.Resource._resourceRevisionRegistry();
+
+var historyItems = registry[resource.url];
+if (!historyItems) {
+historyItems = [];
+registry[resource.url] = historyItems;
+}
+historyItems.push({url: url, loaderId: loaderId, timestamp: timestamp, key: key});
+
+function persist()
+{
+window.localStorage[key] = content;
+window.localStorage["resource-history"] = JSON.stringify(registry);
+}
+
+
+setTimeout(persist, 0);
+}
+
+WebInspector.Resource.Events = {
+RevisionAdded: 0
 }
 
 WebInspector.Resource.prototype = {
@@ -8405,7 +7945,7 @@ get transferSize()
 if (this.cached)
 return 0;
 if (this.statusCode === 304) 
-return this._responseHeadersSize;
+return this.responseHeadersSize;
 if (this._transferSize !== undefined)
 return this._transferSize;
 
@@ -8419,7 +7959,7 @@ return this._transferSize;
 
 
 var bodySize = Number(this.responseHeaders["Content-Length"] || this.resourceSize);
-return this._responseHeadersSize + bodySize;
+return this.responseHeadersSize + bodySize;
 },
 
 increaseTransferSize: function(x)
@@ -8455,6 +7995,16 @@ return this._failed;
 set failed(x)
 {
 this._failed = x;
+},
+
+get canceled()
+{
+return this._canceled;
+},
+
+set canceled(x)
+{
+this._canceled = x;
 },
 
 get category()
@@ -8558,8 +8108,39 @@ set requestHeaders(x)
 this._requestHeaders = x;
 delete this._sortedRequestHeaders;
 delete this._requestCookies;
+delete this._responseHeadersSize;
 
 this.dispatchEventToListeners("requestHeaders changed");
+},
+
+get requestHeadersText()
+{
+if (this._requestHeadersText !== undefined)
+return this._requestHeadersText;
+
+this._requestHeadersText = "";
+for (var key in this.requestHeaders)
+this._requestHeadersText += key + ": " + this.requestHeaders[key] + "\n"; 
+return this._requestHeadersText;
+},
+
+set requestHeadersText(x)
+{
+this._requestHeadersText = x;
+delete this._responseHeadersSize;
+
+this.dispatchEventToListeners("requestHeaders changed");
+},
+
+get requestHeadersSize()
+{
+if (typeof(this._requestHeadersSize) === "undefined") {
+if (this._requestHeadersText)
+this._requestHeadersSize = this._requestHeadersText.length;
+else 
+this._requestHeadersSize = this._headersSize(this._requestHeaders)
+}
+return this._requestHeadersSize;
 },
 
 get sortedRequestHeaders()
@@ -8606,13 +8187,43 @@ return this._responseHeaders || {};
 set responseHeaders(x)
 {
 this._responseHeaders = x;
-
-this._responseHeadersSize = this._headersSize(x);
+delete this._responseHeadersSize;
 delete this._sortedResponseHeaders;
 delete this._responseCookies;
 
 this.dispatchEventToListeners("responseHeaders changed");
 },
+
+get responseHeadersText()
+{
+if (this._responseHeadersText !== undefined)
+return this._responseHeadersText;
+
+this._responseHeadersText = "";
+for (var key in this.responseHeaders)
+this._responseHeadersText += key + ": " + this.responseHeaders[key] + "\n"; 
+return this._responseHeadersText;
+},
+
+set responseHeadersText(x)
+{
+this._responseHeadersText = x;
+delete this._responseHeadersSize;
+
+this.dispatchEventToListeners("responseHeaders changed");
+},
+
+get responseHeadersSize()
+{
+if (typeof(this._responseHeadersSize) === "undefined") {
+if (this._responseHeadersText)
+this._responseHeadersSize = this._responseHeadersText.length;
+else 
+this._responseHeadersSize = this._headersSize(this._responseHeaders)
+}
+return this._responseHeadersSize;
+},
+
 
 get sortedResponseHeaders()
 {
@@ -8656,7 +8267,7 @@ if (this._parsedFormParameters)
 return this._parsedFormParameters;
 if (!this.requestFormData)
 return;
-var requestContentType = this.requestHeaderValue("Content-Type");
+var requestContentType = this.requestContentType();
 if (!requestContentType || !requestContentType.match(/^application\/x-www-form-urlencoded\s*(;.*)?$/i))
 return;
 this._parsedFormParameters = this._parseParameters(this.requestFormData);
@@ -8691,9 +8302,11 @@ return headers[header];
 
 _headersSize: function(headers)
 {
+
+
 var size = 0;
 for (var header in headers)
-size += header.length + headers[header].length + 3; 
+size += header.length + headers[header].length + 4; 
 return size;
 },
 
@@ -8795,59 +8408,42 @@ setInitialContent: function(content)
 this._content = content;
 },
 
-isLocallyModified: function()
+isEditable: function()
 {
-return !!this._baseRevision;
+if (this._actualResource)
+return false;
+var binding = WebInspector.Resource._domainModelBindings[this.type];
+return binding && binding.canSetContent(this);
 },
 
-setContent: function(newContent, onRevert)
+setContent: function(newContent, majorChange, callback)
 {
-var revisionResource = new WebInspector.Resource(null, this.url);
-revisionResource.type = this.type;
-revisionResource.loader = this.loader;
-revisionResource.timestamp = this.timestamp;
-revisionResource._content = this._content;
-revisionResource._actualResource = this;
-revisionResource._fireOnRevert = onRevert;
-
-if (this.finished)
-revisionResource.finished = true;
-else {
-function finished()
-{
-this.removeEventListener("finished", finished);
-revisionResource.finished = true;
-}
-this.addEventListener("finished", finished.bind(this));
-}
-
-if (!this._baseRevision)
-this._baseRevision = revisionResource;
-else
-revisionResource._baseRevision = this._baseRevision;
-
-var data = { revision: revisionResource };
-this._content = newContent;
-this.timestamp = new Date();
-this.dispatchEventToListeners("content-changed", data);
-},
-
-revertToThis: function()
-{
-if (!this._actualResource || !this._fireOnRevert)
+if (!this.isEditable(this)) {
+if (callback)
+callback("Resource is not editable");
 return;
-
-function callback(content)
-{
-if (content)
-this._fireOnRevert(content);
 }
-this.requestContent(callback.bind(this));
+var binding = WebInspector.Resource._domainModelBindings[this.type];
+binding.setContent(this, newContent, majorChange, callback);
 },
 
-get baseRevision()
+addRevision: function(newContent, timestamp, restoringHistory)
 {
-return this._baseRevision;
+var revision = new WebInspector.ResourceRevision(this, this._content, this._contentTimestamp);
+this.history.push(revision);
+
+this._content = newContent;
+this._contentTimestamp = timestamp || new Date();
+
+this.dispatchEventToListeners(WebInspector.Resource.Events.RevisionAdded, revision);
+
+if (!restoringHistory)
+this._persistRevision();
+},
+
+_persistRevision: function()
+{
+WebInspector.Resource.persistRevision(this);
 },
 
 requestContent: function(callback)
@@ -8881,6 +8477,21 @@ else
 image.src = this.url;
 },
 
+isDataURL: function()
+{
+return this.url.match(/^data:/i);
+},
+
+requestContentType: function()
+{
+return this.requestHeaderValue("Content-Type");
+},
+
+isPingRequest: function()
+{
+return "text/ping" === this.requestContentType();
+},
+
 _contentURL: function()
 {
 const maxDataUrlSize = 1024 * 1024;
@@ -8901,6 +8512,7 @@ this._contentEncoded = !WebInspector.Resource.Type.isTextType(this.type);
 function onResourceContent(data)
 {
 this._content = data;
+this._originalContent = data;
 var callbacks = this._pendingContentCallbacks.slice();
 for (var i = 0; i < callbacks.length; ++i)
 callbacks[i](this._content, this._contentEncoded);
@@ -8912,6 +8524,767 @@ WebInspector.networkManager.requestContent(this, this._contentEncoded, onResourc
 }
 
 WebInspector.Resource.prototype.__proto__ = WebInspector.Object.prototype;
+
+WebInspector.ResourceRevision = function(resource, content, timestamp)
+{
+this._resource = resource;
+this._content = content;
+this._timestamp = timestamp;
+}
+
+WebInspector.ResourceRevision.prototype = {
+get resource()
+{
+return this._resource;
+},
+
+get timestamp()
+{
+return this._timestamp;
+},
+
+get content()
+{
+return this._content;
+},
+
+revertToThis: function()
+{
+function revert(content)
+{
+this._resource.setContent(content, true);
+}
+this.requestContent(revert.bind(this));
+},
+
+requestContent: function(callback)
+{
+if (typeof this._content === "string") {
+callback(this._content);
+return;
+}
+
+
+if (typeof this.resource._originalContent === "string") {
+this._content = this._resource._originalContent;
+callback(this._content);
+return;
+}
+
+
+function mycallback(content)
+{
+this._content = content;
+callback(content);
+}
+WebInspector.networkManager.requestContent(this._resource, false, mycallback.bind(this));
+}
+}
+
+WebInspector.ResourceDomainModelBinding = function()
+{
+}
+
+WebInspector.ResourceDomainModelBinding.prototype = {
+canSetContent: function()
+{
+
+return true;
+},
+
+setContent: function(resource, content, majorChange, callback)
+{
+
+}
+}
+
+
+
+
+
+WebInspector.CSSStyleModel = function()
+{
+new WebInspector.CSSStyleModelResourceBinding(this);
+}
+
+WebInspector.CSSStyleModel.parseRuleArrayPayload = function(ruleArray)
+{
+var result = [];
+for (var i = 0; i < ruleArray.length; ++i)
+result.push(WebInspector.CSSRule.parsePayload(ruleArray[i]));
+return result;
+}
+
+WebInspector.CSSStyleModel.Events = {
+StyleSheetChanged: 0
+}
+
+WebInspector.CSSStyleModel.prototype = {
+getStylesAsync: function(nodeId, userCallback)
+{
+function callback(userCallback, error, payload)
+{
+if (error) {
+if (userCallback)
+userCallback(null);
+return;
+}
+
+var result = {};
+if ("inlineStyle" in payload)
+result.inlineStyle = WebInspector.CSSStyleDeclaration.parsePayload(payload.inlineStyle);
+
+result.computedStyle = WebInspector.CSSStyleDeclaration.parsePayload(payload.computedStyle);
+result.matchedCSSRules = WebInspector.CSSStyleModel.parseRuleArrayPayload(payload.matchedCSSRules);
+
+result.styleAttributes = {};
+var payloadStyleAttributes = payload.styleAttributes;
+for (var i = 0; i < payloadStyleAttributes.length; ++i) {
+var name = payloadStyleAttributes[i].name;
+result.styleAttributes[name] = WebInspector.CSSStyleDeclaration.parsePayload(payloadStyleAttributes[i].style);
+}
+
+result.pseudoElements = [];
+for (var i = 0; i < payload.pseudoElements.length; ++i) {
+var entryPayload = payload.pseudoElements[i];
+result.pseudoElements.push({ pseudoId: entryPayload.pseudoId, rules: WebInspector.CSSStyleModel.parseRuleArrayPayload(entryPayload.rules) });
+}
+
+result.inherited = [];
+for (var i = 0; i < payload.inherited.length; ++i) {
+var entryPayload = payload.inherited[i];
+var entry = {};
+if ("inlineStyle" in entryPayload)
+entry.inlineStyle = WebInspector.CSSStyleDeclaration.parsePayload(entryPayload.inlineStyle);
+if ("matchedCSSRules" in entryPayload)
+entry.matchedCSSRules = WebInspector.CSSStyleModel.parseRuleArrayPayload(entryPayload.matchedCSSRules);
+result.inherited.push(entry);
+}
+
+if (userCallback)
+userCallback(result);
+}
+
+CSSAgent.getStylesForNode(nodeId, callback.bind(null, userCallback));
+},
+
+getComputedStyleAsync: function(nodeId, userCallback)
+{
+function callback(userCallback, error, stylePayload)
+{
+if (error)
+userCallback(null);
+else
+userCallback(WebInspector.CSSStyleDeclaration.parsePayload(stylePayload));
+}
+
+CSSAgent.getComputedStyleForNode(nodeId, callback.bind(null, userCallback));
+},
+
+getInlineStyleAsync: function(nodeId, userCallback)
+{
+function callback(userCallback, error, stylePayload)
+{
+if (error)
+userCallback(null);
+else
+userCallback(WebInspector.CSSStyleDeclaration.parsePayload(stylePayload));
+}
+
+CSSAgent.getInlineStyleForNode(nodeId, callback.bind(null, userCallback));
+},
+
+setRuleSelector: function(ruleId, nodeId, newSelector, successCallback, failureCallback)
+{
+function checkAffectsCallback(nodeId, successCallback, rulePayload, selectedNodeIds)
+{
+if (!selectedNodeIds)
+return;
+var doesAffectSelectedNode = (selectedNodeIds.indexOf(nodeId) >= 0);
+var rule = WebInspector.CSSRule.parsePayload(rulePayload);
+successCallback(rule, doesAffectSelectedNode);
+this._fireStyleSheetChanged(rule.id.styleSheetId, true);
+}
+
+function callback(nodeId, successCallback, failureCallback, error, newSelector, rulePayload)
+{
+
+if (error)
+failureCallback();
+else {
+var documentElementId = this._documentElementId(nodeId);
+if (documentElementId)
+WebInspector.domAgent.querySelectorAll(documentElementId, newSelector, checkAffectsCallback.bind(this, nodeId, successCallback, rulePayload));
+else
+failureCallback();
+}
+}
+
+CSSAgent.setRuleSelector(ruleId, newSelector, callback.bind(this, nodeId, successCallback, failureCallback, newSelector));
+},
+
+addRule: function(nodeId, selector, successCallback, failureCallback)
+{
+function checkAffectsCallback(nodeId, successCallback, rulePayload, selectedNodeIds)
+{
+if (!selectedNodeIds)
+return;
+
+var doesAffectSelectedNode = (selectedNodeIds.indexOf(nodeId) >= 0);
+var rule = WebInspector.CSSRule.parsePayload(rulePayload);
+successCallback(rule, doesAffectSelectedNode);
+this._fireStyleSheetChanged(rule.id.styleSheetId, true);
+}
+
+function callback(successCallback, failureCallback, selector, error, rulePayload)
+{
+if (error) {
+
+failureCallback();
+} else {
+var documentElementId = this._documentElementId(nodeId);
+if (documentElementId)
+WebInspector.domAgent.querySelectorAll(documentElementId, selector, checkAffectsCallback.bind(this, nodeId, successCallback, rulePayload));
+else
+failureCallback();
+}
+}
+
+CSSAgent.addRule(nodeId, selector, callback.bind(this, successCallback, failureCallback, selector));
+},
+
+_documentElementId: function(nodeId)
+{
+var node = WebInspector.domAgent.nodeForId(nodeId);
+if (!node)
+return null;
+return node.ownerDocumentElement().id;
+},
+
+_fireStyleSheetChanged: function(styleSheetId, majorChange, callback)
+{
+callback = callback || function() {};
+
+if (!majorChange || !styleSheetId || !this.hasEventListeners(WebInspector.CSSStyleModel.Events.StyleSheetChanged)) {
+callback();
+return;
+}
+
+function mycallback(error, content)
+{
+if (!error)
+this.dispatchEventToListeners(WebInspector.CSSStyleModel.Events.StyleSheetChanged, { styleSheetId: styleSheetId, content: content, majorChange: majorChange });
+callback();
+}
+
+CSSAgent.getStyleSheetText(styleSheetId, mycallback.bind(this));
+},
+
+setStyleSheetText: function(styleSheetId, newText, majorChange, userCallback)
+{
+function callback(error)
+{
+if (!error)
+this._fireStyleSheetChanged(styleSheetId, majorChange, userCallback ? userCallback.bind(this, error) : null);
+}
+CSSAgent.setStyleSheetText(styleSheetId, newText, callback.bind(this));
+}
+}
+
+WebInspector.CSSStyleModel.prototype.__proto__ = WebInspector.Object.prototype;
+
+WebInspector.CSSStyleDeclaration = function(payload)
+{
+this.id = payload.styleId;
+this.width = payload.width;
+this.height = payload.height;
+this.range = payload.range;
+this._shorthandValues = WebInspector.CSSStyleDeclaration.buildShorthandValueMap(payload.shorthandEntries);
+this._livePropertyMap = {}; 
+this._allProperties = []; 
+this._longhandProperties = {}; 
+this.__disabledProperties = {}; 
+var payloadPropertyCount = payload.cssProperties.length;
+
+var propertyIndex = 0;
+for (var i = 0; i < payloadPropertyCount; ++i) {
+var property = new WebInspector.CSSProperty.parsePayload(this, i, payload.cssProperties[i]);
+this._allProperties.push(property);
+if (property.disabled)
+this.__disabledProperties[i] = property;
+if (!property.active && !property.styleBased)
+continue;
+var name = property.name;
+this[propertyIndex] = name;
+this._livePropertyMap[name] = property;
+
+
+if (property.shorthand) { 
+var longhands = this._longhandProperties[property.shorthand];
+if (!longhands) {
+longhands = [];
+this._longhandProperties[property.shorthand] = longhands;
+}
+longhands.push(property);
+}
+++propertyIndex;
+}
+this.length = propertyIndex;
+if ("cssText" in payload)
+this.cssText = payload.cssText;
+}
+
+WebInspector.CSSStyleDeclaration.buildShorthandValueMap = function(shorthandEntries)
+{
+var result = {};
+for (var i = 0; i < shorthandEntries.length; ++i)
+result[shorthandEntries[i].name] = shorthandEntries[i].value;
+return result;
+}
+
+WebInspector.CSSStyleDeclaration.parsePayload = function(payload)
+{
+return new WebInspector.CSSStyleDeclaration(payload);
+}
+
+WebInspector.CSSStyleDeclaration.prototype = {
+get allProperties()
+{
+return this._allProperties;
+},
+
+getLiveProperty: function(name)
+{
+return this._livePropertyMap[name];
+},
+
+getPropertyValue: function(name)
+{
+var property = this._livePropertyMap[name];
+return property ? property.value : "";
+},
+
+getPropertyPriority: function(name)
+{
+var property = this._livePropertyMap[name];
+return property ? property.priority : "";
+},
+
+getPropertyShorthand: function(name)
+{
+var property = this._livePropertyMap[name];
+return property ? property.shorthand : "";
+},
+
+isPropertyImplicit: function(name)
+{
+var property = this._livePropertyMap[name];
+return property ? property.implicit : "";
+},
+
+styleTextWithShorthands: function()
+{
+var cssText = "";
+var foundProperties = {};
+for (var i = 0; i < this.length; ++i) {
+var individualProperty = this[i];
+var shorthandProperty = this.getPropertyShorthand(individualProperty);
+var propertyName = (shorthandProperty || individualProperty);
+
+if (propertyName in foundProperties)
+continue;
+
+if (shorthandProperty) {
+var value = this.getShorthandValue(shorthandProperty);
+var priority = this.getShorthandPriority(shorthandProperty);
+} else {
+var value = this.getPropertyValue(individualProperty);
+var priority = this.getPropertyPriority(individualProperty);
+}
+
+foundProperties[propertyName] = true;
+
+cssText += propertyName + ": " + value;
+if (priority)
+cssText += " !" + priority;
+cssText += "; ";
+}
+
+return cssText;
+},
+
+getLonghandProperties: function(name)
+{
+return this._longhandProperties[name] || [];
+},
+
+getShorthandValue: function(shorthandProperty)
+{
+var property = this.getLiveProperty(shorthandProperty);
+return property ? property.value : this._shorthandValues[shorthandProperty];
+},
+
+getShorthandPriority: function(shorthandProperty)
+{
+var priority = this.getPropertyPriority(shorthandProperty);
+if (priority)
+return priority;
+
+var longhands = this._longhandProperties[shorthandProperty];
+return longhands ? this.getPropertyPriority(longhands[0]) : null;
+},
+
+propertyAt: function(index)
+{
+return (index < this.allProperties.length) ? this.allProperties[index] : null;
+},
+
+pastLastSourcePropertyIndex: function()
+{
+for (var i = this.allProperties.length - 1; i >= 0; --i) {
+var property = this.allProperties[i];
+if (property.active || property.disabled)
+return i + 1;
+}
+return 0;
+},
+
+newBlankProperty: function()
+{
+return new WebInspector.CSSProperty(this, this.pastLastSourcePropertyIndex(), "", "", "", "active", true, false, false, "");
+},
+
+insertPropertyAt: function(index, name, value, userCallback)
+{
+function callback(userCallback, error, payload)
+{
+if (!userCallback)
+return;
+
+if (error) {
+console.error(JSON.stringify(error));
+userCallback(null);
+} else {
+userCallback(WebInspector.CSSStyleDeclaration.parsePayload(payload));
+WebInspector.cssModel._fireStyleSheetChanged(this.id.styleSheetId, true);
+}
+}
+
+CSSAgent.setPropertyText(this.id, index, name + ": " + value + ";", false, callback.bind(null, userCallback));
+},
+
+appendProperty: function(name, value, userCallback)
+{
+this.insertPropertyAt(this.allProperties.length, name, value, userCallback);
+}
+}
+
+WebInspector.CSSRule = function(payload)
+{
+this.id = payload.ruleId;
+this.selectorText = payload.selectorText;
+this.sourceLine = payload.sourceLine;
+this.sourceURL = payload.sourceURL;
+this.origin = payload.origin;
+this.style = WebInspector.CSSStyleDeclaration.parsePayload(payload.style);
+this.style.parentRule = this;
+this.selectorRange = payload.selectorRange;
+}
+
+WebInspector.CSSRule.parsePayload = function(payload)
+{
+return new WebInspector.CSSRule(payload);
+}
+
+WebInspector.CSSRule.prototype = {
+get isUserAgent()
+{
+return this.origin === "user-agent";
+},
+
+get isUser()
+{
+return this.origin === "user";
+},
+
+get isViaInspector()
+{
+return this.origin === "inspector";
+},
+
+get isRegular()
+{
+return this.origin === "";
+}
+}
+
+WebInspector.CSSProperty = function(ownerStyle, index, name, value, priority, status, parsedOk, implicit, shorthand, text)
+{
+this.ownerStyle = ownerStyle;
+this.index = index;
+this.name = name;
+this.value = value;
+this.priority = priority;
+this.status = status;
+this.parsedOk = parsedOk;
+this.implicit = implicit;
+this.shorthand = shorthand;
+this.text = text;
+}
+
+WebInspector.CSSProperty.parsePayload = function(ownerStyle, index, payload)
+{
+
+
+
+
+
+
+var result = new WebInspector.CSSProperty(
+ownerStyle, index, payload.name, payload.value, payload.priority || "", payload.status || "style", ("parsedOk" in payload) ? payload.parsedOk : true, !!payload.implicit, payload.shorthandName || "", payload.text);
+return result;
+}
+
+WebInspector.CSSProperty.prototype = {
+get propertyText()
+{
+if (this.text !== undefined)
+return this.text;
+
+if (this.name === "")
+return "";
+return this.name + ": " + this.value + (this.priority ? " !" + this.priority : "") + ";";
+},
+
+get isLive()
+{
+return this.active || this.styleBased;
+},
+
+get active()
+{
+return this.status === "active";
+},
+
+get styleBased()
+{
+return this.status === "style";
+},
+
+get inactive()
+{
+return this.status === "inactive";
+},
+
+get disabled()
+{
+return this.status === "disabled";
+},
+
+
+setText: function(propertyText, majorChange, userCallback)
+{
+function enabledCallback(style)
+{
+if (style)
+WebInspector.cssModel._fireStyleSheetChanged(style.id.styleSheetId, majorChange);
+if (userCallback)
+userCallback(style);
+}
+
+function callback(error, stylePayload)
+{
+if (!error) {
+this.text = propertyText;
+var style = WebInspector.CSSStyleDeclaration.parsePayload(stylePayload);
+var newProperty = style.allProperties[this.index];
+
+if (newProperty && this.disabled && !propertyText.match(/^\s*$/)) {
+newProperty.setDisabled(false, enabledCallback);
+return;
+}
+
+WebInspector.cssModel._fireStyleSheetChanged(style.id.styleSheetId, majorChange, userCallback ? userCallback.bind(this, style) : null);
+} else {
+if (userCallback)
+userCallback(null);
+}
+}
+
+if (!this.ownerStyle)
+throw "No ownerStyle for property";
+
+
+CSSAgent.setPropertyText(this.ownerStyle.id, this.index, propertyText, this.index < this.ownerStyle.pastLastSourcePropertyIndex(), callback.bind(this));
+},
+
+setValue: function(newValue, majorChange, userCallback)
+{
+var text = this.name + ": " + newValue + (this.priority ? " !" + this.priority : "") + ";"
+this.setText(text, majorChange, userCallback);
+},
+
+setDisabled: function(disabled, userCallback)
+{
+if (!this.ownerStyle && userCallback)
+userCallback(null);
+if (disabled === this.disabled && userCallback)
+userCallback(this.ownerStyle);
+
+function callback(error, stylePayload)
+{
+if (error) {
+if (userCallback)
+userCallback(null);
+return;
+}
+if (userCallback) {
+var style = WebInspector.CSSStyleDeclaration.parsePayload(stylePayload);
+userCallback(style);
+}
+WebInspector.cssModel._fireStyleSheetChanged(this.ownerStyle.id.styleSheetId, false);
+}
+
+CSSAgent.toggleProperty(this.ownerStyle.id, this.index, disabled, callback.bind(this));
+}
+}
+
+WebInspector.CSSStyleSheet = function(payload)
+{
+this.id = payload.styleSheetId;
+this.rules = [];
+this.styles = {};
+for (var i = 0; i < payload.rules.length; ++i) {
+var rule = WebInspector.CSSRule.parsePayload(payload.rules[i]);
+this.rules.push(rule);
+if (rule.style)
+this.styles[rule.style.id] = rule.style;
+}
+if ("text" in payload)
+this._text = payload.text;
+}
+
+WebInspector.CSSStyleSheet.createForId = function(styleSheetId, userCallback)
+{
+function callback(error, styleSheetPayload)
+{
+if (error)
+userCallback(null);
+else
+userCallback(new WebInspector.CSSStyleSheet(styleSheetPayload));
+}
+CSSAgent.getStyleSheet(styleSheetId, callback.bind(this));
+}
+
+WebInspector.CSSStyleSheet.prototype = {
+getText: function()
+{
+return this._text;
+},
+
+setText: function(newText, majorChange, userCallback)
+{
+function callback(error)
+{
+if (userCallback)
+userCallback(error);
+if (!error)
+WebInspector.cssModel._fireStyleSheetChanged(this.id, majorChange);
+}
+
+CSSAgent.setStyleSheetText(this.id, newText, callback.bind(this));
+}
+}
+
+WebInspector.CSSStyleModelResourceBinding = function(cssModel)
+{
+this._cssModel = cssModel;
+this._urlToStyleSheetId = {};
+this._styleSheetIdToURL = {};
+this._cssModel.addEventListener(WebInspector.CSSStyleModel.Events.StyleSheetChanged, this._styleSheetChanged, this);
+WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.InspectedURLChanged, this._inspectedURLChanged, this);
+WebInspector.Resource.registerDomainModelBinding(WebInspector.Resource.Type.Stylesheet, this);
+}
+
+WebInspector.CSSStyleModelResourceBinding.prototype = {
+setContent: function(resource, content, majorChange, userCallback)
+{
+if (this._urlToStyleSheetId[resource.url]) {
+this._innerSetContent(resource.url, content, majorChange, userCallback);
+return;
+}
+this._loadStyleSheetHeaders(this._innerSetContent.bind(this, resource.url, content, majorChange, userCallback));
+},
+
+_inspectedURLChanged: function(event)
+{
+
+this._urlToStyleSheetId = {};
+this._styleSheetIdToURL = {};
+},
+
+_innerSetContent: function(url, content, majorChange, userCallback, error)
+{
+if (error) {
+userCallback(error);
+return;
+}
+
+var styleSheetId = this._urlToStyleSheetId[url];
+if (!styleSheetId) {
+if (userCallback)
+userCallback("No stylesheet found: " + url);
+return;
+}
+this._cssModel.setStyleSheetText(styleSheetId, content, majorChange, userCallback);
+},
+
+_loadStyleSheetHeaders: function(callback)
+{
+function didGetAllStyleSheets(error, infos)
+{
+if (error) {
+callback(error);
+return;
+}
+
+for (var i = 0; i < infos.length; ++i) {
+var info = infos[i];
+this._urlToStyleSheetId[info.sourceURL] = info.styleSheetId;
+this._styleSheetIdToURL[info.styleSheetId] = info.sourceURL;
+}
+callback();
+}
+CSSAgent.getAllStyleSheets(didGetAllStyleSheets.bind(this));
+},
+
+_styleSheetChanged: function(event)
+{
+var styleSheetId = event.data.styleSheetId;
+function setContent()
+{
+var url = this._styleSheetIdToURL[styleSheetId];
+if (!url)
+return;
+
+var resource = WebInspector.resourceForURL(url);
+if (!resource)
+return;
+
+var majorChange = event.data.majorChange;
+if (majorChange)
+resource.addRevision(event.data.content);
+}
+
+if (!this._styleSheetIdToURL[styleSheetId]) {
+this._loadStyleSheetHeaders(setContent.bind(this));
+return;
+}
+setContent.call(this);
+}
+}
+
+WebInspector.CSSStyleModelResourceBinding.prototype.__proto__ = WebInspector.ResourceDomainModelBinding.prototype;
 
 
 
@@ -8927,9 +9300,7 @@ NetworkAgent.enable();
 WebInspector.NetworkManager.EventTypes = {
 ResourceStarted: "ResourceStarted",
 ResourceUpdated: "ResourceUpdated",
-ResourceFinished: "ResourceFinished",
-FrameCommittedLoad: "FrameCommittedLoad",
-FrameDetached: "FrameDetached"
+ResourceFinished: "ResourceFinished"
 }
 
 WebInspector.NetworkManager.prototype = {
@@ -8944,7 +9315,7 @@ function callbackWrapper(error, content)
 {
 callback(!error ? content : null);
 }
-NetworkAgent.getResourceContent(resource.frameId, resource.url, base64Encode, callbackWrapper);
+PageAgent.getResourceContent(resource.frameId, resource.url, base64Encode, callbackWrapper);
 },
 
 inflightResourceForURL: function(url)
@@ -8974,16 +9345,19 @@ resource.requestFormData = request.postData;
 
 _updateResourceWithResponse: function(resource, response)
 {
-if (!("status" in response))
+if (!response)
 return;
 
 resource.mimeType = response.mimeType;
 resource.statusCode = response.status;
 resource.statusText = response.statusText;
 resource.responseHeaders = response.headers;
-
+if (response.headersText)
+resource.responseHeadersText = response.headersText;
 if (response.requestHeaders)
 resource.requestHeaders = response.requestHeaders;
+if (response.requestHeadersText)
+resource.requestHeadersText = response.requestHeadersText;
 
 resource.connectionReused = response.connectionReused;
 resource.connectionID = response.connectionID;
@@ -9001,14 +9375,22 @@ resource.resourceSize = cachedResource.bodySize;
 this._updateResourceWithResponse(resource, cachedResource.response);
 },
 
-requestWillBeSent: function(identifier, frameId, loaderId, documentURL, request, redirectResponse, time, callStack)
+_isNull: function(response)
+{
+return response && !response.status && !response.mimeType && !Object.keys(response.headers).length;
+},
+
+requestWillBeSent: function(identifier, frameId, loaderId, documentURL, request, time, stackTrace, redirectResponse)
 {
 var resource = this._inflightResourcesById[identifier];
 if (resource) {
+
+if (this._isNull(redirectResponse))
+return;
 this.responseReceived(identifier, time, "Other", redirectResponse);
 resource = this._appendRedirect(identifier, time, request.url);
 } else
-resource = this._createResource(identifier, frameId, loaderId, request.url, documentURL, callStack);
+resource = this._createResource(identifier, frameId, loaderId, request.url, documentURL, stackTrace);
 this._updateResourceWithRequest(resource, request);
 resource.startTime = time;
 
@@ -9027,6 +9409,10 @@ this._updateResource(resource);
 
 responseReceived: function(identifier, time, resourceType, response)
 {
+
+if (this._isNull(response))
+return;
+
 var resource = this._inflightResourcesById[identifier];
 if (!resource)
 return;
@@ -9039,15 +9425,15 @@ this._updateResourceWithResponse(resource, response);
 this._updateResource(resource);
 },
 
-dataReceived: function(identifier, time, dataLength, lengthReceived)
+dataReceived: function(identifier, time, dataLength, encodedDataLength)
 {
 var resource = this._inflightResourcesById[identifier];
 if (!resource)
 return;
 
 resource.resourceSize += dataLength;
-if (lengthReceived != -1)
-resource.increaseTransferSize(lengthReceived);
+if (encodedDataLength != -1)
+resource.increaseTransferSize(encodedDataLength);
 resource.endTime = time;
 
 this._updateResource(resource);
@@ -9062,13 +9448,14 @@ return;
 this._finishResource(resource, finishTime);
 },
 
-loadingFailed: function(identifier, time, localizedDescription)
+loadingFailed: function(identifier, time, localizedDescription, canceled)
 {
 var resource = this._inflightResourcesById[identifier];
 if (!resource)
 return;
 
 resource.failed = true;
+resource.canceled = canceled;
 resource.localizedFailDescription = localizedDescription;
 this._finishResource(resource, time);
 },
@@ -9084,11 +9471,6 @@ resource.startTime = resource.responseReceivedTime = time;
 this._finishResource(resource, time);
 },
 
-frameDetached: function(frameId)
-{
-this._dispatchEventToListeners(WebInspector.NetworkManager.EventTypes.FrameDetached, frameId);
-},
-
 initialContentSet: function(identifier, sourceString, type)
 {
 var resource = WebInspector.networkResourceById(identifier);
@@ -9098,11 +9480,6 @@ return;
 resource.type = WebInspector.Resource.Type[type];
 resource.setInitialContent(sourceString);
 this._updateResource(resource);
-},
-
-frameNavigated: function(frame, loaderId)
-{
-this._dispatchEventToListeners(WebInspector.NetworkManager.EventTypes.FrameCommittedLoad, { frame: frame, loaderId: loaderId });
 },
 
 webSocketCreated: function(identifier, requestURL)
@@ -9190,10 +9567,9 @@ this._manager.dispatchEventToListeners(eventType, resource);
 
 _createResource: function(identifier, frameId, loaderId, url, documentURL, stackTrace)
 {
-var resource = new WebInspector.Resource(identifier, url);
+var resource = new WebInspector.Resource(identifier, url, loaderId);
 resource.documentURL = documentURL;
 resource.frameId = frameId;
-resource.loaderId = loaderId;
 resource.stackTrace = stackTrace;
 return resource;
 }
@@ -9206,19 +9582,24 @@ return resource;
 
 WebInspector.ResourceTreeModel = function(networkManager)
 {
-WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceFinished, this._onResourceUpdated, this);
+WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceStarted, this._onResourceStarted, this);
 WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceUpdated, this._onResourceUpdated, this);
-WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.FrameDetached, this._onFrameDetachedFromParent, this);
-WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.FrameCommittedLoad, this._onCommitLoad, this);
+WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceFinished, this._onResourceUpdated, this);
 
 this.frontendReused();
+InspectorBackend.registerDomainDispatcher("Page", new WebInspector.PageDispatcher(this));
 }
 
 WebInspector.ResourceTreeModel.EventTypes = {
 FrameAdded: "FrameAdded",
 FrameNavigated: "FrameNavigated",
 FrameDetached: "FrameDetached",
-ResourceAdded: "ResourceAdded"
+ResourceAdded: "ResourceAdded",
+WillLoadCachedResources: "WillLoadCachedResources",
+CachedResourcesLoaded: "CachedResourcesLoaded",
+DOMContentLoaded: "DOMContentLoaded",
+OnLoad: "OnLoad",
+InspectedURLChanged: "InspectedURLChanged"
 }
 
 WebInspector.ResourceTreeModel.prototype = {
@@ -9227,30 +9608,44 @@ frontendReused: function()
 this._resourcesByURL = {};
 this._resourcesByFrameId = {};
 this._subframes = {};
-NetworkAgent.getCachedResources(this._processCachedResources.bind(this));
+this._frameIds = {};
+delete this._cachedResourcesProcessed;
+PageAgent.getResourceTree(this._processCachedResources.bind(this));
 },
 
 _processCachedResources: function(error, mainFramePayload)
 {
-if (error)
+if (error) {
+console.error(JSON.stringify(error));
 return;
+}
 
-this.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.FrameNavigated, 0);
-
+this.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.WillLoadCachedResources);
 WebInspector.mainResource = this._addFramesRecursively(mainFramePayload);
+this._dispatchInspectedURLChanged(WebInspector.mainResource.url);
+this.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.CachedResourcesLoaded);
+WebInspector.Resource.restoreRevisions();
+
 this._cachedResourcesProcessed = true;
 },
 
-_addOrUpdateFrame: function(frame)
+_dispatchInspectedURLChanged: function(url)
 {
-this.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.FrameAdded, frame);
+InspectorFrontendHost.inspectedURLChanged(url);
+this.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.InspectedURLChanged, url);
+},
 
+_addFrame: function(frame)
+{
+this._frameIds[frame.id] = frame;
 var subframes = this._subframes[frame.parentId];
 if (!subframes) {
 subframes = [];
-this._subframes[frame.parentId || 0] = subframes;
+this._subframes[frame.parentId] = subframes;
 }
+
 subframes.push(frame);
+this.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.FrameAdded, frame);
 },
 
 frames: function(parentFrameId)
@@ -9272,19 +9667,24 @@ result.push(resources[url]);
 return result;
 },
 
-_onCommitLoad: function(event)
+_frameNavigated: function(frame, loaderId)
 {
+
 if (!this._cachedResourcesProcessed)
 return;
 
-var frame = event.data.frame;
-var loaderId = event.data.loaderId;
+
+if (!this._frameIds[frame.id])
+this._addFrame(frame);
+else
+this._clearChildFramesAndResources(frame.id, loaderId);
+
+
 var isMainFrame = !frame.parentId;
 
 
-this._clearChildFramesAndResources(isMainFrame ? 0 : frame.id, loaderId);
+this.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.FrameNavigated, { frame: frame, loaderId: loaderId, isMainFrame: isMainFrame });
 
-this._addOrUpdateFrame(frame);
 
 var resourcesForFrame = this._resourcesByFrameId[frame.id];
 if (resourcesForFrame) {
@@ -9292,25 +9692,52 @@ for (var url in resourcesForFrame)
 this.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.ResourceAdded, resourcesForFrame[url]);
 }
 
-if (isMainFrame && this.resourceForURL(frame.url))
+
+if (isMainFrame && this.resourceForURL(frame.url)) {
 WebInspector.mainResource = this.resourceForURL(frame.url);
+this._dispatchInspectedURLChanged(frame.url);
+}
 },
 
-_onFrameDetachedFromParent: function(event)
+_frameDetached: function(frameId)
 {
+
 if (!this._cachedResourcesProcessed)
 return;
 
-var frameId = event.data;
-this._clearChildFramesAndResources(frameId, 0);
+this._clearChildFramesAndResources(frameId, "");
+var frame = this._frameIds[frameId];
+
+if (frame) {
+var siblings = this._subframes[frame.parentId];
+if (siblings)
+siblings.remove(frame);
+delete this._frameIds[frameId];
+}
+
 this.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.FrameDetached, frameId);
+},
+
+_onResourceStarted: function(event)
+{
+if (!this._cachedResourcesProcessed)
+return;
+this._bindResourceURL(event.data);
 },
 
 _onResourceUpdated: function(event)
 {
 if (!this._cachedResourcesProcessed)
 return;
-this._addResourceToFrame(event.data);
+
+var resource = event.data;
+if (resource.failed) {
+this._unbindResourceURL(resource);
+return;
+}
+
+if (resource.finished)
+this._addResourceToFrame(resource);
 },
 
 _addResourceToFrame: function(resource)
@@ -9333,7 +9760,7 @@ this.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.Resource
 
 forAllResources: function(callback)
 {
-this._callForFrameResources(0, callback);
+return this._callForFrameResources("", callback);
 },
 
 addConsoleMessage: function(msg)
@@ -9377,12 +9804,10 @@ this._resourcesByURL[resource.url] = resource;
 
 _clearChildFramesAndResources: function(frameId, loaderToPreserveId)
 {
-this.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.FrameNavigated, frameId);
-
 this._clearResources(frameId, loaderToPreserveId);
 var subframes = this._subframes[frameId];
 for (var i = 0; subframes && i < subframes.length; ++ i) {
-this.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.FrameRemoved, subframes[i].id);
+this.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.FrameDetached, subframes[i].id);
 this._clearChildFramesAndResources(subframes[i].id, loaderToPreserveId);
 }
 delete this._subframes[frameId];
@@ -9413,8 +9838,6 @@ this._resourcesByFrameId[frameId] = preservedResourcesForFrame;
 _callForFrameResources: function(frameId, callback)
 {
 var resources = this._resourcesByFrameId[frameId];
-if (!resources)
-return;
 
 for (var url in resources) {
 if (callback(resources[url]))
@@ -9443,7 +9866,7 @@ var frameResource = this._createResource(framePayload, framePayload.url);
 frameResource.type = WebInspector.Resource.Type.Document;
 frameResource.finished = true;
 
-this._addOrUpdateFrame(framePayload);
+this._addFrame(framePayload);
 this._addResourceToFrame(frameResource);
 
 for (var i = 0; frameTreePayload.childFrames && i < frameTreePayload.childFrames.length; ++i)
@@ -9465,14 +9888,47 @@ return frameResource;
 
 _createResource: function(frame, url)
 {
-var resource = new WebInspector.Resource(null, url);
+var resource = new WebInspector.Resource(null, url, frame.loaderId);
 resource.frameId = frame.id;
-resource.loaderId = frame.loaderId;
+resource.documentURL = frame.url;
 return resource;
 }
 }
 
 WebInspector.ResourceTreeModel.prototype.__proto__ = WebInspector.Object.prototype;
+
+WebInspector.PageDispatcher = function(resourceTreeModel)
+{
+this._resourceTreeModel = resourceTreeModel;
+}
+
+WebInspector.PageDispatcher.prototype = {
+domContentEventFired: function(time)
+{
+this._resourceTreeModel.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.DOMContentLoaded, time);
+
+
+WebInspector.mainResourceDOMContentTime = time;
+},
+
+loadEventFired: function(time)
+{
+this._resourceTreeModel.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.OnLoad, time);
+
+
+WebInspector.mainResourceLoadTime = time;
+},
+
+frameNavigated: function(frame, loaderId)
+{
+this._resourceTreeModel._frameNavigated(frame, loaderId);
+},
+
+frameDetached: function(frameId)
+{
+this._resourceTreeModel._frameDetached(frameId);
+}
+}
 
 
 
@@ -9666,8 +10122,6 @@ WebInspector.DOMStorageDispatcher = function()
 WebInspector.DOMStorageDispatcher.prototype = {
 addDOMStorage: function(payload)
 {
-if (!WebInspector.panels.resources)
-return;
 var domStorage = new WebInspector.DOMStorage(
 payload.id,
 payload.host,
@@ -9936,6 +10390,7 @@ this.columns = columns || {};
 this._columnsArray = [];
 for (var columnIdentifier in columns) {
 columns[columnIdentifier].ordinal = this._columnsArray.length;
+columns[columnIdentifier].identifier = columnIdentifier;
 this._columnsArray.push(columns[columnIdentifier]);
 }
 
@@ -12028,21 +12483,17 @@ InspectorBackend.registerDomainDispatcher("ApplicationCache", new WebInspector.A
 
 
 
-WebInspector.Script = function(sourceID, sourceURL, lineOffset, columnOffset, length, errorLine, errorMessage, worldType)
+WebInspector.Script = function(sourceID, sourceURL, startLine, startColumn, endLine, endColumn, errorLine, errorMessage, isContentScript)
 {
 this.sourceID = sourceID;
 this.sourceURL = sourceURL;
-this.lineOffset = lineOffset;
-this.columnOffset = columnOffset;
-this.length = length;
+this.lineOffset = startLine;
+this.columnOffset = startColumn;
+this.endLine = endLine;
+this.endColumn = endColumn;
 this.errorLine = errorLine;
 this.errorMessage = errorMessage;
-this.worldType = worldType;
-}
-
-WebInspector.Script.WorldType = {
-MAIN_WORLD: 0,
-EXTENSIONS_WORLD: 1
+this.isContentScript = isContentScript;
 }
 
 WebInspector.Script.prototype = {
@@ -12071,441 +12522,6 @@ callback(error, callFrames);
 }
 DebuggerAgent.editScriptSource(this.sourceID, newSource, didEditScriptSource.bind(this));
 }
-}
-
-
-
-
-
-WebInspector.Breakpoint = function(id, url, sourceID, lineNumber, columnNumber, condition, enabled)
-{
-this.id = id;
-this.url = url;
-this.sourceID = sourceID;
-this.lineNumber = lineNumber;
-this.columnNumber = columnNumber;
-this.condition = condition;
-this.enabled = enabled;
-this.locations = [];
-}
-
-WebInspector.Breakpoint.prototype = {
-addLocation: function(sourceID, lineNumber, columnNumber)
-{
-this.locations.push({ sourceID: sourceID, lineNumber: lineNumber, columnNumber: columnNumber });
-}
-}
-
-
-
-
-
-WebInspector.BreakpointManager = function()
-{
-this._stickyBreakpoints = {};
-var breakpoints = WebInspector.settings.findSettingForAllProjects("nativeBreakpoints");
-for (var projectId in breakpoints)
-this._stickyBreakpoints[projectId] = this._validateBreakpoints(breakpoints[projectId]);
-
-this._breakpoints = {};
-this._domBreakpointsRestored = false;
-
-WebInspector.settings.addEventListener(WebInspector.Settings.Events.ProjectChanged, this._projectChanged, this);
-WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.DebuggerPaused, this._debuggerPaused, this);
-WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.DebuggerResumed, this._debuggerResumed, this);
-}
-
-WebInspector.BreakpointManager.BreakpointTypes = {
-DOM: "DOM",
-EventListener: "EventListener",
-XHR: "XHR"
-}
-
-WebInspector.BreakpointManager.Events = {
-DOMBreakpointAdded: "dom-breakpoint-added",
-ProjectChanged: "project-changed"
-}
-
-WebInspector.BreakpointManager.prototype = {
-createDOMBreakpoint: function(nodeId, type)
-{
-this._createDOMBreakpoint(nodeId, type, true, false);
-},
-
-_createDOMBreakpoint: function(nodeId, type, enabled, restored)
-{
-var node = WebInspector.domAgent.nodeForId(nodeId);
-if (!node)
-return;
-
-var breakpointId = this._createDOMBreakpointId(nodeId, type);
-if (breakpointId in this._breakpoints)
-return;
-
-var breakpoint = new WebInspector.DOMBreakpoint(node, type);
-this._setBreakpoint(breakpointId, breakpoint, enabled, restored);
-if (enabled && restored)
-breakpoint._enable();
-
-breakpoint.view = new WebInspector.DOMBreakpointView(this, breakpointId, enabled, node, type);
-this.dispatchEventToListeners(WebInspector.BreakpointManager.Events.DOMBreakpointAdded, breakpoint.view);
-},
-
-_setBreakpoint: function(breakpointId, breakpoint, enabled, restored)
-{
-this._breakpoints[breakpointId] = breakpoint;
-breakpoint.enabled = enabled;
-if (restored)
-return;
-if (enabled)
-breakpoint._enable();
-this._saveBreakpoints();
-},
-
-_setBreakpointEnabled: function(breakpointId, enabled)
-{
-var breakpoint = this._breakpoints[breakpointId];
-if (breakpoint.enabled === enabled)
-return;
-if (enabled)
-breakpoint._enable();
-else
-breakpoint._disable();
-breakpoint.enabled = enabled;
-this._saveBreakpoints();
-},
-
-_removeBreakpoint: function(breakpointId)
-{
-var breakpoint = this._breakpoints[breakpointId];
-if (breakpoint.enabled)
-breakpoint._disable();
-delete this._breakpoints[breakpointId];
-this._saveBreakpoints();
-},
-
-breakpointViewForEventData: function(eventData)
-{
-var breakpointId;
-if (eventData.breakpointType === WebInspector.BreakpointManager.BreakpointTypes.DOM)
-breakpointId = this._createDOMBreakpointId(eventData.nodeId, eventData.type);
-else
-return;
-
-var breakpoint = this._breakpoints[breakpointId];
-if (breakpoint)
-return breakpoint.view;
-},
-
-_debuggerPaused: function(event)
-{
-var eventType = event.data.eventType;
-var eventData = event.data.eventData;
-
-if (eventType !== WebInspector.DebuggerEventTypes.NativeBreakpoint)
-return;
-
-var breakpointView = this.breakpointViewForEventData(eventData);
-if (!breakpointView)
-return;
-
-breakpointView.hit = true;
-this._lastHitBreakpointView = breakpointView;
-},
-
-_debuggerResumed: function(event)
-{
-if (!this._lastHitBreakpointView)
-return;
-this._lastHitBreakpointView.hit = false;
-delete this._lastHitBreakpointView;
-},
-
-_projectChanged: function(event)
-{
-this._breakpoints = {};
-this._domBreakpointsRestored = false;
-this.dispatchEventToListeners(WebInspector.BreakpointManager.Events.ProjectChanged);
-},
-
-restoreDOMBreakpoints: function()
-{
-function didPushNodeByPathToFrontend(path, nodeId)
-{
-if (!nodeId)
-return;
-
-pathToNodeId[path] = nodeId;
-pendingCalls -= 1;
-if (pendingCalls)
-return;
-for (var i = 0; i < breakpoints.length; ++i) {
-var breakpoint = breakpoints[i];
-if (breakpoint.type !== WebInspector.BreakpointManager.BreakpointTypes.DOM)
-continue;
-var nodeId = pathToNodeId[breakpoint.condition.path];
-if (nodeId)
-this._createDOMBreakpoint(nodeId, breakpoint.condition.type, breakpoint.enabled, true);
-}
-this._domBreakpointsRestored = true;
-this._saveBreakpoints();
-}
-
-var breakpoints = this._stickyBreakpoints[WebInspector.settings.projectId] || [];
-var pathToNodeId = {};
-var pendingCalls = 0;
-for (var i = 0; i < breakpoints.length; ++i) {
-if (breakpoints[i].type !== WebInspector.BreakpointManager.BreakpointTypes.DOM)
-continue;
-var path = breakpoints[i].condition.path;
-if (path in pathToNodeId)
-continue;
-pathToNodeId[path] = 0;
-pendingCalls += 1;
-WebInspector.domAgent.pushNodeByPathToFrontend(path, didPushNodeByPathToFrontend.bind(this, path));
-}
-if (!pendingCalls)
-this._domBreakpointsRestored = true;
-},
-
-_saveBreakpoints: function()
-{
-var breakpoints = [];
-for (var breakpointId in this._breakpoints) {
-var breakpoint = this._breakpoints[breakpointId];
-var persistentBreakpoint = breakpoint._serializeToJSON();
-persistentBreakpoint.enabled = breakpoint.enabled;
-breakpoints.push(persistentBreakpoint);
-}
-if (!this._domBreakpointsRestored) {
-var stickyBreakpoints = this._stickyBreakpoints[WebInspector.settings.projectId] || [];
-for (var i = 0; i < stickyBreakpoints.length; ++i) {
-if (stickyBreakpoints[i].type === WebInspector.BreakpointManager.BreakpointTypes.DOM)
-breakpoints.push(stickyBreakpoints[i]);
-}
-}
-WebInspector.settings.nativeBreakpoints = breakpoints;
-
-this._stickyBreakpoints[WebInspector.settings.projectId] = breakpoints;
-},
-
-_validateBreakpoints: function(persistentBreakpoints)
-{
-var breakpoints = [];
-var breakpointsSet = {};
-for (var i = 0; i < persistentBreakpoints.length; ++i) {
-var breakpoint = persistentBreakpoints[i];
-if (!("type" in breakpoint && "enabled" in breakpoint && "condition" in breakpoint))
-continue;
-var id = breakpoint.type + ":";
-var condition = breakpoint.condition;
-if (breakpoint.type === WebInspector.BreakpointManager.BreakpointTypes.DOM) {
-if (typeof condition.path !== "string" || typeof condition.type !== "number")
-continue;
-id += condition.path + ":" + condition.type;
-} else
-continue;
-
-if (id in breakpointsSet)
-continue;
-breakpointsSet[id] = true;
-breakpoints.push(breakpoint);
-}
-return breakpoints;
-},
-
-_createDOMBreakpointId: function(nodeId, type)
-{
-return "dom:" + nodeId + ":" + type;
-}
-}
-
-WebInspector.BreakpointManager.prototype.__proto__ = WebInspector.Object.prototype;
-
-WebInspector.DOMBreakpoint = function(node, type)
-{
-this._nodeId = node.id;
-this._path = node.path();
-this._type = type;
-}
-
-WebInspector.DOMBreakpoint.prototype = {
-_enable: function()
-{
-BrowserDebuggerAgent.setDOMBreakpoint(this._nodeId, this._type);
-},
-
-_disable: function()
-{
-BrowserDebuggerAgent.removeDOMBreakpoint(this._nodeId, this._type);
-},
-
-_serializeToJSON: function()
-{
-var type = WebInspector.BreakpointManager.BreakpointTypes.DOM;
-return { type: type, condition: { path: this._path, type: this._type } };
-}
-}
-
-WebInspector.NativeBreakpointView = function(manager, id, enabled)
-{
-this._manager = manager;
-this._id = id;
-this._enabled = enabled;
-this._hit = false;
-}
-
-WebInspector.NativeBreakpointView.prototype = {
-get enabled()
-{
-return this._enabled;
-},
-
-set enabled(enabled)
-{
-this._manager._setBreakpointEnabled(this._id, enabled);
-this._enabled = enabled;
-this.dispatchEventToListeners("enable-changed");
-},
-
-get hit()
-{
-return this._hit;
-},
-
-set hit(hit)
-{
-this._hit = hit;
-this.dispatchEventToListeners("hit-state-changed");
-},
-
-remove: function()
-{
-this._manager._removeBreakpoint(this._id);
-this._onRemove();
-this.dispatchEventToListeners("removed");
-},
-
-_compare: function(x, y)
-{
-if (x !== y)
-return x < y ? -1 : 1;
-return 0;
-},
-
-_onRemove: function()
-{
-}
-}
-
-WebInspector.NativeBreakpointView.prototype.__proto__ = WebInspector.Object.prototype;
-
-WebInspector.DOMBreakpointView = function(manager, id, enabled, node, type)
-{
-WebInspector.NativeBreakpointView.call(this, manager, id, enabled);
-this._node = node;
-this._nodeId = node.id;
-this._type = type;
-node.breakpoints[this._type] = this;
-}
-
-WebInspector.DOMBreakpointView.prototype = {
-compareTo: function(other)
-{
-return this._compare(this._type, other._type);
-},
-
-populateLabelElement: function(element)
-{
-
-var linkifiedNode = WebInspector.panels.elements.linkifyNodeById(this._nodeId);
-linkifiedNode.addStyleClass("monospace");
-element.appendChild(linkifiedNode);
-var description = document.createElement("div");
-description.className = "source-text";
-description.textContent = WebInspector.domBreakpointTypeLabel(this._type);
-element.appendChild(description);
-},
-
-populateStatusMessageElement: function(element, eventData)
-{
-if (this._type === WebInspector.DOMBreakpointTypes.SubtreeModified) {
-var targetNodeObject = WebInspector.RemoteObject.fromPayload(eventData.targetNode);
-targetNodeObject.pushNodeToFrontend(decorateNode.bind(this));
-function decorateNode(targetNodeId)
-{
-if (!targetNodeId)
-return;
-
-targetNodeObject.release();
-var targetNode = WebInspector.panels.elements.linkifyNodeById(targetNodeId);
-if (eventData.insertion) {
-if (targetNodeId !== this._nodeId)
-this._format(element, "Paused on a \"%s\" breakpoint set on %s, because a new child was added to its descendant %s.", targetNode);
-else
-this._format(element, "Paused on a \"%s\" breakpoint set on %s, because a new child was added to that node.");
-} else
-this._format(element, "Paused on a \"%s\" breakpoint set on %s, because its descendant %s was removed.", targetNode);
-}
-} else
-this._format(element, "Paused on a \"%s\" breakpoint set on %s.");
-},
-
-_format: function(element, message, extraSubstitution)
-{
-var substitutions = [WebInspector.domBreakpointTypeLabel(this._type), WebInspector.panels.elements.linkifyNodeById(this._nodeId)];
-if (extraSubstitution)
-substitutions.push(extraSubstitution);
-
-var formatters = {
-s: function(substitution)
-{
-return substitution;
-}
-};
-function append(a, b)
-{
-if (typeof b === "string")
-b = document.createTextNode(b);
-element.appendChild(b);
-}
-WebInspector.formatLocalized(message, substitutions, formatters, "", append);
-},
-
-_onRemove: function()
-{
-delete this._node.breakpoints[this._type];
-}
-}
-
-WebInspector.DOMBreakpointView.prototype.__proto__ = WebInspector.NativeBreakpointView.prototype;
-
-WebInspector.DOMBreakpointTypes = {
-SubtreeModified: 0,
-AttributeModified: 1,
-NodeRemoved: 2
-};
-
-WebInspector.domBreakpointTypeLabel = function(type)
-{
-if (!WebInspector._DOMBreakpointTypeLabels) {
-WebInspector._DOMBreakpointTypeLabels = {};
-WebInspector._DOMBreakpointTypeLabels[WebInspector.DOMBreakpointTypes.SubtreeModified] = WebInspector.UIString("Subtree Modified");
-WebInspector._DOMBreakpointTypeLabels[WebInspector.DOMBreakpointTypes.AttributeModified] = WebInspector.UIString("Attribute Modified");
-WebInspector._DOMBreakpointTypeLabels[WebInspector.DOMBreakpointTypes.NodeRemoved] = WebInspector.UIString("Node Removed");
-}
-return WebInspector._DOMBreakpointTypeLabels[type];
-}
-
-WebInspector.domBreakpointTypeContextMenuLabel = function(type)
-{
-if (!WebInspector._DOMBreakpointTypeContextMenuLabels) {
-WebInspector._DOMBreakpointTypeContextMenuLabels = {};
-WebInspector._DOMBreakpointTypeContextMenuLabels[WebInspector.DOMBreakpointTypes.SubtreeModified] = WebInspector.UIString("Break on Subtree Modifications");
-WebInspector._DOMBreakpointTypeContextMenuLabels[WebInspector.DOMBreakpointTypes.AttributeModified] = WebInspector.UIString("Break on Attributes Modifications");
-WebInspector._DOMBreakpointTypeContextMenuLabels[WebInspector.DOMBreakpointTypes.NodeRemoved] = WebInspector.UIString("Break on Node Removal");
-}
-return WebInspector._DOMBreakpointTypeContextMenuLabels[type];
 }
 
 
@@ -12894,7 +12910,7 @@ WebInspector.ElementsTreeOutline.prototype.__proto__ = TreeOutline.prototype;
 WebInspector.ElementsTreeElement = function(node, elementCloseTag)
 {
 this._elementCloseTag = elementCloseTag;
-var hasChildrenOverride = !elementCloseTag && node.hasChildNodes() && !this._showInlineText(node);
+var hasChildrenOverride = !elementCloseTag && (node.hasChildNodes() || node.shadowRoot) && !this._showInlineText(node);
 
 
 TreeElement.call(this, "", node, hasChildrenOverride);
@@ -13000,9 +13016,9 @@ var node = this.representedObject;
 if (!node.nodeName() || node.nodeName().toLowerCase() !== "img")
 return;
 
-function setTooltip(error, result)
+function setTooltip(error, result, wasThrown)
 {
-if (error || !result || result.type !== "string")
+if (error || wasThrown || result.type !== "string")
 return;
 
 try {
@@ -13161,6 +13177,15 @@ treeElement.expandedChildrenLimit++;
 child = child.nextSibling;
 ++treeChildIndex;
 }
+
+var shadowRootChild = treeElement.children[treeElement.children.length - 2];
+if (shadowRootChild && shadowRootChild.representedObject.nodeType() === Node.SHADOW_ROOT_NODE) {
+if (!node.shadowRoot)
+treeElement.removeChild(shadowRootChild);
+else
+treeElement.representedObject = node.shadowRoot;
+} else if (node.shadowRoot)
+treeElement.insertChildElement(node.shadowRoot, treeChildIndex);
 }
 
 
@@ -13372,42 +13397,27 @@ var attribute = event.target.enclosingNodeOrSelfWithClass("webkit-html-attribute
 var newAttribute = event.target.enclosingNodeOrSelfWithClass("add-attribute");
 
 
-contextMenu.appendItem(WebInspector.UIString("Add Attribute"), this._addNewAttribute.bind(this));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Add attribute" : "Add Attribute"), this._addNewAttribute.bind(this));
 if (attribute && !newAttribute)
-contextMenu.appendItem(WebInspector.UIString("Edit Attribute"), this._startEditingAttribute.bind(this, attribute, event.target));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Edit attribute" : "Edit Attribute"), this._startEditingAttribute.bind(this, attribute, event.target));
 contextMenu.appendSeparator();
 
 
 contextMenu.appendItem(WebInspector.UIString("Edit as HTML"), this._editAsHTML.bind(this));
 contextMenu.appendItem(WebInspector.UIString("Copy as HTML"), this._copyHTML.bind(this));
-contextMenu.appendItem(WebInspector.UIString("Delete Node"), this.remove.bind(this));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Delete node" : "Delete Node"), this.remove.bind(this));
 
 if (Preferences.nativeInstrumentationEnabled) {
 
 contextMenu.appendSeparator();
-
-function handlerFunction(nodeId, breakType)
-{
-WebInspector.breakpointManager.createDOMBreakpoint(nodeId, breakType);
-WebInspector.panels.elements.sidebarPanes.domBreakpoints.expand();
-}
-var node = this.representedObject;
-for (var key in WebInspector.DOMBreakpointTypes) {
-var type = WebInspector.DOMBreakpointTypes[key];
-var label = WebInspector.domBreakpointTypeContextMenuLabel(type);
-var breakpoint = node.breakpoints[type];
-if (!breakpoint)
-var handler = handlerFunction.bind(this, node.id, type);
-else
-var handler = breakpoint.remove.bind(breakpoint);
-contextMenu.appendCheckboxItem(label, handler, !!breakpoint);
-}
+var pane = WebInspector.panels.elements.sidebarPanes.domBreakpoints;
+pane.populateNodeContextMenu(this.representedObject, contextMenu);
 }
 },
 
 _populateTextContextMenu: function(contextMenu, textNode)
 {
-contextMenu.appendItem(WebInspector.UIString("Edit Text"), this._startEditingTextNode.bind(this, textNode));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Edit text" : "Edit Text"), this._startEditingTextNode.bind(this, textNode));
 },
 
 _startEditing: function()
@@ -13866,10 +13876,15 @@ html += "</span>";
 return html;
 },
 
-_tagHTML: function(tagName, isClosingTag, isDistinctTreeElement, linkify)
+_tagHTML: function(tagName, isClosingTag, isDistinctTreeElement, linkify, isShadow)
 {
 var node = this.representedObject;
-var result = "<span class=\"webkit-html-tag" + (isClosingTag && isDistinctTreeElement ? " close" : "")  + "\">&lt;";
+var classes = [ "webkit-html-tag" ];
+if (isClosingTag && isDistinctTreeElement)
+classes.push("close");
+if (isShadow)
+classes.push("shadow");
+var result = "<span class=\"" + classes.join(" ") + "\">&lt;";
 result += "<span " + (isClosingTag ? "" : "class=\"webkit-html-tag-name\"") + ">" + (isClosingTag ? "/" : "") + tagName + "</span>";
 if (!isClosingTag && node.hasAttributes()) {
 var attributes = node.attributes();
@@ -13905,12 +13920,12 @@ break;
 case Node.ELEMENT_NODE:
 var tagName = this.treeOutline.nodeNameToCorrectCase(node.nodeName()).escapeHTML();
 if (this._elementCloseTag) {
-info.titleHTML = this._tagHTML(tagName, true, true);
+info.titleHTML = this._tagHTML(tagName, true, true, false, node.inShadowTree());
 info.hasChildren = false;
 break;
 }
 
-var titleHTML = this._tagHTML(tagName, false, false, linkify);
+var titleHTML = this._tagHTML(tagName, false, false, linkify, node.inShadowTree());
 
 var textChild = this._singleTextChild(node);
 var showInlineText = textChild && textChild.nodeValue().length < Preferences.maxInlineTextChildLength;
@@ -13918,14 +13933,14 @@ var showInlineText = textChild && textChild.nodeValue().length < Preferences.max
 if (!this.expanded && (!showInlineText && (this.treeOutline.isXMLMimeType || !WebInspector.ElementsTreeElement.ForbiddenClosingTagElements[tagName]))) {
 if (this.hasChildren)
 titleHTML += "<span class=\"webkit-html-text-node\">&#8230;</span>&#8203;";
-titleHTML += this._tagHTML(tagName, true, false);
+titleHTML += this._tagHTML(tagName, true, false, false, node.inShadowTree());
 }
 
 
 
 
 if (showInlineText) {
-titleHTML += "<span class=\"webkit-html-text-node\">" + textChild.nodeValue().escapeHTML() + "</span>&#8203;" + this._tagHTML(tagName, true, false);
+titleHTML += "<span class=\"webkit-html-text-node\">" + textChild.nodeValue().escapeHTML() + "</span>&#8203;" + this._tagHTML(tagName, true, false, node.inShadowTree());
 info.hasChildren = false;
 }
 info.titleHTML = titleHTML;
@@ -13977,6 +13992,11 @@ break;
 case Node.CDATA_SECTION_NODE:
 info.titleHTML = "<span class=\"webkit-html-text-node\">&lt;![CDATA[" + node.nodeValue().escapeHTML() + "]]&gt;</span>";
 break;
+
+case Node.SHADOW_ROOT_NODE:
+info.titleHTML = "<span class=\"dom-shadow-root\">(shadow)</span>";
+break;
+
 default:
 info.titleHTML = this.treeOutline.nodeNameToCorrectCase(node.nodeName()).collapseWhitespace().escapeHTML();
 }
@@ -13986,7 +14006,7 @@ return info;
 
 _singleTextChild: function(node)
 {
-if (!node)
+if (!node || node.shadowRoot)
 return null;
 
 var firstChild = node.firstChild;
@@ -14864,7 +14884,9 @@ this.valueElement.className = "value";
 
 var description = this.property.value.description;
 
-if (this.property.value.type === "string" && typeof description === "string") {
+if (this.property.wasThrown)
+this.valueElement.textContent = "[Exception: " + description + "]";
+else if (this.property.value.type === "string" && typeof description === "string") {
 this.valueElement.textContent = "\"" + description.replace(/\n/g, "\u21B5") + "\"";
 this.valueElement._originalTextContent = "\"" + description + "\"";
 } else if (this.property.value.type === "function" && typeof description === "string") {
@@ -14875,7 +14897,7 @@ this.valueElement.textContent = description;
 
 if (this.property.isGetter)
 this.valueElement.addStyleClass("dimmed");
-if (this.property.value.isError())
+if (this.property.wasThrown)
 this.valueElement.addStyleClass("error");
 if (this.property.value.type)
 this.valueElement.addStyleClass("console-formatted-" + this.property.value.type);
@@ -14887,7 +14909,7 @@ this.listItemElement.removeChildren();
 this.listItemElement.appendChild(this.nameElement);
 this.listItemElement.appendChild(separatorElement);
 this.listItemElement.appendChild(this.valueElement);
-this.hasChildren = this.property.value.hasChildren;
+this.hasChildren = this.property.value.hasChildren && !this.property.wasThrown;
 },
 
 _contextMenuEventFired: function()
@@ -15175,41 +15197,9 @@ this.emptyElement.className = "info";
 this.emptyElement.textContent = WebInspector.UIString("No Breakpoints");
 
 this.bodyElement.appendChild(this.emptyElement);
-
-WebInspector.breakpointManager.addEventListener(WebInspector.BreakpointManager.Events.ProjectChanged, this._projectChanged, this);
 }
 
 WebInspector.NativeBreakpointsSidebarPane.prototype = {
-addBreakpointItem: function(breakpointItem)
-{
-var element = breakpointItem.element;
-element._breakpointItem = breakpointItem;
-
-breakpointItem.addEventListener("breakpoint-hit", this.expand, this);
-breakpointItem.addEventListener("removed", this._removeListElement.bind(this, element), this);
-
-var currentElement = this.listElement.firstChild;
-while (currentElement) {
-if (currentElement._breakpointItem && currentElement._breakpointItem.compareTo(element._breakpointItem) > 0)
-break;
-currentElement = currentElement.nextSibling;
-}
-this._addListElement(element, currentElement);
-
-if (breakpointItem.click) {
-element.addStyleClass("cursor-pointer");
-element.addEventListener("click", breakpointItem.click.bind(breakpointItem), false);
-}
-element.addEventListener("contextmenu", this._contextMenuEventFired.bind(this, breakpointItem), true);
-},
-
-_contextMenuEventFired: function(breakpointItem, event)
-{
-var contextMenu = new WebInspector.ContextMenu();
-contextMenu.appendItem(WebInspector.UIString("Remove Breakpoint"), breakpointItem.remove.bind(breakpointItem));
-contextMenu.show(event);
-},
-
 _addListElement: function(element, beforeElement)
 {
 if (beforeElement)
@@ -15232,7 +15222,7 @@ this.bodyElement.appendChild(this.emptyElement);
 }
 },
 
-_projectChanged: function()
+_reset: function()
 {
 this.listElement.removeChildren();
 if (this.listElement.parentElement) {
@@ -15265,13 +15255,18 @@ event.stopPropagation();
 
 this.expanded = true;
 
+var inputElementContainer = document.createElement("p");
+inputElementContainer.className = "breakpoint-condition";
 var inputElement = document.createElement("span");
-inputElement.className = "breakpoint-condition editing";
-this._addListElement(inputElement, this.listElement.firstChild);
+inputElementContainer.textContent = WebInspector.UIString("Break when URL contains:");
+inputElement.className = "editing";
+inputElement.id = "breakpoint-condition-input";
+inputElementContainer.appendChild(inputElement);
+this._addListElement(inputElementContainer, this.listElement.firstChild);
 
 function finishEditing(accept, e, text)
 {
-this._removeListElement(inputElement);
+this._removeListElement(inputElementContainer);
 if (accept) {
 this._setBreakpoint(text, true);
 this._saveBreakpoints();
@@ -15319,7 +15314,7 @@ currentElement = currentElement.nextSibling;
 this._addListElement(element, currentElement);
 this._breakpointElements[url] = element;
 if (enabled)
-BrowserDebuggerAgent.setXHRBreakpoint(url);
+DOMDebuggerAgent.setXHRBreakpoint(url);
 },
 
 _removeBreakpoint: function(url)
@@ -15331,7 +15326,7 @@ return;
 this._removeListElement(element);
 delete this._breakpointElements[url];
 if (element._checkboxElement.checked)
-BrowserDebuggerAgent.removeXHRBreakpoint(url);
+DOMDebuggerAgent.removeXHRBreakpoint(url);
 },
 
 _contextMenu: function(url, event)
@@ -15349,9 +15344,9 @@ contextMenu.show(event);
 _checkboxClicked: function(url, event)
 {
 if (event.target.checked)
-BrowserDebuggerAgent.setXHRBreakpoint(url);
+DOMDebuggerAgent.setXHRBreakpoint(url);
 else
-BrowserDebuggerAgent.removeXHRBreakpoint(url);
+DOMDebuggerAgent.removeXHRBreakpoint(url);
 this._saveBreakpoints();
 },
 
@@ -15415,97 +15410,10 @@ var breakpoint = breakpoints[i];
 if (breakpoint && typeof breakpoint.url === "string")
 this._setBreakpoint(breakpoint.url, breakpoint.enabled);
 }
-},
-
-_projectChanged: function()
-{
 }
 }
 
 WebInspector.XHRBreakpointsSidebarPane.prototype.__proto__ = WebInspector.NativeBreakpointsSidebarPane.prototype;
-
-WebInspector.BreakpointItem = function(breakpoint)
-{
-this._breakpoint = breakpoint;
-
-this._element = document.createElement("li");
-
-var checkboxElement = document.createElement("input");
-checkboxElement.className = "checkbox-elem";
-checkboxElement.type = "checkbox";
-checkboxElement.checked = this._breakpoint.enabled;
-checkboxElement.addEventListener("click", this._checkboxClicked.bind(this), false);
-this._element.appendChild(checkboxElement);
-
-this._createLabelElement();
-
-this._breakpoint.addEventListener("enable-changed", this._enableChanged, this);
-this._breakpoint.addEventListener("hit-state-changed", this._hitStateChanged, this);
-this._breakpoint.addEventListener("label-changed", this._labelChanged, this);
-this._breakpoint.addEventListener("removed", this.dispatchEventToListeners.bind(this, "removed"));
-if (breakpoint.click)
-this.click = breakpoint.click.bind(breakpoint);
-}
-
-WebInspector.BreakpointItem.prototype = {
-get element()
-{
-return this._element;
-},
-
-compareTo: function(other)
-{
-return this._breakpoint.compareTo(other._breakpoint);
-},
-
-populateEditElement: function(element)
-{
-this._breakpoint.populateEditElement(element);
-},
-
-remove: function()
-{
-this._breakpoint.remove();
-},
-
-_checkboxClicked: function(event)
-{
-this._breakpoint.enabled = !this._breakpoint.enabled;
-
-
-event.stopPropagation();
-},
-
-_enableChanged: function(event)
-{
-var checkbox = this._element.firstChild;
-checkbox.checked = this._breakpoint.enabled;
-},
-
-_hitStateChanged: function(event)
-{
-if (event.target.hit) {
-this._element.addStyleClass("breakpoint-hit");
-this.dispatchEventToListeners("breakpoint-hit");
-} else
-this._element.removeStyleClass("breakpoint-hit");
-},
-
-_labelChanged: function(event)
-{
-this._element.removeChild(this._labelElement);
-this._createLabelElement();
-},
-
-_createLabelElement: function()
-{
-this._labelElement = document.createElement("span");
-this._breakpoint.populateLabelElement(this._labelElement);
-this._element.appendChild(this._labelElement);
-}
-}
-
-WebInspector.BreakpointItem.prototype.__proto__ = WebInspector.Object.prototype;
 
 WebInspector.EventListenerBreakpointsSidebarPane = function()
 {
@@ -15620,7 +15528,7 @@ var breakpointItem = this._breakpointItems[eventName];
 if (!breakpointItem)
 return;
 breakpointItem.checkbox.checked = true;
-BrowserDebuggerAgent.setEventListenerBreakpoint(eventName);
+DOMDebuggerAgent.setEventListenerBreakpoint(eventName);
 this._updateCategoryCheckbox(breakpointItem.parent);
 },
 
@@ -15630,7 +15538,7 @@ var breakpointItem = this._breakpointItems[eventName];
 if (!breakpointItem)
 return;
 breakpointItem.checkbox.checked = false;
-BrowserDebuggerAgent.removeEventListenerBreakpoint(eventName);
+DOMDebuggerAgent.removeEventListenerBreakpoint(eventName);
 this._updateCategoryCheckbox(breakpointItem.parent);
 },
 
@@ -15694,6 +15602,291 @@ WebInspector.EventListenerBreakpointsSidebarPane.prototype.__proto__ = WebInspec
 
 
 
+WebInspector.DOMBreakpointsSidebarPane = function()
+{
+WebInspector.NativeBreakpointsSidebarPane.call(this, WebInspector.UIString("DOM Breakpoints"));
+
+this._breakpointElements = {};
+
+this._breakpointTypes = {
+SubtreeModified: 0,
+AttributeModified: 1,
+NodeRemoved: 2
+};
+this._breakpointTypeLabels = [
+WebInspector.UIString("Subtree Modified"),
+WebInspector.UIString("Attribute Modified"),
+WebInspector.UIString("Node Removed")
+];
+this._contextMenuLabels = [
+WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Break on subtree modifications" : "Break on Subtree Modifications"),
+WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Break on attributes modifications" : "Break on Attributes Modifications"),
+WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Break on node removal" : "Break on Node Removal")
+];
+WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.InspectedURLChanged, this._inspectedURLChanged, this);
+}
+
+WebInspector.DOMBreakpointsSidebarPane.prototype = {
+_inspectedURLChanged: function(event)
+{
+this._reset();
+var url = event.data;
+this._inspectedURL = url.removeURLFragment();
+},
+
+populateNodeContextMenu: function(node, contextMenu)
+{
+var nodeBreakpoints = {};
+for (var id in this._breakpointElements) {
+var element = this._breakpointElements[id];
+if (element._node === node)
+nodeBreakpoints[element._type] = true;
+}
+
+function toggleBreakpoint(type)
+{
+if (!nodeBreakpoints[type])
+this._setBreakpoint(node, type, true);
+else
+this._removeBreakpoint(node, type);
+this._saveBreakpoints();
+}
+
+for (var type = 0; type < 3; ++type) {
+var label = this._contextMenuLabels[type];
+contextMenu.appendCheckboxItem(label, toggleBreakpoint.bind(this, type), nodeBreakpoints[type]);
+}
+},
+
+createBreakpointHitStatusMessage: function(eventData, callback)
+{
+if (eventData.type === this._breakpointTypes.SubtreeModified) {
+var targetNodeObject = WebInspector.RemoteObject.fromPayload(eventData.targetNode);
+function didPushNodeToFrontend(targetNodeId)
+{
+if (targetNodeId)
+targetNodeObject.release();
+this._doCreateBreakpointHitStatusMessage(eventData, targetNodeId, callback);
+}
+targetNodeObject.pushNodeToFrontend(didPushNodeToFrontend.bind(this));
+} else
+this._doCreateBreakpointHitStatusMessage(eventData, null, callback);
+},
+
+_doCreateBreakpointHitStatusMessage: function (eventData, targetNodeId, callback)
+{
+var message;
+var typeLabel = this._breakpointTypeLabels[eventData.type];
+var linkifiedNode = WebInspector.panels.elements.linkifyNodeById(eventData.nodeId);
+var substitutions = [typeLabel, linkifiedNode];
+var targetNode = "";
+if (targetNodeId)
+targetNode = WebInspector.panels.elements.linkifyNodeById(targetNodeId);
+
+if (eventData.type === this._breakpointTypes.SubtreeModified) {
+if (eventData.insertion) {
+if (targetNodeId !== eventData.nodeId) {
+message = "Paused on a \"%s\" breakpoint set on %s, because a new child was added to its descendant %s.";
+substitutions.push(targetNode);
+} else
+message = "Paused on a \"%s\" breakpoint set on %s, because a new child was added to that node.";
+} else {
+message = "Paused on a \"%s\" breakpoint set on %s, because its descendant %s was removed.";
+substitutions.push(targetNode);
+}
+} else
+message = "Paused on a \"%s\" breakpoint set on %s.";
+
+var element = document.createElement("span");
+var formatters = {
+s: function(substitution)
+{
+return substitution;
+}
+};
+function append(a, b)
+{
+if (typeof b === "string")
+b = document.createTextNode(b);
+element.appendChild(b);
+}
+WebInspector.formatLocalized(message, substitutions, formatters, "", append);
+
+callback(element);
+},
+
+nodeRemoved: function(node)
+{
+this._removeBreakpointsForNode(node);
+if (!node.children)
+return;
+for (var i = 0; i < node.children.length; ++i)
+this._removeBreakpointsForNode(node.children[i]);
+this._saveBreakpoints();
+},
+
+_removeBreakpointsForNode: function(node)
+{
+for (var id in this._breakpointElements) {
+var element = this._breakpointElements[id];
+if (element._node === node)
+this._removeBreakpoint(element._node, element._type);
+}
+},
+
+_setBreakpoint: function(node, type, enabled)
+{
+var breakpointId = this._createBreakpointId(node.id, type);
+if (breakpointId in this._breakpointElements)
+return;
+
+var element = document.createElement("li");
+element._node = node;
+element._type = type;
+element.addEventListener("contextmenu", this._contextMenu.bind(this, node, type), true);
+
+var checkboxElement = document.createElement("input");
+checkboxElement.className = "checkbox-elem";
+checkboxElement.type = "checkbox";
+checkboxElement.checked = enabled;
+checkboxElement.addEventListener("click", this._checkboxClicked.bind(this, node, type), false);
+element._checkboxElement = checkboxElement;
+element.appendChild(checkboxElement);
+
+var labelElement = document.createElement("span");
+element.appendChild(labelElement);
+
+var linkifiedNode = WebInspector.panels.elements.linkifyNodeById(node.id);
+linkifiedNode.addStyleClass("monospace");
+labelElement.appendChild(linkifiedNode);
+
+var description = document.createElement("div");
+description.className = "source-text";
+description.textContent = this._breakpointTypeLabels[type];
+labelElement.appendChild(description);
+
+var currentElement = this.listElement.firstChild;
+while (currentElement) {
+if (currentElement._type && currentElement._type < element._type)
+break;
+currentElement = currentElement.nextSibling;
+}
+this._addListElement(element, currentElement);
+this._breakpointElements[breakpointId] = element;
+if (enabled)
+DOMDebuggerAgent.setDOMBreakpoint(node.id, type);
+},
+
+_removeBreakpoint: function(node, type)
+{
+var breakpointId = this._createBreakpointId(node.id, type);
+var element = this._breakpointElements[breakpointId];
+if (!element)
+return;
+
+this._removeListElement(element);
+delete this._breakpointElements[breakpointId];
+if (element._checkboxElement.checked)
+DOMDebuggerAgent.removeDOMBreakpoint(node.id, type);
+},
+
+_contextMenu: function(node, type, event)
+{
+var contextMenu = new WebInspector.ContextMenu();
+function removeBreakpoint()
+{
+this._removeBreakpoint(node, type);
+this._saveBreakpoints();
+}
+contextMenu.appendItem(WebInspector.UIString("Remove Breakpoint"), removeBreakpoint.bind(this));
+contextMenu.show(event);
+},
+
+_checkboxClicked: function(node, type, event)
+{
+if (event.target.checked)
+DOMDebuggerAgent.setDOMBreakpoint(node.id, type);
+else
+DOMDebuggerAgent.removeDOMBreakpoint(node.id, type);
+this._saveBreakpoints();
+},
+
+highlightBreakpoint: function(eventData)
+{
+var breakpointId = this._createBreakpointId(eventData.nodeId, eventData.type);
+var element = this._breakpointElements[breakpointId];
+if (!element)
+return;
+this.expanded = true;
+element.addStyleClass("breakpoint-hit");
+this._highlightedElement = element;
+},
+
+clearBreakpointHighlight: function()
+{
+if (this._highlightedElement) {
+this._highlightedElement.removeStyleClass("breakpoint-hit");
+delete this._highlightedElement;
+}
+},
+
+_createBreakpointId: function(nodeId, type)
+{
+return nodeId + ":" + type;
+},
+
+_saveBreakpoints: function()
+{
+var breakpoints = [];
+var storedBreakpoints = WebInspector.settings.domBreakpoints;
+for (var i = 0; i < storedBreakpoints.length; ++i) {
+var breakpoint = storedBreakpoints[i];
+if (breakpoint.url !== this._inspectedURL)
+breakpoints.push(breakpoint);
+}
+for (var id in this._breakpointElements) {
+var element = this._breakpointElements[id];
+breakpoints.push({ url: this._inspectedURL, path: element._node.path(), type: element._type, enabled: element._checkboxElement.checked });
+}
+WebInspector.settings.domBreakpoints = breakpoints;
+},
+
+restoreBreakpoints: function()
+{
+var pathToBreakpoints = {};
+
+function didPushNodeByPathToFrontend(path, nodeId)
+{
+var node = WebInspector.domAgent.nodeForId(nodeId);
+if (!node)
+return;
+
+var breakpoints = pathToBreakpoints[path];
+for (var i = 0; i < breakpoints.length; ++i)
+this._setBreakpoint(node, breakpoints[i].type, breakpoints[i].enabled);
+}
+
+var breakpoints = WebInspector.settings.domBreakpoints;
+for (var i = 0; i < breakpoints.length; ++i) {
+var breakpoint = breakpoints[i];
+if (breakpoint.url !== this._inspectedURL)
+continue;
+var path = breakpoint.path;
+if (!pathToBreakpoints[path]) {
+pathToBreakpoints[path] = [];
+WebInspector.domAgent.pushNodeByPathToFrontend(path, didPushNodeByPathToFrontend.bind(this, path));
+}
+pathToBreakpoints[path].push(breakpoint);
+}
+}
+}
+
+WebInspector.DOMBreakpointsSidebarPane.prototype.__proto__ = WebInspector.NativeBreakpointsSidebarPane.prototype;
+
+
+
+
+
 WebInspector.CallStackSidebarPane = function(model)
 {
 WebInspector.SidebarPane.call(this, WebInspector.UIString("Call Stack"));
@@ -15717,20 +15910,9 @@ this.bodyElement.appendChild(infoElement);
 return;
 }
 
-var title;
-var subtitle;
-var script;
-
 for (var i = 0; i < callFrames.length; ++i) {
 var callFrame = callFrames[i];
-switch (callFrame.type) {
-case "function":
-title = callFrame.functionName || WebInspector.UIString("(anonymous function)");
-break;
-case "program":
-title = WebInspector.UIString("(program)");
-break;
-}
+var title = callFrame.functionName || WebInspector.UIString("(anonymous function)");
 
 var subtitle;
 if (!callFrame.isInternalScript)
@@ -15742,7 +15924,7 @@ var placard = new WebInspector.Placard(title, subtitle);
 placard.callFrame = callFrame;
 placard.element.addEventListener("click", this._placardSelected.bind(this, placard), false);
 
-function didGetSourceLocation(placard, sourceFileId, lineNumber, columnNumber)
+function didGetSourceLine(placard, sourceFileId, lineNumber)
 {
 if (placard.subtitle)
 placard.subtitle += ":" + (lineNumber + 1);
@@ -15750,15 +15932,10 @@ else
 placard.subtitle = WebInspector.UIString("line %d", lineNumber + 1);
 placard._text = WebInspector.UIString("%s() at %s", placard.title, placard.subtitle);
 }
-callFrame.sourceLocation(didGetSourceLocation.bind(this, placard));
+callFrame.sourceLine(didGetSourceLine.bind(this, placard));
 
 this.placards.push(placard);
 this.bodyElement.appendChild(placard.element);
-}
-
-if (details.eventType === WebInspector.DebuggerEventTypes.NativeBreakpoint) {
-if (details.eventData.breakpointType === WebInspector.BreakpointManager.BreakpointTypes.DOM)
-this._domBreakpointHit(details.eventData);
 }
 },
 
@@ -15767,16 +15944,6 @@ set selectedCallFrame(x)
 for (var i = 0; i < this.placards.length; ++i) {
 var placard = this.placards[i];
 placard.selected = (placard.callFrame === x);
-}
-},
-
-handleShortcut: function(event)
-{
-var shortcut = WebInspector.KeyboardShortcut.makeKeyFromEvent(event);
-var handler = this._shortcuts[shortcut];
-if (handler) {
-handler(event);
-event.handled = true;
 }
 },
 
@@ -15839,17 +16006,15 @@ text += this.placards[i]._text;
 InspectorFrontendHost.copyText(text);
 },
 
-registerShortcuts: function(section)
+registerShortcuts: function(section, shortcuts)
 {
-this._shortcuts = {};
-
 var nextCallFrame = WebInspector.KeyboardShortcut.makeDescriptor(WebInspector.KeyboardShortcut.Keys.Period,
 WebInspector.KeyboardShortcut.Modifiers.Ctrl);
-this._shortcuts[nextCallFrame.key] = this._selectNextCallFrameOnStack.bind(this);
+shortcuts[nextCallFrame.key] = this._selectNextCallFrameOnStack.bind(this);
 
 var prevCallFrame = WebInspector.KeyboardShortcut.makeDescriptor(WebInspector.KeyboardShortcut.Keys.Comma,
 WebInspector.KeyboardShortcut.Modifiers.Ctrl);
-this._shortcuts[prevCallFrame.key] = this._selectPreviousCallFrameOnStack.bind(this);
+shortcuts[prevCallFrame.key] = this._selectPreviousCallFrameOnStack.bind(this);
 
 section.addRelatedKeys([ nextCallFrame.name, prevCallFrame.name ], WebInspector.UIString("Next/previous call frame"));
 },
@@ -15858,19 +16023,10 @@ setStatus: function(status)
 {
 var statusMessageElement = document.createElement("div");
 statusMessageElement.className = "info";
+if (typeof status === "string")
 statusMessageElement.textContent = status;
-this.bodyElement.appendChild(statusMessageElement);
-},
-
-_domBreakpointHit: function(eventData)
-{
-var breakpoint = WebInspector.breakpointManager.breakpointViewForEventData(eventData);
-if (!breakpoint)
-return;
-
-var statusMessageElement = document.createElement("div");
-statusMessageElement.className = "info";
-breakpoint.populateStatusMessageElement(statusMessageElement, eventData);
+else
+statusMessageElement.appendChild(status);
 this.bodyElement.appendChild(statusMessageElement);
 }
 }
@@ -15917,40 +16073,52 @@ this._sections = [];
 var foundLocalScope = false;
 var scopeChain = callFrame.scopeChain;
 for (var i = 0; i < scopeChain.length; ++i) {
-var scopeObjectProxy = scopeChain[i];
+var scope = scopeChain[i];
 var title = null;
-var subtitle = scopeObjectProxy.description;
+var subtitle = scope.object.description;
 var emptyPlaceholder = null;
 var extraProperties = null;
 
-if (scopeObjectProxy.isLocal) {
+switch (scope.type) {
+case "local":
 foundLocalScope = true;
 title = WebInspector.UIString("Local");
 emptyPlaceholder = WebInspector.UIString("No Variables");
 subtitle = null;
-if (scopeObjectProxy.thisObject)
-extraProperties = [ new WebInspector.RemoteObjectProperty("this", WebInspector.RemoteObject.fromPayload(scopeObjectProxy.thisObject)) ];
-} else if (scopeObjectProxy.isClosure) {
+if (scope.this)
+extraProperties = [ new WebInspector.RemoteObjectProperty("this", WebInspector.RemoteObject.fromPayload(scope.this)) ];
+if (i == 0) {
+var exception = WebInspector.debuggerModel.debuggerPausedDetails.exception;
+if (exception) {
+extraProperties = extraProperties || [];
+extraProperties.push(new WebInspector.RemoteObjectProperty("<exception>", WebInspector.RemoteObject.fromPayload(exception)));
+}
+}
+break;
+case "closure":
 title = WebInspector.UIString("Closure");
 emptyPlaceholder = WebInspector.UIString("No Variables");
 subtitle = null;
-} else if (i === (scopeChain.length - 1))
-title = WebInspector.UIString("Global");
-else if (scopeObjectProxy.isElement)
-title = WebInspector.UIString("Event Target");
-else if (scopeObjectProxy.isDocument)
-title = WebInspector.UIString("Event Document");
-else if (scopeObjectProxy.isWithBlock)
+break;
+case "catch":
+title = WebInspector.UIString("Catch");
+break;
+case "with":
 title = WebInspector.UIString("With Block");
+break;
+case "global":
+title = WebInspector.UIString("Global");
+break;
+}
 
 if (!title || title === subtitle)
 subtitle = null;
 
-var section = new WebInspector.ObjectPropertiesSection(WebInspector.RemoteObject.fromPayload(scopeObjectProxy), title, subtitle, emptyPlaceholder, true, extraProperties, WebInspector.ScopeVariableTreeElement);
+var section = new WebInspector.ObjectPropertiesSection(WebInspector.RemoteObject.fromPayload(scope.object), title, subtitle, emptyPlaceholder, true, extraProperties, WebInspector.ScopeVariableTreeElement);
 section.editInSelectedCallFrameWhenPaused = true;
 section.pane = this;
 
-if (!foundLocalScope || scopeObjectProxy.isLocal || title in this._expandedSections)
+if (!foundLocalScope || scope.type === "local" || title in this._expandedSections)
 section.expanded = true;
 
 this._sections.push(section);
@@ -16346,7 +16514,6 @@ this.shared = shared;
 WebInspector.MetricsSidebarPane = function()
 {
 WebInspector.SidebarPane.call(this, WebInspector.UIString("Metrics"));
-this._inlineStyleId = null;
 }
 
 WebInspector.MetricsSidebarPane.prototype = {
@@ -16378,11 +16545,76 @@ self.inlineStyle = style;
 WebInspector.cssModel.getInlineStyleAsync(node.id, inlineStyleCallback);
 },
 
+_getPropertyValueAsPx: function(style, propertyName)
+{
+return Number(style.getPropertyValue(propertyName).replace(/px$/, "") || 0);
+},
+
+_getBox: function(computedStyle, componentName)
+{
+var suffix = componentName === "border" ? "-width" : "";
+var left = this._getPropertyValueAsPx(computedStyle, componentName + "-left" + suffix);
+var top = this._getPropertyValueAsPx(computedStyle, componentName + "-top" + suffix);
+var right = this._getPropertyValueAsPx(computedStyle, componentName + "-right" + suffix);
+var bottom = this._getPropertyValueAsPx(computedStyle, componentName + "-bottom" + suffix);
+return { left: left, top: top, right: right, bottom: bottom };
+},
+
+_highlightDOMNode: function(showHighlight, mode, event)
+{
+function enclosingOrSelfWithClassInArray(element, classNames)
+{
+for (var node = element; node && node !== element.ownerDocument; node = node.parentNode) {
+if (node.nodeType === Node.ELEMENT_NODE) {
+for (var i = 0; i < classNames.length; ++i) {
+if (node.hasStyleClass(classNames[i]))
+return node;
+}
+}
+}
+return null;
+}
+
+function getBoxRectangleElement(element)
+{
+if (!element)
+return null;
+return enclosingOrSelfWithClassInArray(element, ["metrics", "margin", "border", "padding", "content"]);
+}
+
+event.stopPropagation();
+var fromElement = getBoxRectangleElement(event.fromElement);
+var toElement = getBoxRectangleElement(event.toElement);
+
+if (fromElement === toElement)
+return;
+
+if (showHighlight) {
+
+if (this.node && toElement)
+toElement.addStyleClass("hovered");
+var nodeId = this.node ? this.node.id : 0;
+} else {
+
+if (fromElement)
+fromElement.removeStyleClass("hovered");
+var nodeId = 0;
+}
+if (nodeId) {
+if (this._highlightMode === mode)
+return;
+this._highlightMode = mode;
+} else
+delete this._highlightMode;
+WebInspector.highlightDOMNode(nodeId, mode);
+},
+
 _update: function(style)
 {
 
 var metricsElement = document.createElement("div");
 metricsElement.className = "metrics";
+var self = this;
 
 function createBoxPartElement(style, name, side, suffix)
 {
@@ -16397,8 +16629,34 @@ value = value.replace(/px$/, "");
 var element = document.createElement("div");
 element.className = side;
 element.textContent = value;
-element.addEventListener("dblclick", this.startEditing.bind(this, element, name, propertyName), false);
+element.addEventListener("dblclick", this.startEditing.bind(this, element, name, propertyName, style), false);
 return element;
+}
+
+function getContentAreaWidthPx(style)
+{
+var width = style.getPropertyValue("width").replace(/px$/, "");
+if (style.getPropertyValue("box-sizing") === "border-box") {
+var borderBox = self._getBox(style, "border");
+var paddingBox = self._getBox(style, "padding");
+
+width = width - borderBox.left - borderBox.right - paddingBox.left - paddingBox.right;
+}
+
+return width;
+}
+
+function getContentAreaHeightPx(style)
+{
+var height = style.getPropertyValue("height").replace(/px$/, "");
+if (style.getPropertyValue("box-sizing") === "border-box") {
+var borderBox = self._getBox(style, "border");
+var paddingBox = self._getBox(style, "padding");
+
+height = height - borderBox.top - borderBox.bottom - paddingBox.top - paddingBox.bottom;
+}
+
+return height;
 }
 
 
@@ -16442,17 +16700,17 @@ continue;
 
 var boxElement = document.createElement("div");
 boxElement.className = name;
+boxElement.addEventListener("mouseover", this._highlightDOMNode.bind(this, true, name), false);
+boxElement.addEventListener("mouseout", this._highlightDOMNode.bind(this, false, ""), false);
 
 if (name === "content") {
-var width = style.getPropertyValue("width").replace(/px$/, "");
 var widthElement = document.createElement("span");
-widthElement.textContent = width;
-widthElement.addEventListener("dblclick", this.startEditing.bind(this, widthElement, "width", "width"), false);
+widthElement.textContent = getContentAreaWidthPx(style);
+widthElement.addEventListener("dblclick", this.startEditing.bind(this, widthElement, "width", "width", style), false);
 
-var height = style.getPropertyValue("height").replace(/px$/, "");
 var heightElement = document.createElement("span");
-heightElement.textContent = height;
-heightElement.addEventListener("dblclick", this.startEditing.bind(this, heightElement, "height", "height"), false);
+heightElement.textContent = getContentAreaHeightPx(style);
+heightElement.addEventListener("dblclick", this.startEditing.bind(this, heightElement, "height", "height", style), false);
 
 boxElement.appendChild(widthElement);
 boxElement.appendChild(document.createTextNode(" \u00D7 "));
@@ -16481,37 +16739,114 @@ previousBox = boxElement;
 }
 
 metricsElement.appendChild(previousBox);
+metricsElement.addEventListener("mouseover", this._highlightDOMNode.bind(this, true, ""), false);
+metricsElement.addEventListener("mouseout", this._highlightDOMNode.bind(this, false, ""), false);
 this.bodyElement.removeChildren();
 this.bodyElement.appendChild(metricsElement);
+
+WebInspector.highlightDOMNode(0);
 },
 
-startEditing: function(targetElement, box, styleProperty)
+startEditing: function(targetElement, box, styleProperty, computedStyle)
 {
 if (WebInspector.isBeingEdited(targetElement))
 return;
 
-var context = { box: box, styleProperty: styleProperty };
+var context = { box: box, styleProperty: styleProperty, computedStyle: computedStyle };
+var boundKeyDown = this._handleKeyDown.bind(this, context, styleProperty);
+context.keyDownHandler = boundKeyDown;
+targetElement.addEventListener("keydown", boundKeyDown, false);
 
+WebInspector.panels.elements.startEditingStyle();
 WebInspector.startEditing(targetElement, {
 context: context,
 commitHandler: this.editingCommitted.bind(this),
 cancelHandler: this.editingCancelled.bind(this)
 });
+window.getSelection().setBaseAndExtent(targetElement, 0, targetElement, 1);
+},
+
+_handleKeyDown: function(context, styleProperty, event)
+{
+if (!/^(?:Page)?(?:Up|Down)$/.test(event.keyIdentifier))
+return;
+var element = event.currentTarget;
+
+var selection = window.getSelection();
+if (!selection.rangeCount)
+return;
+
+var selectionRange = selection.getRangeAt(0);
+if (selectionRange.commonAncestorContainer !== element && !selectionRange.commonAncestorContainer.isDescendant(element))
+return;
+
+var originalValue = element.textContent;
+var wordRange = selectionRange.startContainer.rangeOfWord(selectionRange.startOffset, WebInspector.StylesSidebarPane.StyleValueDelimiters, element);
+var wordString = wordRange.toString();
+
+var matches = /(.*?)(-?(?:\d+(?:\.\d+)?|\.\d+))(.*)/.exec(wordString);
+var replacementString;
+if (matches && matches.length) {
+prefix = matches[1];
+suffix = matches[3];
+number = WebInspector.StylesSidebarPane.alteredFloatNumber(parseFloat(matches[2]), event);
+if (styleProperty !== "margin" && number < 0)
+number = 0;
+
+replacementString = prefix + number + suffix;
+}
+if (!replacementString)
+return;
+
+var replacementTextNode = document.createTextNode(replacementString);
+
+wordRange.deleteContents();
+wordRange.insertNode(replacementTextNode);
+
+var finalSelectionRange = document.createRange();
+finalSelectionRange.setStart(replacementTextNode, 0);
+finalSelectionRange.setEnd(replacementTextNode, replacementString.length);
+
+selection.removeAllRanges();
+selection.addRange(finalSelectionRange);
+
+event.handled = true;
+event.preventDefault();
+this._applyUserInput(element, replacementString, originalValue, context, false);
+},
+
+editingEnded: function(element, context)
+{
+delete this.originalPropertyData;
+delete this.previousPropertyDataCandidate;
+element.removeEventListener("keydown", context.keyDownHandler, false);
+WebInspector.panels.elements.endEditingStyle();
 },
 
 editingCancelled: function(element, context)
 {
+if ("originalPropertyData" in this && this.inlineStyle) {
+if (!this.originalPropertyData) {
+
+var pastLastSourcePropertyIndex = this.inlineStyle.pastLastSourcePropertyIndex();
+if (pastLastSourcePropertyIndex)
+this.inlineStyle.allProperties[pastLastSourcePropertyIndex - 1].setText("", false);
+} else
+this.inlineStyle.allProperties[this.originalPropertyData.index].setText(this.originalPropertyData.propertyText, false);
+}
+this.editingEnded(element, context);
 this.update();
 },
 
-editingCommitted: function(element, userInput, previousContent, context)
+_applyUserInput: function(element, userInput, previousContent, context, commitEditor)
 {
 if (!this.inlineStyle) {
 
+delete this.originalPropertyValue;
 return this.editingCancelled(element, context); 
 }
 
-if (userInput === previousContent)
+if (commitEditor && userInput === previousContent)
 return this.editingCancelled(element, context); 
 
 if (context.box !== "position" && (!userInput || userInput === "\u2012"))
@@ -16519,41 +16854,70 @@ userInput = "0px";
 else if (context.box === "position" && (!userInput || userInput === "\u2012"))
 userInput = "auto";
 
+userInput = userInput.toLowerCase();
 
 if (/^\d+$/.test(userInput))
 userInput += "px";
 
+var styleProperty = context.styleProperty;
+var computedStyle = context.computedStyle;
+
+if (computedStyle.getPropertyValue("box-sizing") === "border-box" && (styleProperty === "width" || styleProperty === "height")) {
+if (!userInput.match(/px$/)) {
+WebInspector.log("For elements with box-sizing: border-box, only absolute content area dimensions can be applied", WebInspector.ConsoleMessage.MessageLevel.Error);
+WebInspector.showConsole();
+return;
+}
+
+var borderBox = this._getBox(computedStyle, "border");
+var paddingBox = this._getBox(computedStyle, "padding");
+var userValuePx = Number(userInput.replace(/px$/, ""));
+if (isNaN(userValuePx))
+return;
+if (styleProperty === "width")
+userValuePx += borderBox.left + borderBox.right + paddingBox.left + paddingBox.right;
+else
+userValuePx += borderBox.top + borderBox.bottom + paddingBox.top + paddingBox.bottom;
+
+userInput = userValuePx + "px";
+}
+
+this.previousPropertyDataCandidate = null;
 var self = this;
 var callback = function(style) {
 if (!style)
 return;
 self.inlineStyle = style;
+if (!("originalPropertyData" in self))
+self.originalPropertyData = self.previousPropertyDataCandidate;
+if ("_highlightMode" in self) {
+WebInspector.highlightDOMNode(0, "");
+WebInspector.highlightDOMNode(self.node.id, self._highlightMode);
+}
+if (commitEditor) {
 self.dispatchEventToListeners("metrics edited");
 self.update();
-};
-
-function setEnabledValueCallback(context, style)
-{
-var property = style.getLiveProperty(context.styleProperty);
-if (!property)
-style.appendProperty(context.styleProperty, userInput, callback);
-else
-property.setValue(userInput, callback);
 }
+};
 
 var allProperties = this.inlineStyle.allProperties;
 for (var i = 0; i < allProperties.length; ++i) {
 var property = allProperties[i];
 if (property.name !== context.styleProperty || property.inactive)
 continue;
-if (property.disabled)
-property.setDisabled(false, setEnabledValueCallback.bind(null, context));
-else
-property.setValue(userInput, callback);
+
+this.previousPropertyDataCandidate = property;
+property.setValue(userInput, commitEditor, callback);
 return;
 }
 
 this.inlineStyle.appendProperty(context.styleProperty, userInput, callback);
+},
+
+editingCommitted: function(element, userInput, previousContent, context)
+{
+this.editingEnded(element, context);
+this._applyUserInput(element, userInput, previousContent, context, true);
 }
 }
 
@@ -16589,9 +16953,9 @@ object.evaluate("var proto = this; result = {}; var counter = 1; while (proto) {
 object.release();
 }
 
-function nodePrototypesReady(error, objectPayload)
+function nodePrototypesReady(error, objectPayload, wasThrown)
 {
-if (error || !objectPayload)
+if (error || wasThrown)
 return;
 var object = WebInspector.RemoteObject.fromPayload(objectPayload);
 object.getOwnProperties(fillSection.bind(this));
@@ -18079,6 +18443,75 @@ WebInspector.StylesSidebarPane.PseudoIdNames = [
 "-webkit-resizer", "-webkit-input-list-button", "-webkit-inner-spin-button", "-webkit-outer-spin-button"
 ];
 
+WebInspector.StylesSidebarPane.alteredFloatNumber = function(number, event)
+{
+var arrowKeyPressed = (event.keyIdentifier === "Up" || event.keyIdentifier === "Down");
+
+var numberNearZero = (number < 1 && number > -1);
+if (number === 1 && event.keyIdentifier === "Down")
+numberNearZero = true;
+else if (number === -1 && event.keyIdentifier === "Up")
+numberNearZero = true;
+
+var result;
+if (numberNearZero && event.altKey && arrowKeyPressed) {
+if (event.keyIdentifier === "Down")
+result = Math.ceil(number - 1);
+else
+result = Math.floor(number + 1);
+} else {
+
+
+var changeAmount = 1;
+if (event.shiftKey && !arrowKeyPressed)
+changeAmount = 100;
+else if (event.shiftKey || !arrowKeyPressed)
+changeAmount = 10;
+else if (event.altKey || numberNearZero)
+changeAmount = 0.1;
+
+if (event.keyIdentifier === "Down" || event.keyIdentifier === "PageDown")
+changeAmount *= -1;
+
+
+
+result = Number((number + changeAmount).toFixed(6));
+}
+
+return result;
+}
+
+WebInspector.StylesSidebarPane.alteredHexNumber = function(hexString, event)
+{
+var number = parseInt(hexString, 16);
+if (isNaN(number) || !isFinite(number))
+return hexString;
+
+var maxValue = Math.pow(16, hexString.length) - 1;
+var arrowKeyPressed = (event.keyIdentifier === "Up" || event.keyIdentifier === "Down");
+
+var delta;
+if (arrowKeyPressed)
+delta = (event.keyIdentifier === "Up") ? 1 : -1;
+else
+delta = (event.keyIdentifier === "PageUp") ? 16 : -16;
+
+if (event.shiftKey)
+delta *= 16;
+
+var result = number + delta;
+if (result < 0)
+result = 0; 
+else if (result > maxValue)
+return hexString;
+
+
+var resultString = result.toString(16).toUpperCase();
+for (var i = 0, lengthDelta = hexString.length - resultString.length; i < lengthDelta; ++i)
+resultString = "0" + resultString;
+return resultString;
+},
+
 WebInspector.StylesSidebarPane.prototype = {
 _contextMenuEventFired: function(event)
 {
@@ -18467,6 +18900,7 @@ sections[i].update(true);
 
 _createNewRule: function(event)
 {
+this.expanded = true;
 this.addBlankSection().startEditingSelector();
 },
 
@@ -18604,8 +19038,6 @@ this.titleElement.addStyleClass("styles-selector");
 function linkifyUncopyable(url, line)
 {
 var link = WebInspector.linkifyResourceAsNode(url, "resources", line + 1);
-link.setAttribute("data-uncopyable", link.textContent);
-link.textContent = "";
 return link;
 }
 
@@ -18826,7 +19258,7 @@ document.getElementById("main").addEventListener("mousedown", boundHandler, true
 
 _handleEmptySpaceDoubleClick: function(event)
 {
-if (event.target.hasStyleClass("header")) {
+if (event.target.hasStyleClass("header") || this.element.hasStyleClass("read-only")) {
 event.stopPropagation();
 return;
 }
@@ -19542,7 +19974,7 @@ if (isEnterKey(event) || isFieldInputTerminated) {
 
 event.preventDefault();
 return "move-forward";
-} else if (event.keyCode === WebInspector.KeyboardShortcut.Keys.Esc.code)
+} else if (event.keyCode === WebInspector.KeyboardShortcut.Keys.Esc.code || event.keyIdentifier === "U+001B")
 return "cancel";
 else if (!isEditingName && this._newProperty && event.keyCode === WebInspector.KeyboardShortcut.Keys.Backspace.code) {
 
@@ -19580,7 +20012,8 @@ this.valueElement.normalize();
 return "move-forward";
 }
 
-this._parentPane.isModifyingStyle = true;
+delete this.originalPropertyText;
+WebInspector.panels.elements.startEditingStyle();
 WebInspector.startEditing(selectElement, {
 context: context,
 commitHandler: this.editingCommitted.bind(this),
@@ -19597,18 +20030,46 @@ editingValueKeyDown: function(event)
 {
 if (event.handled)
 return;
+if (this._handleUpOrDownKeyPressed(event))
+return;
+
+this._applyFreeFlowStyleTextEdit();
+},
+
+_applyFreeFlowStyleTextEdit: function(now)
+{
+if (this._applyFreeFlowStyleTextEditTimer)
+clearTimeout(this._applyFreeFlowStyleTextEditTimer);
+
+function apply()
+{
+this.applyStyleText(this.nameElement.textContent + ": " + this.valueElement.textContent);
+}
+if (now)
+apply.call(this);
+else
+this._applyFreeFlowStyleTextEditTimer = setTimeout(apply.bind(this), 100);
+},
+
+kickFreeFlowStyleEditForTest: function()
+{
+this._applyFreeFlowStyleTextEdit(true);
+},
+
+_handleUpOrDownKeyPressed: function(event)
+{
 var arrowKeyPressed = (event.keyIdentifier === "Up" || event.keyIdentifier === "Down");
 var pageKeyPressed = (event.keyIdentifier === "PageUp" || event.keyIdentifier === "PageDown");
 if (!arrowKeyPressed && !pageKeyPressed)
-return;
+return false;
 
 var selection = window.getSelection();
 if (!selection.rangeCount)
-return;
+return false;
 
 var selectionRange = selection.getRangeAt(0);
 if (selectionRange.commonAncestorContainer !== this.valueElement && !selectionRange.commonAncestorContainer.isDescendant(this.valueElement))
-return;
+return false;
 
 var wordRange = selectionRange.startContainer.rangeOfWord(selectionRange.startOffset, WebInspector.StylesSidebarPane.StyleValueDelimiters, this.valueElement);
 var wordString = wordRange.toString();
@@ -19620,7 +20081,7 @@ matches = /(.*#)([\da-fA-F]+)(.*)/.exec(wordString);
 if (matches && matches.length) {
 prefix = matches[1];
 suffix = matches[3];
-number = this._alteredHexNumber(matches[2], event);
+number = WebInspector.StylesSidebarPane.alteredHexNumber(matches[2], event);
 
 replacementString = prefix + number + suffix;
 } else {
@@ -19628,7 +20089,7 @@ matches = /(.*?)(-?(?:\d+(?:\.\d+)?|\.\d+))(.*)/.exec(wordString);
 if (matches && matches.length) {
 prefix = matches[1];
 suffix = matches[3];
-number = this._alteredFloatNumber(parseFloat(matches[2]), event);
+number = WebInspector.StylesSidebarPane.alteredFloatNumber(parseFloat(matches[2]), event);
 
 replacementString = prefix + number + suffix;
 }
@@ -19650,88 +20111,17 @@ selection.addRange(finalSelectionRange);
 event.handled = true;
 event.preventDefault();
 
-if (!("originalPropertyText" in this)) {
-
-
-this.originalPropertyText = this.property.propertyText;
-}
-
 
 this.applyStyleText(this.nameElement.textContent + ": " + this.valueElement.textContent);
 }
-},
-
-_alteredFloatNumber: function(number, event)
-{
-var arrowKeyPressed = (event.keyIdentifier === "Up" || event.keyIdentifier === "Down");
-
-var numberNearZero = (number < 1 && number > -1);
-if (number === 1 && event.keyIdentifier === "Down")
-numberNearZero = true;
-else if (number === -1 && event.keyIdentifier === "Up")
-numberNearZero = true;
-
-var result;
-if (numberNearZero && event.altKey && arrowKeyPressed) {
-if (event.keyIdentifier === "Down")
-result = Math.ceil(number - 1);
-else
-result = Math.floor(number + 1);
-} else {
-
-
-var changeAmount = 1;
-if (event.shiftKey && !arrowKeyPressed)
-changeAmount = 100;
-else if (event.shiftKey || !arrowKeyPressed)
-changeAmount = 10;
-else if (event.altKey || numberNearZero)
-changeAmount = 0.1;
-
-if (event.keyIdentifier === "Down" || event.keyIdentifier === "PageDown")
-changeAmount *= -1;
-
-
-
-result = Number((number + changeAmount).toFixed(6));
-}
-
-return result;
-},
-
-_alteredHexNumber: function(hexString, event)
-{
-var number = parseInt(hexString, 16);
-if (isNaN(number) || !isFinite(number))
-return hexString;
-
-var maxValue = Math.pow(16, hexString.length) - 1;
-var arrowKeyPressed = (event.keyIdentifier === "Up" || event.keyIdentifier === "Down");
-
-var delta;
-if (arrowKeyPressed)
-delta = (event.keyIdentifier === "Up") ? 1 : -1;
-else
-delta = (event.keyIdentifier === "PageUp") ? 16 : -16;
-
-if (event.shiftKey)
-delta *= 16;
-
-var result = number + delta;
-if (result < 0)
-result = 0; 
-else if (result > maxValue)
-return hexString;
-
-
-var resultString = result.toString(16).toUpperCase();
-for (var i = 0, lengthDelta = hexString.length - resultString.length; i < lengthDelta; ++i)
-resultString = "0" + resultString;
-return resultString;
+return true;
 },
 
 editingEnded: function(context)
 {
+if (this._applyFreeFlowStyleTextEditTimer)
+clearTimeout(this._applyFreeFlowStyleTextEditTimer);
+
 this.hasChildren = context.hasChildren;
 if (context.expanded)
 this.expand();
@@ -19741,25 +20131,29 @@ editedElement.removeEventListener("keydown", context.keyDownListener, false);
 if (editedElement.parentElement)
 editedElement.parentElement.removeStyleClass("child-editing");
 
-delete this.originalPropertyText;
-delete this._parentPane.isModifyingStyle;
+WebInspector.panels.elements.endEditingStyle();
 },
 
 editingCancelled: function(element, context)
 {
 this._removePrompt();
-if ("originalPropertyText" in this)
-this.applyStyleText(this.originalPropertyText, true);
-else {
+this._revertStyleUponEditingCanceled(this.originalPropertyText);
+
+this.editingEnded(context);
+},
+
+_revertStyleUponEditingCanceled: function(originalPropertyText)
+{
+if (typeof originalPropertyText === "string") {
+delete this.originalPropertyText;
+this.applyStyleText(originalPropertyText, true, false, true);
+} else {
 if (this._newProperty)
 this.treeOutline.removeChild(this);
 else
 this.updateTitle();
 }
-
-
-this.editingEnded(context);
-},
+}, 
 
 editingCommitted: function(element, userInput, previousContent, context, moveDirection)
 {
@@ -19791,7 +20185,7 @@ var isDataPasted = "originalName" in context;
 var isDirtyViaPaste = isDataPasted && (this.nameElement.textContent !== context.originalName || this.valueElement.textContent !== context.originalValue);
 var shouldCommitNewProperty = this._newProperty && (moveToOther || (!moveDirection && !isEditingName) || (isEditingName && blankInput));
 if (((userInput !== previousContent || isDirtyViaPaste) && !this._newProperty) || shouldCommitNewProperty) {
-this._parentPane.isModifyingStyle = true;
+WebInspector.panels.elements.startEditingStyle();
 this.treeOutline.section._afterUpdate = moveToNextCallback.bind(this, this._newProperty, !blankInput, this.treeOutline.section);
 var propertyText;
 if (blankInput || (this._newProperty && /^\s*$/.test(this.valueElement.textContent)))
@@ -19802,7 +20196,7 @@ propertyText = userInput + ": " + this.valueElement.textContent;
 else
 propertyText = this.nameElement.textContent + ": " + userInput;
 }
-this.applyStyleText(propertyText, true);
+this.applyStyleText(propertyText, true, true);
 } else {
 if (!isDataPasted && !this._newProperty)
 this.updateTitle();
@@ -19814,7 +20208,7 @@ var moveToIndex = moveTo && this.treeOutline ? this.treeOutline.children.indexOf
 
 function moveToNextCallback(alreadyNew, valueChanged, section)
 {
-delete this._parentPane.isModifyingStyle;
+WebInspector.panels.elements.endEditingStyle();
 
 if (!moveDirection)
 return;
@@ -19873,38 +20267,40 @@ delete this._prompt;
 }
 },
 
-_hasBeenAppliedToPageViaUpDown: function()
+_hasBeenModifiedIncrementally: function()
 {
 
 
-return ("originalPropertyText" in this);
+return typeof this.originalPropertyText === "string";
 },
 
-applyStyleText: function(styleText, updateInterface)
+applyStyleText: function(styleText, updateInterface, majorChange, isRevert)
 {
+
+if (!isRevert && !updateInterface && !this._hasBeenModifiedIncrementally()) {
+
+
+this.originalPropertyText = this.property.propertyText;
+}
+
 var section = this.treeOutline.section;
 var elementsPanel = WebInspector.panels.elements;
 styleText = styleText.replace(/\s/g, " ").trim(); 
 var styleTextLength = styleText.length;
-if (!styleTextLength && updateInterface && this._newProperty && !this._hasBeenAppliedToPageViaUpDown()) {
+if (!styleTextLength && updateInterface && !isRevert && this._newProperty && !this._hasBeenModifiedIncrementally()) {
 
 this.parent.removeChild(this);
 section.afterUpdate();
 return;
 }
 
-function callback(newStyle)
+function callback(originalPropertyText, newStyle)
 {
 if (!newStyle) {
+if (updateInterface) {
 
-
-
-if (this._newProperty) {
-this.parent.removeChild(this);
-return;
+this._revertStyleUponEditingCanceled(originalPropertyText);
 }
-if (updateInterface)
-this.updateTitle();
 return;
 }
 
@@ -19923,7 +20319,7 @@ this.updateAll(true);
 
 if (styleText.length && !/;\s*$/.test(styleText))
 styleText += ";";
-this.property.setText(styleText, updateInterface, callback.bind(this));
+this.property.setText(styleText, majorChange, callback.bind(this, this.originalPropertyText));
 }
 }
 
@@ -20611,7 +21007,7 @@ this.contentElement.className = "outline-disclosure source-code";
 if (!WebInspector.settings.domWordWrap)
 this.contentElement.classList.add("nowrap");
 
-this.element.addEventListener("contextmenu", this._contextMenuEventFired.bind(this), true);
+this.contentElement.addEventListener("contextmenu", this._contextMenuEventFired.bind(this), true);
 
 this.treeOutline = new WebInspector.ElementsTreeOutline();
 this.treeOutline.panel = this;
@@ -20652,7 +21048,7 @@ this.sidebarPanes.styles = new WebInspector.StylesSidebarPane(this.sidebarPanes.
 this.sidebarPanes.metrics = new WebInspector.MetricsSidebarPane();
 this.sidebarPanes.properties = new WebInspector.PropertiesSidebarPane();
 if (Preferences.nativeInstrumentationEnabled)
-this.sidebarPanes.domBreakpoints = WebInspector.createDOMBreakpointsSidebarPane();
+this.sidebarPanes.domBreakpoints = WebInspector.domBreakpointsSidebarPane;
 this.sidebarPanes.eventListeners = new WebInspector.EventListenersSidebarPane();
 
 this.sidebarPanes.styles.onexpand = this.updateStyles.bind(this);
@@ -20665,7 +21061,7 @@ this.sidebarPanes.styles.expanded = true;
 this.sidebarPanes.styles.addEventListener("style edited", this._stylesPaneEdited, this);
 this.sidebarPanes.styles.addEventListener("style property toggled", this._stylesPaneEdited, this);
 this.sidebarPanes.metrics.addEventListener("metrics edited", this._metricsPaneEdited, this);
-WebInspector.cssModel.addEventListener("stylesheet changed", this._styleSheetChanged, this);
+WebInspector.cssModel.addEventListener(WebInspector.CSSStyleModel.Events.StyleSheetChanged, this._styleSheetChanged, this);
 
 this.sidebarElement = document.createElement("div");
 this.sidebarElement.id = "elements-sidebar";
@@ -20686,12 +21082,13 @@ this.element.appendChild(this.sidebarResizeElement);
 
 this._registerShortcuts();
 
-WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.NodeInserted, this._nodeInserted, this);
+WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.NodeInserted, this._nodeUpdated.bind(this, true));
 WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.NodeRemoved, this._nodeRemoved, this);
 WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.AttrModified, this._attributesUpdated, this);
-WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.CharacterDataModified, this._characterDataModified, this);
+WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.CharacterDataModified, this._nodeUpdated.bind(this, false));
 WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.DocumentUpdated, this._documentUpdated, this);
 WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.ChildNodeCountUpdated, this._childNodeCountUpdated, this);
+WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.ShadowRootUpdated, this._nodeUpdated.bind(this, true));
 
 this.recentlyModifiedNodes = [];
 }
@@ -20725,6 +21122,9 @@ this.updateBreadcrumb();
 this.treeOutline.updateSelection();
 if (this.recentlyModifiedNodes.length)
 this.updateModifiedNodes();
+
+if (Preferences.nativeInstrumentationEnabled)
+this.sidebarElement.insertBefore(this.sidebarPanes.domBreakpoints.element, this.sidebarPanes.eventListeners.element);
 
 if (!this.rootDOMNode)
 WebInspector.domAgent.requestDocument();
@@ -20772,8 +21172,8 @@ this.searchCanceled();
 if (!inspectedRootDocument)
 return;
 
-WebInspector.breakpointManager.restoreDOMBreakpoints();
-
+if (Preferences.nativeInstrumentationEnabled)
+this.sidebarPanes.domBreakpoints.restoreBreakpoints();
 
 this.rootDOMNode = inspectedRootDocument;
 
@@ -20857,7 +21257,7 @@ var contextMenu = new WebInspector.ContextMenu();
 var populated = this.treeOutline.populateContextMenu(contextMenu, event);
 if (populated)
 contextMenu.appendSeparator();
-contextMenu.appendCheckboxItem(WebInspector.UIString("Word Wrap"), toggleWordWrap.bind(this), isTextWrapped.call(this));
+contextMenu.appendCheckboxItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Word wrap" : "Word Wrap"), toggleWordWrap.bind(this), isTextWrapped.call(this));
 
 contextMenu.show(event);
 },
@@ -20872,9 +21272,9 @@ if (!resourceURL)
 return false;
 
 
-contextMenu.appendItem(WebInspector.openLinkExternallyLabel(), WebInspector.openResource.bind(null, resourceURL, false));
+contextMenu.appendItem(WebInspector.openLinkExternallyLabel(), WebInspector.openResource.bind(WebInspector, resourceURL, false));
 if (WebInspector.resourceForURL(resourceURL))
-contextMenu.appendItem(WebInspector.UIString("Open Link in Resources Panel"), WebInspector.openResource.bind(null, resourceURL, true));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Open link in Resources panel" : "Open Link in Resources Panel"), WebInspector.openResource.bind(null, resourceURL, true));
 return true;
 },
 
@@ -20991,33 +21391,37 @@ set focusedDOMNode(x)
 this.treeOutline.focusedDOMNode = x;
 },
 
+startEditingStyle: function()
+{
+this._isEditingStyle = true;
+},
+
+endEditingStyle: function()
+{
+delete this._isEditingStyle;
+},
+
+_nodeUpdated: function(hierarchyUpdated, event)
+{
+var updatedNodeDetails = { node: event.data };
+if (hierarchyUpdated)
+updatedNodeDetails.parent = event.data.parentNode;
+this.recentlyModifiedNodes.push(updatedNodeDetails);
+if (this.visible)
+this._updateModifiedNodesSoon();
+},
+
 _attributesUpdated: function(event)
 {
-this.recentlyModifiedNodes.push({node: event.data, updated: true});
-if (this.visible)
-this._updateModifiedNodesSoon();
+this._nodeUpdated(false, event);
 
-if (!this.sidebarPanes.styles.isModifyingStyle && event.data === this.focusedDOMNode)
+if (!this._isEditingStyle && event.data === this.focusedDOMNode)
 this._styleSheetChanged();
-},
-
-_characterDataModified: function(event)
-{
-this.recentlyModifiedNodes.push({node: event.data, updated: true});
-if (this.visible)
-this._updateModifiedNodesSoon();
-},
-
-_nodeInserted: function(event)
-{
-this.recentlyModifiedNodes.push({node: event.data, parent: event.data.parentNode, inserted: true});
-if (this.visible)
-this._updateModifiedNodesSoon();
 },
 
 _nodeRemoved: function(event)
 {
-this.recentlyModifiedNodes.push({node: event.data.node, parent: event.data.parent, removed: true});
+this.recentlyModifiedNodes.push({node: event.data.node, parent: event.data.parent});
 if (this.visible)
 this._updateModifiedNodesSoon();
 },
@@ -21050,15 +21454,12 @@ for (var i = 0; i < this.recentlyModifiedNodes.length; ++i) {
 var parent = this.recentlyModifiedNodes[i].parent;
 var node = this.recentlyModifiedNodes[i].node;
 
-if (this.recentlyModifiedNodes[i].updated) {
+if (!parent) {
 var nodeItem = this.treeOutline.findTreeElement(node);
 if (nodeItem)
 nodeItem.updateTitle();
 continue;
 }
-
-if (!parent)
-continue;
 
 var parentNodeItem = this.treeOutline.findTreeElement(parent);
 if (parentNodeItem && !parentNodeItem.alreadyUpdatedChildren) {
@@ -21227,6 +21628,10 @@ break;
 
 case Node.DOCUMENT_TYPE_NODE:
 crumbTitle = "<!DOCTYPE>";
+break;
+
+case Node.SHADOW_ROOT_NODE:
+crumbTitle = "(shadow)";
 break;
 
 default:
@@ -21456,7 +21861,7 @@ var newEndNeeded = false;
 while (crumb) {
 var hidden = crumb.hasStyleClass("hidden");
 if (!hidden) {
-var collapsed = crumb.hasStyleClass("collapsed"); 
+var collapsed = crumb.hasStyleClass("collapsed");
 if (collapsedRun && collapsed) {
 crumb.addStyleClass("hidden");
 crumb.removeStyleClass("compact");
@@ -21690,18 +22095,20 @@ if (!node)
 return;
 
 this.focusedDOMNode = node;
+if (this._nodeSearchButton.toggled) {
+InspectorFrontendHost.bringToFront();
 this._nodeSearchButton.toggled = false;
+}
 },
 
-_setSearchingForNode: function(error, enabled)
+_setSearchingForNode: function(enabled)
 {
-if (!error)
 this._nodeSearchButton.toggled = enabled;
 },
 
 setSearchingForNode: function(enabled)
 {
-DOMAgent.setSearchingForNode(enabled, this._setSearchingForNode.bind(this));
+DOMAgent.setInspectModeEnabled(enabled, this._setSearchingForNode.bind(this, enabled));
 },
 
 toggleSearchingForNode: function()
@@ -21776,7 +22183,12 @@ this._toggleGridMode();
 WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceStarted, this._onResourceStarted, this);
 WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceUpdated, this._onResourceUpdated, this);
 WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceFinished, this._onResourceUpdated, this);
-WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.FrameCommittedLoad, this._onFrameCommitLoad, this);
+
+WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.FrameNavigated, this._frameNavigated, this);
+WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.OnLoad, this._onLoadEventFired, this);
+WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.DOMContentLoaded, this._domContentLoadedEventFired, this);
+
+this.registerShortcuts();
 }
 
 WebInspector.NetworkPanel.prototype = {
@@ -21824,7 +22236,10 @@ handleShortcut: function(event)
 if (this._viewingResourceMode && event.keyCode === WebInspector.KeyboardShortcut.Keys.Esc.code) {
 this._toggleGridMode();
 event.handled = true;
+return;
 }
+
+WebInspector.Panel.prototype.handleShortcut.call(this, event);
 },
 
 _createTimelineGrid: function()
@@ -21844,29 +22259,29 @@ columns.name.disclosure = true;
 
 columns.method.title = WebInspector.UIString("Method");
 columns.method.sortable = true;
-columns.method.width = "7%";
+columns.method.width = "6%";
 
 columns.status.titleDOMFragment = this._makeHeaderFragment(WebInspector.UIString("Status"), WebInspector.UIString("Text"));
 columns.status.sortable = true;
-columns.status.width = "8%";
+columns.status.width = "6%";
 
 columns.type.title = WebInspector.UIString("Type");
 columns.type.sortable = true;
-columns.type.width = "10%";
+columns.type.width = "6%";
 
 columns.size.titleDOMFragment = this._makeHeaderFragment(WebInspector.UIString("Size"), WebInspector.UIString("Transfer"));
 columns.size.sortable = true;
-columns.size.width = "10%";
+columns.size.width = "6%";
 columns.size.aligned = "right";
 
 columns.time.titleDOMFragment = this._makeHeaderFragment(WebInspector.UIString("Time"), WebInspector.UIString("Latency"));
 columns.time.sortable = true;
-columns.time.width = "10%";
+columns.time.width = "6%";
 columns.time.aligned = "right";
 
 columns.timeline.title = "";
 columns.timeline.sortable = false;
-columns.timeline.width = "37%";
+columns.timeline.width = "50%";
 columns.timeline.sort = "ascending";
 
 this._dataGrid = new WebInspector.DataGrid(columns);
@@ -22296,22 +22711,16 @@ this._largerResourcesButton.toggled = WebInspector.settings.resourcesLargeRows;
 this._largerResourcesButton.addEventListener("click", this._toggleLargerResources.bind(this), false);
 },
 
-set mainResourceLoadTime(x)
+_onLoadEventFired: function(event)
 {
-if (this._mainResourceLoadTime === x)
-return;
-
-this._mainResourceLoadTime = x || -1;
+this._mainResourceLoadTime = event.data || -1;
 
 this._updateDividersIfNeeded(true);
 },
 
-set mainResourceDOMContentTime(x)
+_domContentLoadedEventFired: function(event)
 {
-if (this._mainResourceDOMContentTime === x)
-return;
-
-this._mainResourceDOMContentTime = x || -1;
+this._mainResourceDOMContentTime = event.data || -1;
 this._updateDividersIfNeeded(true);
 },
 
@@ -22495,17 +22904,17 @@ return;
 this._reset();
 },
 
-_onFrameCommitLoad: function(event)
+_frameNavigated: function(event)
 {
-if (event.data.frame.parentId)
+if (!event.data.isMainFrame)
 return;
 
+var loaderId = event.data.loaderId;
 
 if (this._preserveLogToggle.toggled)
 return;
 
 
-var loaderId = event.data.loaderId;
 var resourcesToPreserve = [];
 for (var i = 0; i < this._resources.length; ++i) {
 var resource = this._resources[i];
@@ -22645,12 +23054,12 @@ this._dataGrid.showColumn("time");
 
 var widths = {};
 widths.name = 20;
-widths.method = 7;
-widths.status = 8;
-widths.type = 10;
-widths.size = 10;
-widths.time = 10;
-widths.timeline = 37;
+widths.method = 6;
+widths.status = 6;
+widths.type = 6;
+widths.size = 6;
+widths.time = 6;
+widths.timeline = 50;
 }
 
 this._dataGrid.showColumn("timeline");
@@ -22690,24 +23099,70 @@ _contextMenu: function(event)
 var contextMenu = new WebInspector.ContextMenu();
 var gridNode = this._dataGrid.dataGridNodeFromNode(event.target);
 var resource = gridNode && gridNode._resource;
+
+if (resource) {
+contextMenu.appendItem(WebInspector.openLinkExternallyLabel(), WebInspector.openResource.bind(WebInspector, resource.url, false));
+contextMenu.appendSeparator();
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Copy location" : "Copy Location"), this._copyLocation.bind(this, resource));
+if (resource.requestHeadersText)
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Copy request headers" : "Copy Request Headers"), this._copyRequestHeaders.bind(this, resource));
+if (resource.responseHeadersText)
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Copy response headers" : "Copy Response Headers"), this._copyResponseHeaders.bind(this, resource));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Copy entry as HAR" : "Copy Entry as HAR"), this._copyResource.bind(this, resource));
+}
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Copy all as HAR" : "Copy All as HAR"), this._copyAll.bind(this));
+
+if (Preferences.saveAsAvailable) {
+contextMenu.appendSeparator();
 if (resource)
-contextMenu.appendItem(WebInspector.UIString("Copy entry as HAR"), this._exportResource.bind(this, resource));
-contextMenu.appendItem(WebInspector.UIString("Copy network log as HAR"), this._exportAll.bind(this));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Save entry as HAR" : "Save Entry as HAR"), this._exportResource.bind(this, resource));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Save all as HAR" : "Save All as HAR"), this._exportAll.bind(this));
+}
+
 contextMenu.show(event);
+},
+
+_copyAll: function()
+{
+var harArchive = {
+log: (new WebInspector.HARLog()).build()
+};
+InspectorFrontendHost.copyText(JSON.stringify(harArchive));
+},
+
+_copyResource: function(resource)
+{
+var har = (new WebInspector.HAREntry(resource)).build();
+InspectorFrontendHost.copyText(JSON.stringify(har));
+},
+
+_copyLocation: function(resource)
+{
+InspectorFrontendHost.copyText(resource.url);
+},
+
+_copyRequestHeaders: function(resource)
+{
+InspectorFrontendHost.copyText(resource.requestHeadersText);
+},
+
+_copyResponseHeaders: function(resource)
+{
+InspectorFrontendHost.copyText(resource.responseHeadersText);
 },
 
 _exportAll: function()
 {
 var harArchive = {
 log: (new WebInspector.HARLog()).build()
-}
-InspectorFrontendHost.copyText(JSON.stringify(harArchive));
+};
+InspectorFrontendHost.saveAs(WebInspector.mainResource.domain + ".har", JSON.stringify(harArchive));
 },
 
 _exportResource: function(resource)
 {
 var har = (new WebInspector.HAREntry(resource)).build();
-InspectorFrontendHost.copyText(JSON.stringify(har));
+InspectorFrontendHost.saveAs(resource.displayName + ".har", JSON.stringify(har));
 },
 
 _updateOffscreenRows: function(e)
@@ -23070,7 +23525,7 @@ WebInspector.DataGridNode.prototype.select.apply(this, arguments);
 
 _openInNewTab: function()
 {
-PageAgent.openInInspectedWindow(this._resource.url);
+PageAgent.open(this._resource.url, true);
 },
 
 get selectable()
@@ -23130,18 +23585,10 @@ refreshResource: function()
 {
 this._refreshNameCell();
 
-this._methodCell.textContent = this._resource.requestMethod;
+this._methodCell.setTextAndTitle(this._resource.requestMethod);
 
 this._refreshStatusCell();
-
-if (this._resource.mimeType) {
-this._typeCell.removeStyleClass("network-dim-cell");
-this._typeCell.textContent = this._resource.mimeType;
-} else {
-this._typeCell.addStyleClass("network-dim-cell");
-this._typeCell.textContent = WebInspector.UIString("Pending");
-}
-
+this._refreshTypeCell();
 this._refreshSizeCell();
 this._refreshTimeCell();
 
@@ -23199,9 +23646,18 @@ _refreshStatusCell: function()
 {
 this._statusCell.removeChildren();
 
+if (this._resource.failed) {
+if (this._resource.canceled)
+this._statusCell.setTextAndTitle(WebInspector.UIString("(canceled)"));
+else
+this._statusCell.setTextAndTitle(WebInspector.UIString("(failed)"));
+this._statusCell.addStyleClass("network-dim-cell");
+return;
+}
+
 var fromCache = this._resource.cached;
 if (fromCache) {
-this._statusCell.textContent = WebInspector.UIString("(from cache)");
+this._statusCell.setTextAndTitle(WebInspector.UIString("(from cache)"));
 this._statusCell.addStyleClass("network-dim-cell");
 return;
 }
@@ -23213,8 +23669,27 @@ this._statusCell.removeStyleClass("network-dim-cell");
 this._appendSubtitle(this._statusCell, this._resource.statusText);
 this._statusCell.title = this._resource.statusCode + " " + this._resource.statusText;
 } else {
+if (this._resource.isDataURL() && this._resource.finished)
+this._statusCell.setTextAndTitle(WebInspector.UIString("(data url)"));
+else if (this._resource.isPingRequest())
+this._statusCell.setTextAndTitle(WebInspector.UIString("(ping)"));
+else
+this._statusCell.setTextAndTitle(WebInspector.UIString("(Pending)"));
 this._statusCell.addStyleClass("network-dim-cell");
-this._statusCell.textContent = WebInspector.UIString("Pending");
+}
+},
+
+_refreshTypeCell: function()
+{
+if (this._resource.mimeType) {
+this._typeCell.removeStyleClass("network-dim-cell");
+this._typeCell.setTextAndTitle(this._resource.mimeType);
+} else if (this._resource.isPingRequest) {
+this._typeCell.removeStyleClass("network-dim-cell");
+this._typeCell.setTextAndTitle(this._resource.requestContentType());
+} else {
+this._typeCell.addStyleClass("network-dim-cell");
+this._typeCell.setTextAndTitle(WebInspector.UIString("Pending"));
 }
 },
 
@@ -23223,7 +23698,7 @@ _refreshSizeCell: function()
 var resourceSize = typeof this._resource.resourceSize === "number" ? Number.bytesToString(this._resource.resourceSize) : "?";
 var transferSize = typeof this._resource.transferSize === "number" ? Number.bytesToString(this._resource.transferSize) : "?";
 var fromCache = this._resource.cached;
-this._sizeCell.textContent = !fromCache ? resourceSize : WebInspector.UIString("(from cache)");
+this._sizeCell.setTextAndTitle(!fromCache ? resourceSize : WebInspector.UIString("(from cache)"));
 if (fromCache)
 this._sizeCell.addStyleClass("network-dim-cell");
 else
@@ -23236,11 +23711,11 @@ _refreshTimeCell: function()
 {
 if (this._resource.duration > 0) {
 this._timeCell.removeStyleClass("network-dim-cell");
-this._timeCell.textContent = Number.secondsToString(this._resource.duration);
+this._timeCell.setTextAndTitle(Number.secondsToString(this._resource.duration));
 this._appendSubtitle(this._timeCell, Number.secondsToString(this._resource.latency));
 } else {
 this._timeCell.addStyleClass("network-dim-cell");
-this._timeCell.textContent = WebInspector.UIString("Pending");
+this._timeCell.setTextAndTitle(WebInspector.UIString("Pending"));
 }
 },
 
@@ -23711,17 +24186,1933 @@ function noop()
 
 
 
-WebInspector.SourceFrame = function(delegate, url)
+WebInspector.TextViewer = function(textModel, platform, url, delegate)
 {
 WebInspector.View.call(this);
 
-this.element.addStyleClass("script-view");
+this._textModel = textModel;
+this._textModel.changeListener = this._textChanged.bind(this);
+this._textModel.resetUndoStack();
+this._delegate = delegate;
+
+this.element.className = "text-editor monospace";
+
+var enterTextChangeMode = this._enterInternalTextChangeMode.bind(this);
+var exitTextChangeMode = this._exitInternalTextChangeMode.bind(this);
+var syncScrollListener = this._syncScroll.bind(this);
+var syncDecorationsForLineListener = this._syncDecorationsForLine.bind(this);
+this._mainPanel = new WebInspector.TextEditorMainPanel(this._textModel, url, syncScrollListener, syncDecorationsForLineListener, enterTextChangeMode, exitTextChangeMode);
+this._gutterPanel = new WebInspector.TextEditorGutterPanel(this._textModel, syncDecorationsForLineListener);
+this.element.appendChild(this._mainPanel.element);
+this.element.appendChild(this._gutterPanel.element);
+
+
+this._gutterPanel.element.addEventListener("mousewheel", function(e) {
+this._mainPanel.element.dispatchEvent(e);
+}.bind(this), false);
+
+this.element.addEventListener("dblclick", this._doubleClick.bind(this), true);
+this.element.addEventListener("keydown", this._handleKeyDown.bind(this), false);
+this.element.addEventListener("contextmenu", this._contextMenu.bind(this), true);
+
+this._registerShortcuts();
+}
+
+WebInspector.TextViewer.prototype = {
+set mimeType(mimeType)
+{
+this._mainPanel.mimeType = mimeType;
+},
+
+set readOnly(readOnly)
+{
+if (this._mainPanel.readOnly === readOnly)
+return;
+this._mainPanel.readOnly = readOnly;
+this._delegate.readOnlyStateChanged(readOnly);
+},
+
+get readOnly()
+{
+return this._mainPanel.readOnly;
+},
+
+get textModel()
+{
+return this._textModel;
+},
+
+revealLine: function(lineNumber)
+{
+this._mainPanel.revealLine(lineNumber);
+},
+
+addDecoration: function(lineNumber, decoration)
+{
+this._mainPanel.addDecoration(lineNumber, decoration);
+this._gutterPanel.addDecoration(lineNumber, decoration);
+},
+
+removeDecoration: function(lineNumber, decoration)
+{
+this._mainPanel.removeDecoration(lineNumber, decoration);
+this._gutterPanel.removeDecoration(lineNumber, decoration);
+},
+
+markAndRevealRange: function(range)
+{
+this._mainPanel.markAndRevealRange(range);
+},
+
+highlightLine: function(lineNumber)
+{
+lineNumber = Math.min(lineNumber, this._textModel.linesCount - 1);
+this._mainPanel.highlightLine(lineNumber);
+},
+
+clearLineHighlight: function()
+{
+this._mainPanel.clearLineHighlight();
+},
+
+freeCachedElements: function()
+{
+this._mainPanel.freeCachedElements();
+this._gutterPanel.freeCachedElements();
+},
+
+get scrollTop()
+{
+return this._mainPanel.element.scrollTop;
+},
+
+set scrollTop(scrollTop)
+{
+this._mainPanel.element.scrollTop = scrollTop;
+},
+
+get scrollLeft()
+{
+return this._mainPanel.element.scrollLeft;
+},
+
+set scrollLeft(scrollLeft)
+{
+this._mainPanel.element.scrollLeft = scrollLeft;
+},
+
+beginUpdates: function()
+{
+this._mainPanel.beginUpdates();
+this._gutterPanel.beginUpdates();
+},
+
+endUpdates: function()
+{
+this._mainPanel.endUpdates();
+this._gutterPanel.endUpdates();
+this._updatePanelOffsets();
+},
+
+resize: function()
+{
+this._mainPanel.resize();
+this._gutterPanel.resize();
+this._updatePanelOffsets();
+},
+
+
+_textChanged: function(oldRange, newRange, oldText, newText)
+{
+if (!this._internalTextChangeMode)
+this._textModel.resetUndoStack();
+this._mainPanel.textChanged(oldRange, newRange);
+this._gutterPanel.textChanged(oldRange, newRange);
+this._updatePanelOffsets();
+},
+
+_enterInternalTextChangeMode: function()
+{
+this._internalTextChangeMode = true;
+this._delegate.startEditing();
+},
+
+_exitInternalTextChangeMode: function(oldRange, newRange)
+{
+this._internalTextChangeMode = false;
+this._delegate.endEditing(oldRange, newRange);
+},
+
+_updatePanelOffsets: function()
+{
+var lineNumbersWidth = this._gutterPanel.element.offsetWidth;
+if (lineNumbersWidth)
+this._mainPanel.element.style.setProperty("left", lineNumbersWidth + "px");
+else
+this._mainPanel.element.style.removeProperty("left"); 
+},
+
+_syncScroll: function()
+{
+
+setTimeout(function() {
+var mainElement = this._mainPanel.element;
+var gutterElement = this._gutterPanel.element;
+
+this._gutterPanel.syncClientHeight(mainElement.clientHeight);
+gutterElement.scrollTop = mainElement.scrollTop;
+}.bind(this), 0);
+},
+
+_syncDecorationsForLine: function(lineNumber)
+{
+if (lineNumber >= this._textModel.linesCount)
+return;
+
+var mainChunk = this._mainPanel.chunkForLine(lineNumber);
+if (mainChunk.linesCount === 1 && mainChunk.decorated) {
+var gutterChunk = this._gutterPanel.makeLineAChunk(lineNumber);
+var height = mainChunk.height;
+if (height)
+gutterChunk.element.style.setProperty("height", height + "px");
+else
+gutterChunk.element.style.removeProperty("height");
+} else {
+var gutterChunk = this._gutterPanel.chunkForLine(lineNumber);
+if (gutterChunk.linesCount === 1)
+gutterChunk.element.style.removeProperty("height");
+}
+},
+
+_doubleClick: function(event)
+{
+if (!this.readOnly || this._commitEditingInProgress)
+return;
+
+var lineRow = event.target.enclosingNodeOrSelfWithClass("webkit-line-content");
+if (!lineRow)
+return;  
+
+if (!this._delegate.isContentEditable())
+return;
+
+this.readOnly = false;
+window.getSelection().collapseToStart();
+},
+
+_registerShortcuts: function()
+{
+var keys = WebInspector.KeyboardShortcut.Keys;
+var modifiers = WebInspector.KeyboardShortcut.Modifiers;
+
+this._shortcuts = {};
+var commitEditing = this._commitEditing.bind(this);
+var cancelEditing = this._cancelEditing.bind(this);
+this._shortcuts[WebInspector.KeyboardShortcut.makeKey("s", modifiers.CtrlOrMeta)] = commitEditing;
+this._shortcuts[WebInspector.KeyboardShortcut.makeKey(keys.Enter.code, modifiers.CtrlOrMeta)] = commitEditing;
+this._shortcuts[WebInspector.KeyboardShortcut.makeKey(keys.Esc.code)] = cancelEditing;
+
+var handleUndo = this._mainPanel.handleUndoRedo.bind(this._mainPanel, false);
+var handleRedo = this._mainPanel.handleUndoRedo.bind(this._mainPanel, true);
+this._shortcuts[WebInspector.KeyboardShortcut.makeKey("z", modifiers.CtrlOrMeta)] = handleUndo;
+this._shortcuts[WebInspector.KeyboardShortcut.makeKey("z", modifiers.Shift | modifiers.CtrlOrMeta)] = handleRedo;
+
+var handleTabKey = this._mainPanel.handleTabKeyPress.bind(this._mainPanel, false);
+var handleShiftTabKey = this._mainPanel.handleTabKeyPress.bind(this._mainPanel, true);
+this._shortcuts[WebInspector.KeyboardShortcut.makeKey(keys.Tab.code)] = handleTabKey;
+this._shortcuts[WebInspector.KeyboardShortcut.makeKey(keys.Tab.code, modifiers.Shift)] = handleShiftTabKey;
+},
+
+_handleKeyDown: function(e)
+{
+var shortcutKey = WebInspector.KeyboardShortcut.makeKeyFromEvent(e);
+var handler = this._shortcuts[shortcutKey];
+if (handler && handler.call(this)) {
+e.preventDefault();
+e.stopPropagation();
+}
+},
+
+_contextMenu: function(event)
+{
+var contextMenu = new WebInspector.ContextMenu();
+var target = event.target.enclosingNodeOrSelfWithClass("webkit-line-number");
+if (target)
+this._delegate.populateLineGutterContextMenu(target.lineNumber, contextMenu);
+else {
+var selection = this._mainPanel._getSelection();
+if (selection && !selection.isEmpty())
+return; 
+this._delegate.populateTextAreaContextMenu(contextMenu);
+}
+
+var fileName = this._delegate.suggestedFileName();
+if (fileName)
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Save as..." : "Save As..."), InspectorFrontendHost.saveAs.bind(InspectorFrontendHost, fileName, this._textModel.text));
+
+contextMenu.show(event);
+},
+
+_commitEditing: function()
+{
+if (this.readOnly)
+return false;
+
+this.readOnly = true;
+function didCommitEditing(error)
+{
+this._commitEditingInProgress = false;
+if (error)
+this.readOnly = false;
+}
+this._commitEditingInProgress = true;
+this._delegate.commitEditing(didCommitEditing.bind(this));
+return true;
+},
+
+_cancelEditing: function()
+{
+if (this.readOnly)
+return false;
+
+this.readOnly = true;
+this._delegate.cancelEditing();
+return true;
+}
+}
+
+WebInspector.TextViewer.prototype.__proto__ = WebInspector.View.prototype;
+
+WebInspector.TextViewerDelegate = function()
+{
+}
+
+WebInspector.TextViewerDelegate.prototype = {
+isContentEditable: function()
+{
+
+},
+
+readOnlyStateChanged: function(readOnly)
+{
+
+},
+
+startEditing: function()
+{
+
+},
+
+endEditing: function(oldRange, newRange)
+{
+
+},
+
+commitEditing: function()
+{
+
+},
+
+cancelEditing: function()
+{
+
+},
+
+populateLineGutterContextMenu: function(contextMenu)
+{
+
+},
+
+populateTextAreaContextMenu: function(contextMenu)
+{
+
+},
+
+suggestedFileName: function()
+{
+
+}
+}
+
+WebInspector.TextViewerDelegate.prototype.__proto__ = WebInspector.Object.prototype;
+
+WebInspector.TextEditorChunkedPanel = function(textModel)
+{
+this._textModel = textModel;
+
+this._defaultChunkSize = 50;
+this._paintCoalescingLevel = 0;
+this._domUpdateCoalescingLevel = 0;
+}
+
+WebInspector.TextEditorChunkedPanel.prototype = {
+get textModel()
+{
+return this._textModel;
+},
+
+revealLine: function(lineNumber)
+{
+if (lineNumber >= this._textModel.linesCount)
+return;
+
+var chunk = this.makeLineAChunk(lineNumber);
+chunk.element.scrollIntoViewIfNeeded();
+},
+
+addDecoration: function(lineNumber, decoration)
+{
+if (lineNumber >= this._textModel.linesCount)
+return;
+
+var chunk = this.makeLineAChunk(lineNumber);
+chunk.addDecoration(decoration);
+},
+
+removeDecoration: function(lineNumber, decoration)
+{
+if (lineNumber >= this._textModel.linesCount)
+return;
+
+var chunk = this.chunkForLine(lineNumber);
+chunk.removeDecoration(decoration);
+},
+
+_buildChunks: function()
+{
+this.beginDomUpdates();
+
+this._container.removeChildren();
+
+this._textChunks = [];
+for (var i = 0; i < this._textModel.linesCount; i += this._defaultChunkSize) {
+var chunk = this._createNewChunk(i, i + this._defaultChunkSize);
+this._textChunks.push(chunk);
+this._container.appendChild(chunk.element);
+}
+
+this._repaintAll();
+
+this.endDomUpdates();
+},
+
+makeLineAChunk: function(lineNumber)
+{
+var chunkNumber = this._chunkNumberForLine(lineNumber);
+var oldChunk = this._textChunks[chunkNumber];
+if (oldChunk.linesCount === 1)
+return oldChunk;
+
+return this._splitChunkOnALine(lineNumber, chunkNumber);
+},
+
+_splitChunkOnALine: function(lineNumber, chunkNumber)
+{
+this.beginDomUpdates();
+
+var oldChunk = this._textChunks[chunkNumber];
+var wasExpanded = oldChunk.expanded;
+oldChunk.expanded = false;
+
+var insertIndex = chunkNumber + 1;
+
+
+if (lineNumber > oldChunk.startLine) {
+var prefixChunk = this._createNewChunk(oldChunk.startLine, lineNumber);
+this._textChunks.splice(insertIndex++, 0, prefixChunk);
+this._container.insertBefore(prefixChunk.element, oldChunk.element);
+}
+
+
+var lineChunk = this._createNewChunk(lineNumber, lineNumber + 1);
+this._textChunks.splice(insertIndex++, 0, lineChunk);
+this._container.insertBefore(lineChunk.element, oldChunk.element);
+
+
+if (oldChunk.startLine + oldChunk.linesCount > lineNumber + 1) {
+var suffixChunk = this._createNewChunk(lineNumber + 1, oldChunk.startLine + oldChunk.linesCount);
+this._textChunks.splice(insertIndex, 0, suffixChunk);
+this._container.insertBefore(suffixChunk.element, oldChunk.element);
+}
+
+
+this._textChunks.splice(chunkNumber, 1);
+this._container.removeChild(oldChunk.element);
+
+if (wasExpanded) {
+if (prefixChunk)
+prefixChunk.expanded = true;
+lineChunk.expanded = true;
+if (suffixChunk)
+suffixChunk.expanded = true;
+}
+
+this.endDomUpdates();
+
+return lineChunk;
+},
+
+_scroll: function()
+{
+
+if (this.element.scrollLeft <= 2)
+this.element.scrollLeft = 0;
+
+this._scheduleRepaintAll();
+if (this._syncScrollListener)
+this._syncScrollListener();
+},
+
+_scheduleRepaintAll: function()
+{
+if (this._repaintAllTimer)
+clearTimeout(this._repaintAllTimer);
+this._repaintAllTimer = setTimeout(this._repaintAll.bind(this), 50);
+},
+
+beginUpdates: function()
+{
+this._paintCoalescingLevel++;
+},
+
+endUpdates: function()
+{
+this._paintCoalescingLevel--;
+if (!this._paintCoalescingLevel)
+this._repaintAll();
+},
+
+beginDomUpdates: function()
+{
+this._domUpdateCoalescingLevel++;
+},
+
+endDomUpdates: function()
+{
+this._domUpdateCoalescingLevel--;
+},
+
+_chunkNumberForLine: function(lineNumber)
+{
+function compareLineNumbers(value, chunk)
+{
+return value < chunk.startLine ? -1 : 1;
+}
+var insertBefore = insertionIndexForObjectInListSortedByFunction(lineNumber, this._textChunks, compareLineNumbers);
+return insertBefore - 1;
+},
+
+chunkForLine: function(lineNumber)
+{
+return this._textChunks[this._chunkNumberForLine(lineNumber)];
+},
+
+_findFirstVisibleChunkNumber: function(visibleFrom)
+{
+function compareOffsetTops(value, chunk)
+{
+return value < chunk.offsetTop ? -1 : 1;
+}
+var insertBefore = insertionIndexForObjectInListSortedByFunction(visibleFrom, this._textChunks, compareOffsetTops);
+return insertBefore - 1;
+},
+
+_findVisibleChunks: function(visibleFrom, visibleTo)
+{
+var from = this._findFirstVisibleChunkNumber(visibleFrom);
+for (var to = from + 1; to < this._textChunks.length; ++to) {
+if (this._textChunks[to].offsetTop >= visibleTo)
+break;
+}
+return { start: from, end: to };
+},
+
+_findFirstVisibleLineNumber: function(visibleFrom)
+{
+var chunk = this._textChunks[this._findFirstVisibleChunkNumber(visibleFrom)];
+if (!chunk.expanded)
+return chunk.startLine;
+
+var lineNumbers = [];
+for (var i = 0; i < chunk.linesCount; ++i) {
+lineNumbers.push(chunk.startLine + i);
+}
+
+function compareLineRowOffsetTops(value, lineNumber)
+{
+var lineRow = chunk.getExpandedLineRow(lineNumber);
+return value < lineRow.offsetTop ? -1 : 1;
+}
+var insertBefore = insertionIndexForObjectInListSortedByFunction(visibleFrom, lineNumbers, compareLineRowOffsetTops);
+return lineNumbers[insertBefore - 1];
+},
+
+_repaintAll: function()
+{
+delete this._repaintAllTimer;
+
+if (this._paintCoalescingLevel || this._dirtyLines)
+return;
+
+var visibleFrom = this.element.scrollTop;
+var visibleTo = this.element.scrollTop + this.element.clientHeight;
+
+if (visibleTo) {
+var result = this._findVisibleChunks(visibleFrom, visibleTo);
+this._expandChunks(result.start, result.end);
+}
+},
+
+_expandChunks: function(fromIndex, toIndex)
+{
+
+for (var i = 0; i < fromIndex; ++i)
+this._textChunks[i].expanded = false;
+for (var i = toIndex; i < this._textChunks.length; ++i)
+this._textChunks[i].expanded = false;
+for (var i = fromIndex; i < toIndex; ++i)
+this._textChunks[i].expanded = true;
+},
+
+_totalHeight: function(firstElement, lastElement)
+{
+lastElement = (lastElement || firstElement).nextElementSibling;
+if (lastElement)
+return lastElement.offsetTop - firstElement.offsetTop;
+
+var offsetParent = firstElement.offsetParent;
+if (offsetParent && offsetParent.scrollHeight > offsetParent.clientHeight)
+return offsetParent.scrollHeight - firstElement.offsetTop;
+
+var total = 0;
+while (firstElement && firstElement !== lastElement) {
+total += firstElement.offsetHeight;
+firstElement = firstElement.nextElementSibling;
+}
+return total;
+},
+
+resize: function()
+{
+this._repaintAll();
+}
+}
+
+WebInspector.TextEditorGutterPanel = function(textModel, syncDecorationsForLineListener)
+{
+WebInspector.TextEditorChunkedPanel.call(this, textModel);
+
+this._syncDecorationsForLineListener = syncDecorationsForLineListener;
+
+this.element = document.createElement("div");
+this.element.className = "text-editor-lines";
+
+this._container = document.createElement("div");
+this._container.className = "inner-container";
+this.element.appendChild(this._container);
+
+this.element.addEventListener("scroll", this._scroll.bind(this), false);
+
+this.freeCachedElements();
+this._buildChunks();
+}
+
+WebInspector.TextEditorGutterPanel.prototype = {
+freeCachedElements: function()
+{
+this._cachedRows = [];
+},
+
+_createNewChunk: function(startLine, endLine)
+{
+return new WebInspector.TextEditorGutterChunk(this, startLine, endLine);
+},
+
+textChanged: function(oldRange, newRange)
+{
+this.beginDomUpdates();
+
+var linesDiff = newRange.linesCount - oldRange.linesCount;
+if (linesDiff) {
+
+for (var chunkNumber = this._textChunks.length - 1; chunkNumber >= 0 ; --chunkNumber) {
+var chunk = this._textChunks[chunkNumber];
+if (chunk.startLine + chunk.linesCount <= this._textModel.linesCount)
+break;
+chunk.expanded = false;
+this._container.removeChild(chunk.element);
+}
+this._textChunks.length = chunkNumber + 1;
+
+
+var totalLines = 0;
+if (this._textChunks.length) {
+var lastChunk = this._textChunks[this._textChunks.length - 1];
+totalLines = lastChunk.startLine + lastChunk.linesCount;
+}
+for (var i = totalLines; i < this._textModel.linesCount; i += this._defaultChunkSize) {
+var chunk = this._createNewChunk(i, i + this._defaultChunkSize);
+this._textChunks.push(chunk);
+this._container.appendChild(chunk.element);
+}
+this._repaintAll();
+} else {
+
+var chunkNumber = this._chunkNumberForLine(newRange.startLine);
+var chunk = this._textChunks[chunkNumber];
+while (chunk && chunk.startLine <= newRange.endLine) {
+if (chunk.linesCount === 1)
+this._syncDecorationsForLineListener(chunk.startLine);
+chunk = this._textChunks[++chunkNumber];
+}
+}
+
+this.endDomUpdates();
+},
+
+syncClientHeight: function(clientHeight)
+{
+if (this.element.offsetHeight > clientHeight)
+this._container.style.setProperty("padding-bottom", (this.element.offsetHeight - clientHeight) + "px");
+else
+this._container.style.removeProperty("padding-bottom");
+}
+}
+
+WebInspector.TextEditorGutterPanel.prototype.__proto__ = WebInspector.TextEditorChunkedPanel.prototype;
+
+WebInspector.TextEditorGutterChunk = function(textViewer, startLine, endLine)
+{
+this._textViewer = textViewer;
+this._textModel = textViewer._textModel;
+
+this.startLine = startLine;
+endLine = Math.min(this._textModel.linesCount, endLine);
+this.linesCount = endLine - startLine;
+
+this._expanded = false;
+
+this.element = document.createElement("div");
+this.element.lineNumber = startLine;
+this.element.className = "webkit-line-number";
+
+if (this.linesCount === 1) {
+
+
+var innerSpan = document.createElement("span");
+innerSpan.className = "webkit-line-number-inner";
+innerSpan.textContent = startLine + 1;
+var outerSpan = document.createElement("div");
+outerSpan.className = "webkit-line-number-outer";
+outerSpan.appendChild(innerSpan);
+this.element.appendChild(outerSpan);
+} else {
+var lineNumbers = [];
+for (var i = startLine; i < endLine; ++i)
+lineNumbers.push(i + 1);
+this.element.textContent = lineNumbers.join("\n");
+}
+}
+
+WebInspector.TextEditorGutterChunk.prototype = {
+addDecoration: function(decoration)
+{
+this._textViewer.beginDomUpdates();
+if (typeof decoration === "string")
+this.element.addStyleClass(decoration);
+this._textViewer.endDomUpdates();
+},
+
+removeDecoration: function(decoration)
+{
+this._textViewer.beginDomUpdates();
+if (typeof decoration === "string")
+this.element.removeStyleClass(decoration);
+this._textViewer.endDomUpdates();
+},
+
+get expanded()
+{
+return this._expanded;
+},
+
+set expanded(expanded)
+{
+if (this.linesCount === 1)
+this._textViewer._syncDecorationsForLineListener(this.startLine);
+
+if (this._expanded === expanded)
+return;
+
+this._expanded = expanded;
+
+if (this.linesCount === 1)
+return;
+
+this._textViewer.beginDomUpdates();
+
+if (expanded) {
+this._expandedLineRows = [];
+var parentElement = this.element.parentElement;
+for (var i = this.startLine; i < this.startLine + this.linesCount; ++i) {
+var lineRow = this._createRow(i);
+parentElement.insertBefore(lineRow, this.element);
+this._expandedLineRows.push(lineRow);
+}
+parentElement.removeChild(this.element);
+} else {
+var elementInserted = false;
+for (var i = 0; i < this._expandedLineRows.length; ++i) {
+var lineRow = this._expandedLineRows[i];
+var parentElement = lineRow.parentElement;
+if (parentElement) {
+if (!elementInserted) {
+elementInserted = true;
+parentElement.insertBefore(this.element, lineRow);
+}
+parentElement.removeChild(lineRow);
+}
+this._textViewer._cachedRows.push(lineRow);
+}
+delete this._expandedLineRows;
+}
+
+this._textViewer.endDomUpdates();
+},
+
+get height()
+{
+if (!this._expandedLineRows)
+return this._textViewer._totalHeight(this.element);
+return this._textViewer._totalHeight(this._expandedLineRows[0], this._expandedLineRows[this._expandedLineRows.length - 1]);
+},
+
+get offsetTop()
+{
+return (this._expandedLineRows && this._expandedLineRows.length) ? this._expandedLineRows[0].offsetTop : this.element.offsetTop;
+},
+
+_createRow: function(lineNumber)
+{
+var lineRow = this._textViewer._cachedRows.pop() || document.createElement("div");
+lineRow.lineNumber = lineNumber;
+lineRow.className = "webkit-line-number";
+lineRow.textContent = lineNumber + 1;
+return lineRow;
+}
+}
+
+WebInspector.TextEditorMainPanel = function(textModel, url, syncScrollListener, syncDecorationsForLineListener, enterTextChangeMode, exitTextChangeMode)
+{
+WebInspector.TextEditorChunkedPanel.call(this, textModel);
+
+this._syncScrollListener = syncScrollListener;
+this._syncDecorationsForLineListener = syncDecorationsForLineListener;
+this._enterTextChangeMode = enterTextChangeMode;
+this._exitTextChangeMode = exitTextChangeMode;
+
+this._url = url;
+this._highlighter = new WebInspector.TextEditorHighlighter(textModel, this._highlightDataReady.bind(this));
+this._readOnly = true;
+
+this.element = document.createElement("div");
+this.element.className = "text-editor-contents";
+this.element.tabIndex = 0;
+
+this._container = document.createElement("div");
+this._container.className = "inner-container";
+this._container.tabIndex = 0;
+this.element.appendChild(this._container);
+
+this.element.addEventListener("scroll", this._scroll.bind(this), false);
+
+
+
+
+
+this._handleDOMUpdatesCallback = this._handleDOMUpdates.bind(this);
+this._container.addEventListener("DOMCharacterDataModified", this._handleDOMUpdatesCallback, false);
+this._container.addEventListener("DOMNodeInserted", this._handleDOMUpdatesCallback, false);
+this._container.addEventListener("DOMSubtreeModified", this._handleDOMUpdatesCallback, false);
+
+this.freeCachedElements();
+this._buildChunks();
+}
+
+WebInspector.TextEditorMainPanel.prototype = {
+set mimeType(mimeType)
+{
+this._highlighter.mimeType = mimeType;
+},
+
+set readOnly(readOnly)
+{
+if (this._readOnly === readOnly)
+return;
+
+this.beginDomUpdates();
+this._readOnly = readOnly;
+if (this._readOnly)
+this._container.removeStyleClass("text-editor-editable");
+else
+this._container.addStyleClass("text-editor-editable");
+this.endDomUpdates();
+},
+
+get readOnly()
+{
+return this._readOnly;
+},
+
+markAndRevealRange: function(range)
+{
+if (this._rangeToMark) {
+var markedLine = this._rangeToMark.startLine;
+delete this._rangeToMark;
+
+if (!this._dirtyLines) {
+this.beginDomUpdates();
+var chunk = this.chunkForLine(markedLine);
+var wasExpanded = chunk.expanded;
+chunk.expanded = false;
+chunk.updateCollapsedLineRow();
+chunk.expanded = wasExpanded;
+this.endDomUpdates();
+} else
+this._paintLines(markedLine, markedLine + 1);
+}
+
+if (range) {
+this._rangeToMark = range;
+this.revealLine(range.startLine);
+var chunk = this.makeLineAChunk(range.startLine);
+this._paintLine(chunk.element);
+if (this._markedRangeElement)
+this._markedRangeElement.scrollIntoViewIfNeeded();
+}
+delete this._markedRangeElement;
+},
+
+highlightLine: function(lineNumber)
+{
+this.clearLineHighlight();
+this._highlightedLine = lineNumber;
+this.revealLine(lineNumber);
+this.addDecoration(lineNumber, "webkit-highlighted-line");
+},
+
+clearLineHighlight: function()
+{
+if (typeof this._highlightedLine === "number") {
+this.removeDecoration(this._highlightedLine, "webkit-highlighted-line");
+delete this._highlightedLine;
+}
+},
+
+freeCachedElements: function()
+{
+this._cachedSpans = [];
+this._cachedTextNodes = [];
+this._cachedRows = [];
+},
+
+handleUndoRedo: function(redo)
+{
+if (this._readOnly || this._dirtyLines)
+return false;
+
+this.beginUpdates();
+this._enterTextChangeMode();
+
+var callback = function(oldRange, newRange) {
+this._exitTextChangeMode(oldRange, newRange);
+this._enterTextChangeMode();
+}.bind(this);
+
+var range = redo ? this._textModel.redo(callback) : this._textModel.undo(callback);
+if (range)
+this._setCaretLocation(range.endLine, range.endColumn, true);
+
+this._exitTextChangeMode(null, null);
+this.endUpdates();
+
+return true;
+},
+
+handleTabKeyPress: function(shiftKey)
+{
+if (this._readOnly || this._dirtyLines)
+return false;
+
+var selection = this._getSelection();
+if (!selection)
+return false;
+
+if (shiftKey)
+return true;
+
+this.beginUpdates();
+this._enterTextChangeMode();
+
+var range = selection;
+if (range.startLine > range.endLine || (range.startLine === range.endLine && range.startColumn > range.endColumn))
+range = new WebInspector.TextRange(range.endLine, range.endColumn, range.startLine, range.startColumn);
+
+var newRange = this._setText(range, "\t");
+
+this._exitTextChangeMode(range, newRange);
+this.endUpdates();
+
+this._setCaretLocation(newRange.endLine, newRange.endColumn, true);
+return true;
+},
+
+_splitChunkOnALine: function(lineNumber, chunkNumber)
+{
+var selection = this._getSelection();
+var chunk = WebInspector.TextEditorChunkedPanel.prototype._splitChunkOnALine.call(this, lineNumber, chunkNumber);
+this._restoreSelection(selection);
+return chunk;
+},
+
+_buildChunks: function()
+{
+for (var i = 0; i < this._textModel.linesCount; ++i)
+this._textModel.removeAttribute(i, "highlight");
+
+WebInspector.TextEditorChunkedPanel.prototype._buildChunks.call(this);
+},
+
+_createNewChunk: function(startLine, endLine)
+{
+return new WebInspector.TextEditorMainChunk(this, startLine, endLine);
+},
+
+_expandChunks: function(fromIndex, toIndex)
+{
+var lastChunk = this._textChunks[toIndex - 1];
+var lastVisibleLine = lastChunk.startLine + lastChunk.linesCount;
+
+var selection = this._getSelection();
+
+this._muteHighlightListener = true;
+this._highlighter.highlight(lastVisibleLine);
+delete this._muteHighlightListener;
+
+this._restorePaintLinesOperationsCredit();
+WebInspector.TextEditorChunkedPanel.prototype._expandChunks.call(this, fromIndex, toIndex);
+this._adjustPaintLinesOperationsRefreshValue();
+
+this._restoreSelection(selection);
+},
+
+_highlightDataReady: function(fromLine, toLine)
+{
+if (this._muteHighlightListener)
+return;
+this._restorePaintLinesOperationsCredit();
+this._paintLines(fromLine, toLine, true  );
+},
+
+_schedulePaintLines: function(startLine, endLine)
+{
+if (startLine >= endLine)
+return;
+
+if (!this._scheduledPaintLines) {
+this._scheduledPaintLines = [ { startLine: startLine, endLine: endLine } ];
+this._paintScheduledLinesTimer = setTimeout(this._paintScheduledLines.bind(this), 0);
+} else {
+for (var i = 0; i < this._scheduledPaintLines.length; ++i) {
+var chunk = this._scheduledPaintLines[i];
+if (chunk.startLine <= endLine && chunk.endLine >= startLine) {
+chunk.startLine = Math.min(chunk.startLine, startLine);
+chunk.endLine = Math.max(chunk.endLine, endLine);
+return;
+}
+if (chunk.startLine > endLine) {
+this._scheduledPaintLines.splice(i, 0, { startLine: startLine, endLine: endLine });
+return;
+}
+}
+this._scheduledPaintLines.push({ startLine: startLine, endLine: endLine });
+}
+},
+
+_paintScheduledLines: function(skipRestoreSelection)
+{
+if (this._paintScheduledLinesTimer)
+clearTimeout(this._paintScheduledLinesTimer);
+delete this._paintScheduledLinesTimer;
+
+if (!this._scheduledPaintLines)
+return;
+
+
+if (this._dirtyLines || this._repaintAllTimer) {
+this._paintScheduledLinesTimer = setTimeout(this._paintScheduledLines.bind(this), 50);
+return;
+}
+
+var scheduledPaintLines = this._scheduledPaintLines;
+delete this._scheduledPaintLines;
+
+this._restorePaintLinesOperationsCredit();
+this._paintLineChunks(scheduledPaintLines, !skipRestoreSelection);
+this._adjustPaintLinesOperationsRefreshValue();
+},
+
+_restorePaintLinesOperationsCredit: function()
+{
+if (!this._paintLinesOperationsRefreshValue)
+this._paintLinesOperationsRefreshValue = 250;
+this._paintLinesOperationsCredit = this._paintLinesOperationsRefreshValue;
+this._paintLinesOperationsLastRefresh = Date.now();
+},
+
+_adjustPaintLinesOperationsRefreshValue: function()
+{
+var operationsDone = this._paintLinesOperationsRefreshValue - this._paintLinesOperationsCredit;
+if (operationsDone <= 0)
+return;
+var timePast = Date.now() - this._paintLinesOperationsLastRefresh;
+if (timePast <= 0)
+return;
+
+var value = Math.floor(operationsDone / timePast * 50);
+this._paintLinesOperationsRefreshValue = Number.constrain(value, 150, 1500);
+},
+
+_paintLines: function(fromLine, toLine, restoreSelection)
+{
+this._paintLineChunks([ { startLine: fromLine, endLine: toLine } ], restoreSelection);
+},
+
+_paintLineChunks: function(lineChunks, restoreSelection)
+{
+
+
+var visibleFrom = this.element.scrollTop;
+var firstVisibleLineNumber = this._findFirstVisibleLineNumber(visibleFrom);
+
+var chunk;
+var selection;
+var invisibleLineRows = [];
+for (var i = 0; i < lineChunks.length; ++i) {
+var lineChunk = lineChunks[i];
+if (this._dirtyLines || this._scheduledPaintLines) {
+this._schedulePaintLines(lineChunk.startLine, lineChunk.endLine);
+continue;
+}
+for (var lineNumber = lineChunk.startLine; lineNumber < lineChunk.endLine; ++lineNumber) {
+if (!chunk || lineNumber < chunk.startLine || lineNumber >= chunk.startLine + chunk.linesCount)
+chunk = this.chunkForLine(lineNumber);
+var lineRow = chunk.getExpandedLineRow(lineNumber);
+if (!lineRow)
+continue;
+if (lineNumber < firstVisibleLineNumber) {
+invisibleLineRows.push(lineRow);
+continue;
+}
+if (restoreSelection && !selection)
+selection = this._getSelection();
+this._paintLine(lineRow);
+if (this._paintLinesOperationsCredit < 0) {
+this._schedulePaintLines(lineNumber + 1, lineChunk.endLine);
+break;
+}
+}
+}
+
+for (var i = 0; i < invisibleLineRows.length; ++i) {
+if (restoreSelection && !selection)
+selection = this._getSelection();
+this._paintLine(invisibleLineRows[i]);
+}
+
+if (restoreSelection)
+this._restoreSelection(selection);
+},
+
+_paintLine: function(lineRow)
+{
+var lineNumber = lineRow.lineNumber;
+if (this._dirtyLines) {
+this._schedulePaintLines(lineNumber, lineNumber + 1);
+return;
+}
+
+this.beginDomUpdates();
+try {
+if (this._scheduledPaintLines || this._paintLinesOperationsCredit < 0) {
+this._schedulePaintLines(lineNumber, lineNumber + 1);
+return;
+}
+
+var highlight = this._textModel.getAttribute(lineNumber, "highlight");
+if (!highlight)
+return;
+
+lineRow.removeChildren();
+var line = this._textModel.line(lineNumber);
+if (!line)
+lineRow.appendChild(document.createElement("br"));
+
+var plainTextStart = -1;
+for (var j = 0; j < line.length;) {
+if (j > 1000) {
+
+if (plainTextStart === -1)
+plainTextStart = j;
+break;
+}
+var attribute = highlight[j];
+if (!attribute || !attribute.tokenType) {
+if (plainTextStart === -1)
+plainTextStart = j;
+j++;
+} else {
+if (plainTextStart !== -1) {
+this._appendTextNode(lineRow, line.substring(plainTextStart, j));
+plainTextStart = -1;
+--this._paintLinesOperationsCredit;
+}
+this._appendSpan(lineRow, line.substring(j, j + attribute.length), attribute.tokenType);
+j += attribute.length;
+--this._paintLinesOperationsCredit;
+}
+}
+if (plainTextStart !== -1) {
+this._appendTextNode(lineRow, line.substring(plainTextStart, line.length));
+--this._paintLinesOperationsCredit;
+}
+if (lineRow.decorationsElement)
+lineRow.appendChild(lineRow.decorationsElement);
+} finally {
+if (this._rangeToMark && this._rangeToMark.startLine === lineNumber)
+this._markedRangeElement = highlightSearchResult(lineRow, this._rangeToMark.startColumn, this._rangeToMark.endColumn - this._rangeToMark.startColumn);
+this.endDomUpdates();
+}
+},
+
+_releaseLinesHighlight: function(lineRow)
+{
+if (!lineRow)
+return;
+if ("spans" in lineRow) {
+var spans = lineRow.spans;
+for (var j = 0; j < spans.length; ++j)
+this._cachedSpans.push(spans[j]);
+delete lineRow.spans;
+}
+if ("textNodes" in lineRow) {
+var textNodes = lineRow.textNodes;
+for (var j = 0; j < textNodes.length; ++j)
+this._cachedTextNodes.push(textNodes[j]);
+delete lineRow.textNodes;
+}
+this._cachedRows.push(lineRow);
+},
+
+_getSelection: function()
+{
+var selection = window.getSelection();
+if (!selection.rangeCount)
+return null;
+var selectionRange = selection.getRangeAt(0);
+
+if (!this._container.isAncestor(selectionRange.startContainer) || !this._container.isAncestor(selectionRange.endContainer))
+return null;
+var start = this._selectionToPosition(selectionRange.startContainer, selectionRange.startOffset);
+var end = selectionRange.collapsed ? start : this._selectionToPosition(selectionRange.endContainer, selectionRange.endOffset);
+if (selection.anchorNode === selectionRange.startContainer && selection.anchorOffset === selectionRange.startOffset)
+return new WebInspector.TextRange(start.line, start.column, end.line, end.column);
+else
+return new WebInspector.TextRange(end.line, end.column, start.line, start.column);
+},
+
+_restoreSelection: function(range, scrollIntoView)
+{
+if (!range)
+return;
+var start = this._positionToSelection(range.startLine, range.startColumn);
+var end = range.isEmpty() ? start : this._positionToSelection(range.endLine, range.endColumn);
+window.getSelection().setBaseAndExtent(start.container, start.offset, end.container, end.offset);
+
+if (scrollIntoView) {
+for (var node = end.container; node; node = node.parentElement) {
+if (node.scrollIntoViewIfNeeded) {
+node.scrollIntoViewIfNeeded();
+break;
+}
+}
+}
+},
+
+_setCaretLocation: function(line, column, scrollIntoView)
+{
+var range = new WebInspector.TextRange(line, column, line, column);
+this._restoreSelection(range, scrollIntoView);
+},
+
+_selectionToPosition: function(container, offset)
+{
+if (container === this._container && offset === 0)
+return { line: 0, column: 0 };
+if (container === this._container && offset === 1)
+return { line: this._textModel.linesCount - 1, column: this._textModel.lineLength(this._textModel.linesCount - 1) };
+
+var lineRow = this._enclosingLineRowOrSelf(container);
+var lineNumber = lineRow.lineNumber;
+if (container === lineRow && offset === 0)
+return { line: lineNumber, column: 0 };
+
+
+var column = 0;
+var node = lineRow.nodeType === Node.TEXT_NODE ? lineRow : lineRow.traverseNextTextNode(lineRow);
+while (node && node !== container) {
+var text = node.textContent;
+for (var i = 0; i < text.length; ++i) {
+if (text.charAt(i) === "\n") {
+lineNumber++;
+column = 0;
+} else
+column++;
+}
+node = node.traverseNextTextNode(lineRow);
+}
+
+if (node === container && offset) {
+var text = node.textContent;
+for (var i = 0; i < offset; ++i) {
+if (text.charAt(i) === "\n") {
+lineNumber++;
+column = 0;
+} else
+column++;
+}
+}
+return { line: lineNumber, column: column };
+},
+
+_positionToSelection: function(line, column)
+{
+var chunk = this.chunkForLine(line);
+
+var lineRow = chunk.linesCount === 1 ? chunk.element : chunk.getExpandedLineRow(line);
+if (lineRow)
+var rangeBoundary = lineRow.rangeBoundaryForOffset(column);
+else {
+var offset = column;
+for (var i = chunk.startLine; i < line; ++i)
+offset += this._textModel.lineLength(i) + 1; 
+lineRow = chunk.element;
+if (lineRow.firstChild)
+var rangeBoundary = { container: lineRow.firstChild, offset: offset };
+else
+var rangeBoundary = { container: lineRow, offset: 0 };
+}
+return rangeBoundary;
+},
+
+_enclosingLineRowOrSelf: function(element)
+{
+var lineRow = element.enclosingNodeOrSelfWithClass("webkit-line-content");
+if (lineRow)
+return lineRow;
+for (var lineRow = element; lineRow; lineRow = lineRow.parentElement) {
+if (lineRow.parentElement === this._container)
+return lineRow;
+}
+return null;
+},
+
+_appendSpan: function(element, content, className)
+{
+if (className === "html-resource-link" || className === "html-external-link") {
+element.appendChild(this._createLink(content, className === "html-external-link"));
+return;
+}
+
+var span = this._cachedSpans.pop() || document.createElement("span");
+span.className = "webkit-" + className;
+span.textContent = content;
+element.appendChild(span);
+if (!("spans" in element))
+element.spans = [];
+element.spans.push(span);
+},
+
+_appendTextNode: function(element, text)
+{
+var textNode = this._cachedTextNodes.pop();
+if (textNode)
+textNode.nodeValue = text;
+else
+textNode = document.createTextNode(text);
+element.appendChild(textNode);
+if (!("textNodes" in element))
+element.textNodes = [];
+element.textNodes.push(textNode);
+},
+
+_createLink: function(content, isExternal)
+{
+var quote = content.charAt(0);
+if (content.length > 1 && (quote === "\"" ||   quote === "'"))
+content = content.substring(1, content.length - 1);
+else
+quote = null;
+
+var a = WebInspector.linkifyURLAsNode(this._rewriteHref(content), content, null, isExternal);
+var span = document.createElement("span");
+span.className = "webkit-html-attribute-value";
+if (quote)
+span.appendChild(document.createTextNode(quote));
+span.appendChild(a);
+if (quote)
+span.appendChild(document.createTextNode(quote));
+return span;
+},
+
+_rewriteHref: function(hrefValue, isExternal)
+{
+if (!this._url || !hrefValue || hrefValue.indexOf("://") > 0)
+return hrefValue;
+return WebInspector.completeURL(this._url, hrefValue);
+},
+
+_handleDOMUpdates: function(e)
+{
+if (this._domUpdateCoalescingLevel)
+return;
+
+var target = e.target;
+if (target === this._container)
+return;
+
+var lineRow = this._enclosingLineRowOrSelf(target);
+if (!lineRow)
+return;
+
+if (lineRow.decorationsElement && (lineRow.decorationsElement === target || lineRow.decorationsElement.isAncestor(target))) {
+if (this._syncDecorationsForLineListener)
+this._syncDecorationsForLineListener(lineRow.lineNumber);
+return;
+}
+
+if (this._readOnly)
+return;
+
+if (target === lineRow && e.type === "DOMNodeInserted") {
+
+delete lineRow.lineNumber;
+}
+
+var startLine = 0;
+for (var row = lineRow; row; row = row.previousSibling) {
+if (typeof row.lineNumber === "number") {
+startLine = row.lineNumber;
+break;
+}
+}
+
+var endLine = startLine + 1;
+for (var row = lineRow.nextSibling; row; row = row.nextSibling) {
+if (typeof row.lineNumber === "number" && row.lineNumber > startLine) {
+endLine = row.lineNumber;
+break;
+}
+}
+
+if (target === lineRow && e.type === "DOMNodeRemoved") {
+
+delete lineRow.lineNumber;
+}
+
+if (this._dirtyLines) {
+this._dirtyLines.start = Math.min(this._dirtyLines.start, startLine);
+this._dirtyLines.end = Math.max(this._dirtyLines.end, endLine);
+} else {
+this._dirtyLines = { start: startLine, end: endLine };
+setTimeout(this._applyDomUpdates.bind(this), 0);
+
+this.markAndRevealRange(null);
+}
+},
+
+_applyDomUpdates: function()
+{
+if (!this._dirtyLines)
+return;
+
+
+if (this._readOnly) {
+delete this._dirtyLines;
+return;
+}
+
+
+this._enterTextChangeMode();
+
+var dirtyLines = this._dirtyLines;
+delete this._dirtyLines;
+
+var firstChunkNumber = this._chunkNumberForLine(dirtyLines.start);
+var startLine = this._textChunks[firstChunkNumber].startLine;
+var endLine = this._textModel.linesCount;
+
+
+var firstLineRow;
+if (firstChunkNumber) {
+var chunk = this._textChunks[firstChunkNumber - 1];
+firstLineRow = chunk.expanded ? chunk.getExpandedLineRow(chunk.startLine + chunk.linesCount - 1) : chunk.element;
+firstLineRow = firstLineRow.nextSibling;
+} else
+firstLineRow = this._container.firstChild;
+
+var lines = [];
+for (var lineRow = firstLineRow; lineRow; lineRow = lineRow.nextSibling) {
+if (typeof lineRow.lineNumber === "number" && lineRow.lineNumber >= dirtyLines.end) {
+endLine = lineRow.lineNumber;
+break;
+}
+
+lineRow.lineNumber = startLine + lines.length;
+this._collectLinesFromDiv(lines, lineRow);
+}
+
+
+var startOffset = 0;
+while (startLine < dirtyLines.start && startOffset < lines.length) {
+if (this._textModel.line(startLine) !== lines[startOffset])
+break;
+++startOffset;
+++startLine;
+}
+
+var endOffset = lines.length;
+while (endLine > dirtyLines.end && endOffset > startOffset) {
+if (this._textModel.line(endLine - 1) !== lines[endOffset - 1])
+break;
+--endOffset;
+--endLine;
+}
+
+lines = lines.slice(startOffset, endOffset);
+
+
+var startColumn = 0;
+var endColumn = this._textModel.lineLength(endLine - 1);
+if (lines.length > 0) {
+var line1 = this._textModel.line(startLine);
+var line2 = lines[0];
+while (line1[startColumn] && line1[startColumn] === line2[startColumn])
+++startColumn;
+lines[0] = line2.substring(startColumn);
+
+var line1 = this._textModel.line(endLine - 1);
+var line2 = lines[lines.length - 1];
+for (var i = 0; i < endColumn && i < line2.length; ++i) {
+if (startLine === endLine - 1 && endColumn - i <= startColumn)
+break;
+if (line1[endColumn - i - 1] !== line2[line2.length - i - 1])
+break;
+}
+if (i) {
+endColumn -= i;
+lines[lines.length - 1] = line2.substring(0, line2.length - i);
+}
+}
+
+var selection = this._getSelection();
+
+if (lines.length === 0 && endLine < this._textModel.linesCount)
+var oldRange = new WebInspector.TextRange(startLine, 0, endLine, 0);
+else if (lines.length === 0 && startLine > 0)
+var oldRange = new WebInspector.TextRange(startLine - 1, this._textModel.lineLength(startLine - 1), endLine - 1, this._textModel.lineLength(endLine - 1));
+else
+var oldRange = new WebInspector.TextRange(startLine, startColumn, endLine - 1, endColumn);
+
+var newRange = this._setText(oldRange, lines.join("\n"));
+
+this._paintScheduledLines(true);
+this._restoreSelection(selection);
+
+this._exitTextChangeMode(oldRange, newRange);
+},
+
+textChanged: function(oldRange, newRange)
+{
+this.beginDomUpdates();
+this._removeDecorationsInRange(oldRange);
+this._updateChunksForRanges(oldRange, newRange);
+this._updateHighlightsForRange(newRange);
+this.endDomUpdates();
+},
+
+_setText: function(range, text)
+{
+if (this._lastEditedRange && (!text || text.indexOf("\n") !== -1 || this._lastEditedRange.endLine !== range.startLine || this._lastEditedRange.endColumn !== range.startColumn))
+this._textModel.markUndoableState();
+
+var newRange = this._textModel.setText(range, text);
+this._lastEditedRange = newRange;
+
+return newRange;
+},
+
+_removeDecorationsInRange: function(range)
+{
+for (var i = this._chunkNumberForLine(range.startLine); i < this._textChunks.length; ++i) {
+var chunk = this._textChunks[i];
+if (chunk.startLine > range.endLine)
+break;
+chunk.removeAllDecorations();
+}
+},
+
+_updateChunksForRanges: function(oldRange, newRange)
+{
+
+var firstChunkNumber = this._chunkNumberForLine(oldRange.startLine);
+var lastChunkNumber = firstChunkNumber;
+while (lastChunkNumber + 1 < this._textChunks.length) {
+if (this._textChunks[lastChunkNumber + 1].startLine > oldRange.endLine)
+break;
+++lastChunkNumber;
+}
+
+var startLine = this._textChunks[firstChunkNumber].startLine;
+var linesCount = this._textChunks[lastChunkNumber].startLine + this._textChunks[lastChunkNumber].linesCount - startLine;
+var linesDiff = newRange.linesCount - oldRange.linesCount;
+linesCount += linesDiff;
+
+if (linesDiff) {
+
+for (var chunkNumber = lastChunkNumber + 1; chunkNumber < this._textChunks.length; ++chunkNumber)
+this._textChunks[chunkNumber].startLine += linesDiff;
+}
+
+var firstLineRow;
+if (firstChunkNumber) {
+var chunk = this._textChunks[firstChunkNumber - 1];
+firstLineRow = chunk.expanded ? chunk.getExpandedLineRow(chunk.startLine + chunk.linesCount - 1) : chunk.element;
+firstLineRow = firstLineRow.nextSibling;
+} else
+firstLineRow = this._container.firstChild;
+
+
+for (var chunkNumber = firstChunkNumber; chunkNumber <= lastChunkNumber; ++chunkNumber) {
+var chunk = this._textChunks[chunkNumber];
+if (chunk.startLine + chunk.linesCount > this._textModel.linesCount)
+break;
+var lineNumber = chunk.startLine;
+for (var lineRow = firstLineRow; lineRow && lineNumber < chunk.startLine + chunk.linesCount; lineRow = lineRow.nextSibling) {
+if (lineRow.lineNumber !== lineNumber || lineRow !== chunk.getExpandedLineRow(lineNumber) || lineRow.textContent !== this._textModel.line(lineNumber) || !lineRow.firstChild)
+break;
+++lineNumber;
+}
+if (lineNumber < chunk.startLine + chunk.linesCount)
+break;
+chunk.updateCollapsedLineRow();
+++firstChunkNumber;
+firstLineRow = lineRow;
+startLine += chunk.linesCount;
+linesCount -= chunk.linesCount;
+}
+
+if (firstChunkNumber > lastChunkNumber && linesCount === 0)
+return;
+
+
+var chunk = this._textChunks[lastChunkNumber + 1];
+var linesInLastChunk = linesCount % this._defaultChunkSize;
+if (chunk && !chunk.decorated && linesInLastChunk > 0 && linesInLastChunk + chunk.linesCount <= this._defaultChunkSize) {
+++lastChunkNumber;
+linesCount += chunk.linesCount;
+}
+
+var scrollTop = this.element.scrollTop;
+var scrollLeft = this.element.scrollLeft;
+
+
+var firstUnmodifiedLineRow = null;
+var chunk = this._textChunks[lastChunkNumber + 1];
+if (chunk) {
+firstUnmodifiedLineRow = chunk.expanded ? chunk.getExpandedLineRow(chunk.startLine) : chunk.element;
+}
+while (firstLineRow && firstLineRow !== firstUnmodifiedLineRow) {
+var lineRow = firstLineRow;
+firstLineRow = firstLineRow.nextSibling;
+this._container.removeChild(lineRow);
+}
+
+
+for (var chunkNumber = firstChunkNumber; linesCount > 0; ++chunkNumber) {
+var chunkLinesCount = Math.min(this._defaultChunkSize, linesCount);
+var newChunk = this._createNewChunk(startLine, startLine + chunkLinesCount);
+this._container.insertBefore(newChunk.element, firstUnmodifiedLineRow);
+
+if (chunkNumber <= lastChunkNumber)
+this._textChunks[chunkNumber] = newChunk;
+else
+this._textChunks.splice(chunkNumber, 0, newChunk);
+startLine += chunkLinesCount;
+linesCount -= chunkLinesCount;
+}
+if (chunkNumber <= lastChunkNumber)
+this._textChunks.splice(chunkNumber, lastChunkNumber - chunkNumber + 1);
+
+this.element.scrollTop = scrollTop;
+this.element.scrollLeft = scrollLeft;
+},
+
+_updateHighlightsForRange: function(range)
+{
+var visibleFrom = this.element.scrollTop;
+var visibleTo = this.element.scrollTop + this.element.clientHeight;
+
+var result = this._findVisibleChunks(visibleFrom, visibleTo);
+var chunk = this._textChunks[result.end - 1];
+var lastVisibleLine = chunk.startLine + chunk.linesCount;
+
+lastVisibleLine = Math.max(lastVisibleLine, range.endLine + 1);
+lastVisibleLine = Math.min(lastVisibleLine, this._textModel.linesCount);
+
+var updated = this._highlighter.updateHighlight(range.startLine, lastVisibleLine);
+if (!updated) {
+
+for (var i = this._chunkNumberForLine(range.startLine); i < this._textChunks.length; ++i)
+this._textChunks[i].expanded = false;
+}
+
+this._repaintAll();
+},
+
+_collectLinesFromDiv: function(lines, element)
+{
+var textContents = [];
+var node = element.nodeType === Node.TEXT_NODE ? element : element.traverseNextNode(element);
+while (node) {
+if (element.decorationsElement === node) {
+node = node.nextSibling;
+continue;
+}
+if (node.nodeName.toLowerCase() === "br")
+textContents.push("\n");
+else if (node.nodeType === Node.TEXT_NODE)
+textContents.push(node.textContent);
+node = node.traverseNextNode(element);
+}
+
+var textContent = textContents.join("");
+
+textContent = textContent.replace(/\n$/, "");
+
+textContents = textContent.split("\n");
+for (var i = 0; i < textContents.length; ++i)
+lines.push(textContents[i]);
+}
+}
+
+WebInspector.TextEditorMainPanel.prototype.__proto__ = WebInspector.TextEditorChunkedPanel.prototype;
+
+WebInspector.TextEditorMainChunk = function(textViewer, startLine, endLine)
+{
+this._textViewer = textViewer;
+this._textModel = textViewer._textModel;
+
+this.element = document.createElement("div");
+this.element.lineNumber = startLine;
+this.element.className = "webkit-line-content";
+this.element.addEventListener("DOMNodeRemoved", this._textViewer._handleDOMUpdatesCallback, false);
+
+this._startLine = startLine;
+endLine = Math.min(this._textModel.linesCount, endLine);
+this.linesCount = endLine - startLine;
+
+this._expanded = false;
+
+this.updateCollapsedLineRow();
+}
+
+WebInspector.TextEditorMainChunk.prototype = {
+addDecoration: function(decoration)
+{
+this._textViewer.beginDomUpdates();
+if (typeof decoration === "string")
+this.element.addStyleClass(decoration);
+else {
+if (!this.element.decorationsElement) {
+this.element.decorationsElement = document.createElement("div");
+this.element.decorationsElement.className = "webkit-line-decorations";
+this.element.appendChild(this.element.decorationsElement);
+}
+this.element.decorationsElement.appendChild(decoration);
+}
+this._textViewer.endDomUpdates();
+},
+
+removeDecoration: function(decoration)
+{
+this._textViewer.beginDomUpdates();
+if (typeof decoration === "string")
+this.element.removeStyleClass(decoration);
+else if (this.element.decorationsElement)
+this.element.decorationsElement.removeChild(decoration);
+this._textViewer.endDomUpdates();
+},
+
+removeAllDecorations: function()
+{
+this._textViewer.beginDomUpdates();
+this.element.className = "webkit-line-content";
+if (this.element.decorationsElement) {
+this.element.removeChild(this.element.decorationsElement);
+delete this.element.decorationsElement;
+}
+this._textViewer.endDomUpdates();
+},
+
+get decorated()
+{
+return this.element.className !== "webkit-line-content" || !!(this.element.decorationsElement && this.element.decorationsElement.firstChild);
+},
+
+get startLine()
+{
+return this._startLine;
+},
+
+set startLine(startLine)
+{
+this._startLine = startLine;
+this.element.lineNumber = startLine;
+if (this._expandedLineRows) {
+for (var i = 0; i < this._expandedLineRows.length; ++i)
+this._expandedLineRows[i].lineNumber = startLine + i;
+}
+},
+
+get expanded()
+{
+return this._expanded;
+},
+
+set expanded(expanded)
+{
+if (this._expanded === expanded)
+return;
+
+this._expanded = expanded;
+
+if (this.linesCount === 1) {
+if (expanded)
+this._textViewer._paintLine(this.element);
+return;
+}
+
+this._textViewer.beginDomUpdates();
+
+if (expanded) {
+this._expandedLineRows = [];
+var parentElement = this.element.parentElement;
+for (var i = this.startLine; i < this.startLine + this.linesCount; ++i) {
+var lineRow = this._createRow(i);
+parentElement.insertBefore(lineRow, this.element);
+this._expandedLineRows.push(lineRow);
+}
+parentElement.removeChild(this.element);
+this._textViewer._paintLines(this.startLine, this.startLine + this.linesCount);
+} else {
+var elementInserted = false;
+for (var i = 0; i < this._expandedLineRows.length; ++i) {
+var lineRow = this._expandedLineRows[i];
+var parentElement = lineRow.parentElement;
+if (parentElement) {
+if (!elementInserted) {
+elementInserted = true;
+parentElement.insertBefore(this.element, lineRow);
+}
+parentElement.removeChild(lineRow);
+}
+this._textViewer._releaseLinesHighlight(lineRow);
+}
+delete this._expandedLineRows;
+}
+
+this._textViewer.endDomUpdates();
+},
+
+get height()
+{
+if (!this._expandedLineRows)
+return this._textViewer._totalHeight(this.element);
+return this._textViewer._totalHeight(this._expandedLineRows[0], this._expandedLineRows[this._expandedLineRows.length - 1]);
+},
+
+get offsetTop()
+{
+return (this._expandedLineRows && this._expandedLineRows.length) ? this._expandedLineRows[0].offsetTop : this.element.offsetTop;
+},
+
+_createRow: function(lineNumber)
+{
+var lineRow = this._textViewer._cachedRows.pop() || document.createElement("div");
+lineRow.lineNumber = lineNumber;
+lineRow.className = "webkit-line-content";
+lineRow.addEventListener("DOMNodeRemoved", this._textViewer._handleDOMUpdatesCallback, false);
+lineRow.textContent = this._textModel.line(lineNumber);
+if (!lineRow.textContent)
+lineRow.appendChild(document.createElement("br"));
+return lineRow;
+},
+
+getExpandedLineRow: function(lineNumber)
+{
+if (!this._expanded || lineNumber < this.startLine || lineNumber >= this.startLine + this.linesCount)
+return null;
+if (!this._expandedLineRows)
+return this.element;
+return this._expandedLineRows[lineNumber - this.startLine];
+},
+
+updateCollapsedLineRow: function()
+{
+if (this.linesCount === 1 && this._expanded)
+return;
+
+var lines = [];
+for (var i = this.startLine; i < this.startLine + this.linesCount; ++i)
+lines.push(this._textModel.line(i));
+
+this.element.removeChildren();
+this.element.textContent = lines.join("\n");
+
+
+if (!lines[lines.length - 1])
+this.element.appendChild(document.createElement("br"));
+}
+}
+
+
+
+
+
+WebInspector.SourceFrame = function(delegate, url)
+{
+WebInspector.TextViewerDelegate.call(this);
 
 this._delegate = delegate;
 this._url = url;
 
 this._textModel = new WebInspector.TextEditorModel();
 this._textModel.replaceTabsWithSpaces = true;
+
+this._textViewer = new WebInspector.TextViewer(this._textModel, WebInspector.platform, this._url, this);
+this._textViewer.element.addStyleClass("script-view");
+this._visible = false;
 
 this._currentSearchResultIndex = -1;
 this._searchResults = [];
@@ -23731,9 +26122,6 @@ this._rowMessages = {};
 this._messageBubbles = {};
 
 this._breakpoints = {};
-
-this._registerShortcuts();
-this.element.addEventListener("keydown", this._handleKeyDown.bind(this), false);
 }
 
 WebInspector.SourceFrame.Events = {
@@ -23741,37 +26129,52 @@ Loaded: "loaded"
 }
 
 WebInspector.SourceFrame.prototype = {
+get visible()
+{
+return this._textViewer.visible;
+},
+
+set visible(x)
+{
+this._textViewer.visible = x;
+},
 
 show: function(parentElement)
 {
-WebInspector.View.prototype.show.call(this, parentElement);
+this._ensureContentLoaded();
 
-if (!this._contentRequested) {
-this._contentRequested = true;
-this._delegate.requestContent(this._createTextViewer.bind(this));
-}
+this._textViewer.show(parentElement);
+this._textViewer.resize();
 
-if (this._textViewer) {
+if (this.loaded) {
 if (this._scrollTop)
 this._textViewer.scrollTop = this._scrollTop;
 if (this._scrollLeft)
 this._textViewer.scrollLeft = this._scrollLeft;
-this._textViewer.resize();
 }
 },
 
 hide: function()
 {
-if (this._textViewer) {
+if (this.loaded) {
 this._scrollTop = this._textViewer.scrollTop;
 this._scrollLeft = this._textViewer.scrollLeft;
 this._textViewer.freeCachedElements();
 }
 
-WebInspector.View.prototype.hide.call(this);
-
+this._textViewer.hide();
 this._hidePopup();
 this._clearLineHighlight();
+},
+
+detach: function()
+{
+this._textViewer.detach();
+},
+
+get element()
+{
+return this._textViewer.element;
 },
 
 get loaded()
@@ -23784,20 +26187,33 @@ hasContent: function()
 return true;
 },
 
+_ensureContentLoaded: function()
+{
+if (!this._contentRequested) {
+this._contentRequested = true;
+this.requestContent(this._initializeTextViewer.bind(this));
+}
+},
+
+requestContent: function(callback)
+{
+this._delegate.requestContent(callback);
+},
+
 markDiff: function(diffData)
 {
-if (this._diffLines && this._textViewer)
+if (this._diffLines && this.loaded)
 this._removeDiffDecorations();
 
 this._diffLines = diffData;
-if (this._textViewer)
+if (this.loaded)
 this._updateDiffDecorations();
 },
 
 addMessage: function(msg)
 {
 this._messages.push(msg);
-if (this._textViewer)
+if (this.loaded)
 this.addMessageToSource(msg.line - 1, msg);
 },
 
@@ -23811,7 +26227,7 @@ bubble.parentNode.removeChild(bubble);
 this._messages = [];
 this._rowMessages = {};
 this._messageBubbles = {};
-if (this._textViewer)
+
 this._textViewer.resize();
 },
 
@@ -23822,19 +26238,19 @@ return this._textModel;
 
 get scrollTop()
 {
-return this._textViewer ? this._textViewer.scrollTop : this._scrollTop;
+return this.loaded ? this._textViewer.scrollTop : this._scrollTop;
 },
 
 set scrollTop(scrollTop)
 {
 this._scrollTop = scrollTop;
-if (this._textViewer)
+if (this.loaded)
 this._textViewer.scrollTop = scrollTop;
 },
 
 highlightLine: function(line)
 {
-if (this._textViewer)
+if (this.loaded)
 this._textViewer.highlightLine(line);
 else
 this._lineToHighlight = line;
@@ -23842,7 +26258,7 @@ this._lineToHighlight = line;
 
 _clearLineHighlight: function()
 {
-if (this._textViewer)
+if (this.loaded)
 this._textViewer.clearLineHighlight();
 else
 delete this._lineToHighlight;
@@ -23889,7 +26305,17 @@ this.addBreakpoint(lineNumber, breakpoint.resolved, breakpoint.conditional, brea
 delete this._viewerState;
 },
 
-_startEditing: function()
+isContentEditable: function()
+{
+return this._delegate.canEditScriptSource();
+},
+
+readOnlyStateChanged: function(readOnly)
+{
+WebInspector.markBeingEdited(this._textViewer.element, !readOnly);
+},
+
+startEditing: function()
 {
 if (!this._viewerState) {
 this._saveViewerState();
@@ -23900,8 +26326,11 @@ WebInspector.searchController.cancelSearch();
 this.clearMessages();
 },
 
-_endEditing: function(oldRange, newRange)
+endEditing: function(oldRange, newRange)
 {
+if (!oldRange || !newRange)
+return;
+
 
 if (typeof this._executionLineNumber === "number") {
 var newExecutionLineNumber = this._lineNumberAfterEditing(this._executionLineNumber, oldRange, newRange);
@@ -23930,8 +26359,15 @@ _lineNumberAfterEditing: function(lineNumber, oldRange, newRange)
 var shiftOffset = lineNumber <= oldRange.startLine ? 0 : newRange.linesCount - oldRange.linesCount;
 
 
-if (lineNumber === oldRange.startLine && lineNumber + 1 <= newRange.endLine && this._textModel.lineLength(lineNumber) < this._textModel.lineLength(lineNumber + 1))
-shiftOffset = 1;
+if (lineNumber === oldRange.startLine) {
+var whiteSpacesRegex = /^[\s\xA0]*$/;
+for (var i = 0; lineNumber + i <= newRange.endLine; ++i) {
+if (!whiteSpacesRegex.test(this._textModel.line(lineNumber + i))) {
+shiftOffset = i;
+break;
+}
+}
+}
 
 var newLineNumber = Math.max(0, lineNumber + shiftOffset);
 if (oldRange.startLine < lineNumber && lineNumber < oldRange.endLine)
@@ -23939,31 +26375,22 @@ newLineNumber = oldRange.startLine;
 return newLineNumber;
 },
 
-_createTextViewer: function(mimeType, content)
+_initializeTextViewer: function(mimeType, content)
 {
+this._textViewer.mimeType = mimeType;
+
 this._content = content;
 this._textModel.setText(null, content);
 
-this._textViewer = new WebInspector.TextViewer(this._textModel, WebInspector.platform, this._url);
-this._textViewer.startEditingListener = this._startEditing.bind(this);
-this._textViewer.endEditingListener = this._endEditing.bind(this);
-
 var element = this._textViewer.element;
 if (this._delegate.debuggingSupported()) {
-element.addEventListener("contextmenu", this._contextMenu.bind(this), true);
 element.addEventListener("mousedown", this._mouseDown.bind(this), true);
 element.addEventListener("mousemove", this._mouseMove.bind(this), true);
 element.addEventListener("scroll", this._scroll.bind(this), true);
 }
 
-if (this._delegate.canEditScriptSource())
-element.addEventListener("dblclick", this._doubleClick.bind(this), true);
-
-this.element.appendChild(element);
-
 this._textViewer.beginUpdates();
 
-this._textViewer.mimeType = mimeType;
 this._setTextViewerDecorations();
 
 if (typeof this._executionLineNumber === "number")
@@ -23982,6 +26409,9 @@ delete this._delayedFindSearchMatches;
 this.dispatchEventToListeners(WebInspector.SourceFrame.Events.Loaded);
 
 this._textViewer.endUpdates();
+
+if (this._parentElement)
+this.show(this._parentElement)
 },
 
 _setTextViewerDecorations: function()
@@ -24024,17 +26454,18 @@ this._collectRegexMatches(new RegExp(query.substring(1, query.length - 1)), this
 callback(this, this._searchResults.length);
 }
 
-if (this._textViewer)
+if (this.loaded)
 doFindSearchMatches.call(this, query);
 else
 this._delayedFindSearchMatches = doFindSearchMatches.bind(this, query);
 
+this._ensureContentLoaded();
 },
 
 searchCanceled: function()
 {
 delete this._delayedFindSearchMatches;
-if (!this._textViewer)
+if (!this.loaded)
 return;
 
 this._currentSearchResultIndex = -1;
@@ -24074,7 +26505,7 @@ return this._searchResults.length && this._currentSearchResultIndex === (this._s
 
 _jumpToSearchResult: function(index)
 {
-if (!this._textViewer || !this._searchResults.length)
+if (!this.loaded || !this._searchResults.length)
 return;
 this._currentSearchResultIndex = (index + this._searchResults.length) % this._searchResults.length;
 this._textViewer.markAndRevealRange(this._searchResults[this._currentSearchResultIndex]);
@@ -24115,7 +26546,7 @@ msg._resourceMessageRepeatCountElement.textContent = WebInspector.UIString(" (re
 setExecutionLine: function(lineNumber, skipRevealLine)
 {
 this._executionLineNumber = lineNumber;
-if (this._textViewer) {
+if (this.loaded) {
 this._textViewer.addDecoration(lineNumber, "webkit-execution-line");
 if (!skipRevealLine)
 this._textViewer.revealLine(lineNumber);
@@ -24124,7 +26555,7 @@ this._textViewer.revealLine(lineNumber);
 
 clearExecutionLine: function()
 {
-if (this._textViewer)
+if (this.loaded)
 this._textViewer.removeDecoration(this._executionLineNumber, "webkit-execution-line");
 delete this._executionLineNumber;
 },
@@ -24166,7 +26597,9 @@ this.addMessageToSource(this._messages[i].line - 1, this._messages[i]);
 addMessageToSource: function(lineNumber, msg)
 {
 if (lineNumber >= this._textModel.linesCount)
-return;
+lineNumber = this._textModel.linesCount - 1;
+if (lineNumber < 0)
+lineNumber = 0;
 
 var messageBubbleElement = this._messageBubbles[lineNumber];
 if (!messageBubbleElement || messageBubbleElement.nodeType !== Node.ELEMENT_NODE || !messageBubbleElement.hasStyleClass("webkit-html-message-bubble")) {
@@ -24243,21 +26676,14 @@ this._textViewer.removeDecoration(lineNumber, "webkit-breakpoint-conditional");
 this._textViewer.endUpdates();
 },
 
-_contextMenu: function(event)
+populateLineGutterContextMenu: function(lineNumber, contextMenu)
 {
-var target = event.target.enclosingNodeOrSelfWithClass("webkit-line-number");
-if (!target)
-return;
-var lineNumber = target.lineNumber;
-
-var contextMenu = new WebInspector.ContextMenu();
-
-contextMenu.appendItem(WebInspector.UIString("Continue to Here"), this._delegate.continueToLine.bind(this._delegate, lineNumber));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Continue to here" : "Continue to Here"), this._delegate.continueToLine.bind(this._delegate, lineNumber));
 
 var breakpoint = this._delegate.findBreakpoint(lineNumber);
 if (!breakpoint) {
 
-contextMenu.appendItem(WebInspector.UIString("Add Breakpoint"), this._delegate.setBreakpoint.bind(this._delegate, lineNumber, "", true));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Add breakpoint" : "Add Breakpoint"), this._delegate.setBreakpoint.bind(this._delegate, lineNumber, "", true));
 
 function addConditionalBreakpoint()
 {
@@ -24270,10 +26696,10 @@ this._delegate.setBreakpoint(lineNumber, condition, true);
 }
 this._editBreakpointCondition(lineNumber, "", didEditBreakpointCondition.bind(this));
 }
-contextMenu.appendItem(WebInspector.UIString("Add Conditional Breakpoint…"), addConditionalBreakpoint.bind(this));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Add conditional breakpoint…" : "Add Conditional Breakpoint…"), addConditionalBreakpoint.bind(this));
 } else {
 
-contextMenu.appendItem(WebInspector.UIString("Remove Breakpoint"), this._delegate.removeBreakpoint.bind(this._delegate, lineNumber));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Remove breakpoint" : "Remove Breakpoint"), this._delegate.removeBreakpoint.bind(this._delegate, lineNumber));
 function editBreakpointCondition()
 {
 function didEditBreakpointCondition(committed, condition)
@@ -24283,17 +26709,25 @@ this._delegate.updateBreakpoint(lineNumber, condition, breakpoint.enabled);
 }
 this._editBreakpointCondition(lineNumber, breakpoint.condition, didEditBreakpointCondition.bind(this));
 }
-contextMenu.appendItem(WebInspector.UIString("Edit Breakpoint…"), editBreakpointCondition.bind(this));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Edit breakpoint…" : "Edit Breakpoint…"), editBreakpointCondition.bind(this));
 function setBreakpointEnabled(enabled)
 {
 this._delegate.updateBreakpoint(lineNumber, breakpoint.condition, enabled);
 }
 if (breakpoint.enabled)
-contextMenu.appendItem(WebInspector.UIString("Disable Breakpoint"), setBreakpointEnabled.bind(this, false));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Disable breakpoint" : "Disable Breakpoint"), setBreakpointEnabled.bind(this, false));
 else
-contextMenu.appendItem(WebInspector.UIString("Enable Breakpoint"), setBreakpointEnabled.bind(this, true));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Enable breakpoint" : "Enable Breakpoint"), setBreakpointEnabled.bind(this, true));
 }
-contextMenu.show(event);
+},
+
+populateTextAreaContextMenu: function(contextMenu)
+{
+},
+
+suggestedFileName: function()
+{
+return this._delegate.suggestedFileName();
 },
 
 _scroll: function(event)
@@ -24431,9 +26865,9 @@ this._resetHoverTimer();
 }
 }
 
-function showObjectPopup(result)
+function showObjectPopup(result, wasThrown)
 {
-if (result.isError() || !this._delegate.debuggerPaused())
+if (wasThrown || !this._delegate.debuggerPaused())
 return;
 
 var popupContentElement = null;
@@ -24454,7 +26888,7 @@ titleElement.className = "source-frame-popover-title monospace";
 titleElement.textContent = result.description;
 popupContentElement.appendChild(titleElement);
 
-var section = new WebInspector.ObjectPropertiesSection(result, "", null, false);
+var section = new WebInspector.ObjectPropertiesSection(result);
 section.expanded = true;
 section.element.addStyleClass("source-frame-popover-tree");
 section.headerElement.addStyleClass("hidden");
@@ -24518,90 +26952,64 @@ return conditionElement;
 
 resize: function()
 {
-if (this._textViewer)
 this._textViewer.resize();
 },
 
-_registerShortcuts: function()
+commitEditing: function(callback)
 {
-this._shortcuts = {};
-var handleSaveCallback = this._handleSave.bind(this);
-this._shortcuts[WebInspector.KeyboardShortcut.makeKey("s", WebInspector.KeyboardShortcut.Modifiers.CtrlOrMeta)] = handleSaveCallback;
-this._shortcuts[WebInspector.KeyboardShortcut.makeKey(WebInspector.KeyboardShortcut.Keys.Enter.code, WebInspector.KeyboardShortcut.Modifiers.CtrlOrMeta)] = handleSaveCallback;
-this._shortcuts[WebInspector.KeyboardShortcut.makeKey(WebInspector.KeyboardShortcut.Keys.Esc.code)] = this._handleRevertEditing.bind(this);
-},
-
-_handleKeyDown: function(e)
-{
-var shortcutKey = WebInspector.KeyboardShortcut.makeKeyFromEvent(e);
-var handler = this._shortcuts[shortcutKey];
-if (handler && handler.call(this)) {
-e.preventDefault();
-e.stopPropagation();
-}
-},
-
-_handleSave: function()
-{
-if (this._textViewer.readOnly || !this._delegate.canEditScriptSource())
-return false;
-
 if (!this._viewerState) {
 
-this._textViewer.readOnly = true;
 this._delegate.setScriptSourceIsBeingEdited(false);
-return true;
+callback();
+return;
 }
 
-var originalViewerState = this._viewerState;
-var newSource = this._textModel.text;
-
-delete this._viewerState;
-this._textViewer.readOnly = true;
-this._delegate.setScriptSourceIsBeingEdited(false);
-
-function didEditScriptSource(error)
+function didEditContent(error)
 {
-if (error && !this._viewerState && this._textModel.text === newSource) {
-this._viewerState = originalViewerState;
-this._textViewer.readOnly = false;
-this._delegate.setScriptSourceIsBeingEdited(true);
-WebInspector.log(error, WebInspector.ConsoleMessage.MessageLevel.Error);
+if (error) {
+if (error.data && error.data[0]) {
+WebInspector.log(error.data[0], WebInspector.ConsoleMessage.MessageLevel.Error);
 WebInspector.showConsole();
 }
-}
-this._delegate.editScriptSource(newSource, didEditScriptSource.bind(this));
-return true;
-},
-
-_handleRevertEditing: function()
-{
-if (this._textViewer.readOnly)
-return false;
-
-this._restoreViewerState();
-this._textViewer.readOnly = true;
-this._delegate.setScriptSourceIsBeingEdited(false);
-return true;
-},
-
-_doubleClick: function(event)
-{
-if (!this._delegate.canEditScriptSource())
+callback(error);
 return;
-
-var lineRow = event.target.enclosingNodeOrSelfWithClass("webkit-line-content");
-if (!lineRow)
-return;  
-
-if (this._textViewer.readOnly) {
-this._textViewer.readOnly = false;
-window.getSelection().collapseToStart();
-}
-}
 }
 
-WebInspector.SourceFrame.prototype.__proto__ = WebInspector.View.prototype;
+var newBreakpoints = {};
+for (var lineNumber in this._breakpoints) {
+newBreakpoints[lineNumber] = this._breakpoints[lineNumber];
+this.removeBreakpoint(Number(lineNumber));
+}
+
+for (var lineNumber in this._viewerState.breakpoints)
+this._delegate.removeBreakpoint(Number(lineNumber));
+
+for (var lineNumber in newBreakpoints) {
+var breakpoint = newBreakpoints[lineNumber];
+this._delegate.setBreakpoint(Number(lineNumber), breakpoint.condition, breakpoint.enabled);
+}
+
+delete this._viewerState;
+this._delegate.setScriptSourceIsBeingEdited(false);
+
+callback();
+}
+this.editContent(this._textModel.text, didEditContent.bind(this));
+},
+
+editContent: function(newContent, callback)
+{
+this._delegate.editScriptSource(newContent, callback);
+},
+
+cancelEditing: function()
+{
+this._restoreViewerState();
+this._delegate.setScriptSourceIsBeingEdited(false);
+}
+}
+
+WebInspector.SourceFrame.prototype.__proto__ = WebInspector.TextViewerDelegate.prototype;
 
 
 WebInspector.SourceFrameDelegate = function()
@@ -24672,6 +27080,11 @@ evaluateInSelectedCallFrame: function(string)
 releaseEvaluationResult: function()
 {
 
+},
+
+suggestedFileName: function()
+{
+
 }
 }
 
@@ -24697,20 +27110,12 @@ WebInspector.ResourceView.prototype.__proto__ = WebInspector.View.prototype;
 
 WebInspector.ResourceView.createResourceView = function(resource)
 {
-function sourceFrameForDelegateAndURL(delegate, url)
-{
-var view = new WebInspector.SourceFrame(delegate, url);
-view.resource = resource;
-return view;
-}
-
 switch (resource.category) {
 case WebInspector.resourceCategories.documents:
 case WebInspector.resourceCategories.scripts:
 case WebInspector.resourceCategories.xhr:
-return sourceFrameForDelegateAndURL(new WebInspector.SourceFrameDelegateForResourcesPanel(resource), resource.url);
 case WebInspector.resourceCategories.stylesheets:
-return sourceFrameForDelegateAndURL(new WebInspector.CSSSourceFrameDelegateForResourcesPanel(resource), resource.url);
+return new WebInspector.ResourceSourceFrame(resource);
 case WebInspector.resourceCategories.images:
 return new WebInspector.ImageView(resource);
 case WebInspector.resourceCategories.fonts:
@@ -24722,13 +27127,13 @@ return new WebInspector.ResourceView(resource);
 
 WebInspector.ResourceView.resourceViewTypeMatchesResource = function(resource)
 {
-var resourceView = resource._resourcesView;
+var resourceView = resource._resourceView;
 switch (resource.category) {
 case WebInspector.resourceCategories.documents:
-case WebInspector.resourceCategories.stylesheets:
 case WebInspector.resourceCategories.scripts:
 case WebInspector.resourceCategories.xhr:
-return resourceView.__proto__ === WebInspector.SourceFrame.prototype;
+case WebInspector.resourceCategories.stylesheets:
+return resourceView.__proto__ === WebInspector.ResourceSourceFrame.prototype;
 case WebInspector.resourceCategories.images:
 return resourceView.__proto__ === WebInspector.ImageView.prototype;
 case WebInspector.resourceCategories.fonts:
@@ -24742,23 +27147,23 @@ WebInspector.ResourceView.resourceViewForResource = function(resource)
 {
 if (!resource)
 return null;
-if (!resource._resourcesView)
-resource._resourcesView = WebInspector.ResourceView.createResourceView(resource);
-return resource._resourcesView;
+if (!resource._resourceView)
+resource._resourceView = WebInspector.ResourceView.createResourceView(resource);
+return resource._resourceView;
 }
 
 WebInspector.ResourceView.recreateResourceView = function(resource)
 {
 var newView = WebInspector.ResourceView.createResourceView(resource);
 
-var oldView = resource._resourcesView;
+var oldView = resource._resourceView;
 var oldViewParentNode = oldView.visible ? oldView.element.parentNode : null;
 var scrollTop = oldView.scrollTop;
 
-resource._resourcesView.detach();
-delete resource._resourcesView;
+resource._resourceView.detach();
+delete resource._resourceView;
 
-resource._resourcesView = newView;
+resource._resourceView = newView;
 
 if (oldViewParentNode)
 newView.show(oldViewParentNode);
@@ -24772,90 +27177,120 @@ WebInspector.ResourceView.existingResourceViewForResource = function(resource)
 {
 if (!resource)
 return null;
-return resource._resourcesView;
+return resource._resourceView;
 }
 
 
-WebInspector.SourceFrameDelegateForResourcesPanel = function(resource)
+WebInspector.ResourceSourceFrame = function(resource)
 {
-WebInspector.SourceFrameDelegate.call(this);
+WebInspector.SourceFrame.call(this, new WebInspector.SourceFrameDelegate(), resource.url);
 this._resource = resource;
 }
 
 
 
-WebInspector.SourceFrameDelegateForResourcesPanel.DefaultMIMETypeForResourceType = {
+WebInspector.ResourceSourceFrame.DefaultMIMETypeForResourceType = {
 0: "text/html",
 1: "text/css",
 4: "text/javascript"
 }
 
-WebInspector.SourceFrameDelegateForResourcesPanel.prototype = {
+WebInspector.ResourceSourceFrame.prototype = {
+get resource()
+{
+return this._resource;
+},
+
+isContentEditable: function()
+{
+return this._resource.isEditable();
+},
+
+editContent: function(newText, callback)
+{
+this._clearIncrementalUpdateTimer();
+var majorChange = true;
+this._resource.setContent(newText, majorChange, callback);
+},
+
+cancelEditing: function()
+{
+this._clearIncrementalUpdateTimer();
+const majorChange = false;
+this._resource.setContent(this._viewerState.textModelContent, majorChange);
+WebInspector.SourceFrame.prototype.cancelEditing.call(this);
+},
+
+endEditing: function(oldRange, newRange)
+{
+function commitIncrementalEdit()
+{
+var majorChange = false;
+this._resource.setContent(this._textModel.text, majorChange, function() {});
+}
+const updateTimeout = 200;
+this._incrementalUpdateTimer = setTimeout(commitIncrementalEdit.bind(this), updateTimeout);
+},
+
+_clearIncrementalUpdateTimer: function()
+{
+if (this._incrementalUpdateTimer)
+clearTimeout(this._incrementalUpdateTimer);
+delete this._incrementalUpdateTimer;
+},
+
 requestContent: function(callback)
 {
 function contentLoaded(text)
 {
-var mimeType = WebInspector.SourceFrameDelegateForResourcesPanel.DefaultMIMETypeForResourceType[this._resource.type] || this._resource.mimeType;
+var mimeType = WebInspector.ResourceSourceFrame.DefaultMIMETypeForResourceType[this._resource.type] || this._resource.mimeType;
 callback(mimeType, text);
 }
 this._resource.requestContent(contentLoaded.bind(this));
-}
-}
-
-WebInspector.SourceFrameDelegateForResourcesPanel.prototype.__proto__ = WebInspector.SourceFrameDelegate.prototype;
-
-
-WebInspector.CSSSourceFrameDelegateForResourcesPanel = function(resource)
-{
-WebInspector.SourceFrameDelegateForResourcesPanel.call(this, resource);
-}
-
-WebInspector.CSSSourceFrameDelegateForResourcesPanel.prototype = {
-canEditScriptSource: function()
-{
-return true;
 },
 
-editScriptSource: function(newText)
+suggestedFileName: function()
 {
-function handleStyleSheet(newText, styleSheet)
-{
-this._styleSheet = styleSheet;
-this._saveStyleSheet(newText);
-}
-
-function handleInfos(newText, error, infos)
-{
-if (error)
-return;
-for (var i = 0; i < infos.length; ++i) {
-var info = infos[i];
-if (info.sourceURL === this._resource.url) {
-WebInspector.CSSStyleSheet.createForId(info.styleSheetId, handleStyleSheet.bind(this, newText));
-break;
-}
+return this._resource.displayName;
 }
 }
 
-if (this._styleSheet)
-this._saveStyleSheet(newText);
-else
-CSSAgent.getAllStyleSheets(handleInfos.bind(this, newText));
+WebInspector.ResourceSourceFrame.prototype.__proto__ = WebInspector.SourceFrame.prototype;
+
+WebInspector.RevisionSourceFrame = function(revision)
+{
+WebInspector.SourceFrame.call(this, new WebInspector.SourceFrameDelegate(), revision.resource.url);
+this._revision = revision;
+}
+
+WebInspector.RevisionSourceFrame.prototype = {
+get resource()
+{
+return this._revision.resource;
 },
 
-_saveStyleSheet: function(newText)
+isContentEditable: function()
 {
-function callback(success)
+return false;
+},
+
+requestContent: function(callback)
 {
-if (!success)
-console.error("Failed to save modified stylesheet %s", this._resource.url);
+function contentLoaded(text)
+{
+var mimeType = WebInspector.ResourceSourceFrame.DefaultMIMETypeForResourceType[this._revision.resource.type] || this._revision.resource.mimeType;
+callback(mimeType, text);
+}
+this._revision.requestContent(contentLoaded.bind(this));
+},
+
+suggestedFileName: function()
+{
+return this._revision.resource.displayName;
+}
 }
 
-this._styleSheet.setText(newText, callback.bind(this));
-}
-}
-
-WebInspector.CSSSourceFrameDelegateForResourcesPanel.prototype.__proto__ = WebInspector.SourceFrameDelegateForResourcesPanel.prototype;
+WebInspector.RevisionSourceFrame.prototype.__proto__ = WebInspector.SourceFrame.prototype;
 
 
 
@@ -24902,15 +27337,6 @@ this.functionsSelectElement.id = "scripts-functions";
 
 
 
-
-this.formatButton = document.createElement("button");
-this.formatButton.className = "status-bar-item";
-this.formatButton.id = "format-script";
-this.formatButton.title = WebInspector.UIString("Format script.");
-this.formatButton.appendChild(document.createElement("img"));
-this.formatButton.addEventListener("click", this._toggleFormatSourceFiles.bind(this), false);
-if (Preferences.debugMode)
-this.topStatusBar.appendChild(this.formatButton);
 
 this.sidebarButtonsElement = document.createElement("div");
 this.sidebarButtonsElement.id = "scripts-sidebar-buttons";
@@ -24982,7 +27408,7 @@ this.sidebarPanes.callstack = new WebInspector.CallStackSidebarPane(this._presen
 this.sidebarPanes.scopechain = new WebInspector.ScopeChainSidebarPane();
 this.sidebarPanes.jsBreakpoints = new WebInspector.JavaScriptBreakpointsSidebarPane(this._presentationModel, this._showSourceLine.bind(this));
 if (Preferences.nativeInstrumentationEnabled) {
-this.sidebarPanes.domBreakpoints = WebInspector.createDOMBreakpointsSidebarPane();
+this.sidebarPanes.domBreakpoints = WebInspector.domBreakpointsSidebarPane;
 this.sidebarPanes.xhrBreakpoints = new WebInspector.XHRBreakpointsSidebarPane();
 this.sidebarPanes.eventListenerBreakpoints = new WebInspector.EventListenerBreakpointsSidebarPane();
 }
@@ -25017,6 +27443,10 @@ this.enableToggleButton.element.addStyleClass("hidden");
 this._pauseOnExceptionButton = new WebInspector.StatusBarButton("", "scripts-pause-on-exceptions-status-bar-item", 3);
 this._pauseOnExceptionButton.addEventListener("click", this._togglePauseOnExceptions.bind(this), false);
 
+this._toggleFormatSourceFilesButton = new WebInspector.StatusBarButton(WebInspector.UIString("Pretty print"), "scripts-toggle-pretty-print-status-bar-item");
+this._toggleFormatSourceFilesButton.toggled = false;
+this._toggleFormatSourceFilesButton.addEventListener("click", this._toggleFormatSourceFiles.bind(this), false);
+
 this._registerShortcuts();
 
 this._debuggerEnabled = Preferences.debuggerAlwaysEnabled;
@@ -25042,10 +27472,16 @@ WebInspector.debuggerModel.enableDebugger();
 
 
 WebInspector.ScriptsPanel.PauseOnExceptionsState = {
-DontPauseOnExceptions : 0,
-PauseOnAllExceptions : 1,
-PauseOnUncaughtExceptions: 2
+DontPauseOnExceptions : "none",
+PauseOnAllExceptions : "all",
+PauseOnUncaughtExceptions: "uncaught"
 };
+
+WebInspector.ScriptsPanel.BrowserBreakpointTypes = {
+DOM: "DOM",
+EventListener: "EventListener",
+XHR: "XHR"
+}
 
 WebInspector.ScriptsPanel.prototype = {
 get toolbarItemLabel()
@@ -25055,7 +27491,7 @@ return WebInspector.UIString("Scripts");
 
 get statusBarItems()
 {
-return [this.enableToggleButton.element, this._pauseOnExceptionButton.element];
+return [this.enableToggleButton.element, this._pauseOnExceptionButton.element, this._toggleFormatSourceFilesButton.element];
 },
 
 get defaultFocusedElement()
@@ -25072,6 +27508,8 @@ show: function()
 {
 WebInspector.Panel.prototype.show.call(this);
 this.sidebarResizeElement.style.right = (this.sidebarElement.offsetWidth - 3) + "px";
+if (Preferences.nativeInstrumentationEnabled)
+this.sidebarElement.insertBefore(this.sidebarPanes.domBreakpoints.element, this.sidebarPanes.xhrBreakpoints.element);
 
 if (this.visibleView)
 this.visibleView.show(this.viewsContainerElement);
@@ -25117,21 +27555,39 @@ _addOptionToFilesSelect: function(sourceFileId)
 var sourceFile = this._presentationModel.sourceFile(sourceFileId);
 var select = this._filesSelectElement;
 var option = document.createElement("option");
-option.text = sourceFile.url ? WebInspector.displayNameForURL(sourceFile.url) : WebInspector.UIString("(program)");
-if (sourceFile.isExtensionScript)
+option.text = sourceFile.displayName;
+option.isContentScript = sourceFile.isContentScript;
+if (sourceFile.isContentScript)
 option.addStyleClass("extension-script");
 function optionCompare(a, b)
 {
+if (a === select.contentScriptSection)
+return b.isContentScript ? -1 : 1;
+if (b === select.contentScriptSection)
+return a.isContentScript ? 1 : -1;
+
+if (a.isContentScript && !b.isContentScript)
+return 1;
+if (!a.isContentScript && b.isContentScript)
+return -1;
+
 if (a.text === b.text)
 return 0;
 return a.text < b.text ? -1 : 1;
 }
-var insertionIndex = insertionIndexForObjectInListSortedByFunction(option, select.childNodes, optionCompare);
-if (insertionIndex < 0)
-select.appendChild(option);
-else
-select.insertBefore(option, select.childNodes.item(insertionIndex));
 
+var insertionIndex = insertionIndexForObjectInListSortedByFunction(option, select.childNodes, optionCompare);
+select.insertBefore(option, insertionIndex < 0 ? null : select.childNodes.item(insertionIndex));
+
+if (sourceFile.isContentScript && !select.contentScriptSection) {
+var contentScriptSection = document.createElement("option");
+contentScriptSection.text = WebInspector.UIString("Content scripts");
+contentScriptSection.disabled = true;
+select.contentScriptSection = contentScriptSection;
+
+var insertionIndex = insertionIndexForObjectInListSortedByFunction(contentScriptSection, select.childNodes, optionCompare);
+select.insertBefore(contentScriptSection, insertionIndex < 0 ? null : select.childNodes.item(insertionIndex));
+}
 option._sourceFileId = sourceFileId;
 this._sourceFileIdToFilesSelectOption[sourceFileId] = option;
 },
@@ -25213,29 +27669,39 @@ WebInspector.currentPanel = this;
 this.sidebarPanes.callstack.update(callFrames, details);
 this.sidebarPanes.callstack.selectedCallFrame = this._presentationModel.selectedCallFrame;
 
-var status;
 if (details.eventType === WebInspector.DebuggerEventTypes.NativeBreakpoint) {
-if (details.eventData.breakpointType === WebInspector.BreakpointManager.BreakpointTypes.EventListener) {
+if (details.eventData.breakpointType === WebInspector.ScriptsPanel.BrowserBreakpointTypes.DOM) {
+this.sidebarPanes.domBreakpoints.highlightBreakpoint(details.eventData);
+function didCreateBreakpointHitStatusMessage(element)
+{
+this.sidebarPanes.callstack.setStatus(element);
+}
+this.sidebarPanes.domBreakpoints.createBreakpointHitStatusMessage(details.eventData, didCreateBreakpointHitStatusMessage.bind(this));
+} else if (details.eventData.breakpointType === WebInspector.ScriptsPanel.BrowserBreakpointTypes.EventListener) {
 var eventName = details.eventData.eventName;
 this.sidebarPanes.eventListenerBreakpoints.highlightBreakpoint(details.eventData.eventName);
 var eventNameForUI = WebInspector.EventListenerBreakpointsSidebarPane.eventNameForUI(eventName);
-status = WebInspector.UIString("Paused on a \"%s\" Event Listener.", eventNameForUI);
-} else if (details.eventData.breakpointType === WebInspector.BreakpointManager.BreakpointTypes.XHR) {
+this.sidebarPanes.callstack.setStatus(WebInspector.UIString("Paused on a \"%s\" Event Listener.", eventNameForUI));
+} else if (details.eventData.breakpointType === WebInspector.ScriptsPanel.BrowserBreakpointTypes.XHR) {
 this.sidebarPanes.xhrBreakpoints.highlightBreakpoint(details.eventData.breakpointURL);
-status = WebInspector.UIString("Paused on a XMLHttpRequest.");
+this.sidebarPanes.callstack.setStatus(WebInspector.UIString("Paused on a XMLHttpRequest."));
 }
 } else {
-function didGetSourceLocation(sourceFileId, lineNumber, columnNumber)
+function didGetSourceLocation(sourceFileId, lineNumber)
 {
+var exception = WebInspector.debuggerModel.debuggerPausedDetails.exception;
+if (exception) {
+this.sidebarPanes.callstack.setStatus(WebInspector.UIString("Paused on exception: '%s'.", exception.description));
+return;
+}
+
 if (!sourceFileId || !this._presentationModel.findBreakpoint(sourceFileId, lineNumber))
 return;
 this.sidebarPanes.jsBreakpoints.highlightBreakpoint(sourceFileId, lineNumber);
-status = WebInspector.UIString("Paused on a JavaScript breakpoint.");
+this.sidebarPanes.callstack.setStatus(WebInspector.UIString("Paused on a JavaScript breakpoint."));
 }
-callFrames[0].sourceLocation(didGetSourceLocation.bind(this));
+callFrames[0].sourceLine(didGetSourceLocation.bind(this));
 }
-if (status)
-this.sidebarPanes.callstack.setStatus(status);
 
 window.focus();
 InspectorFrontendHost.bringToFront();
@@ -25252,7 +27718,7 @@ this._clearInterface();
 
 _debuggerWasEnabled: function()
 {
-this._setPauseOnExceptions(WebInspector.settings.pauseOnExceptionState);
+this._setPauseOnExceptions(WebInspector.settings.pauseOnExceptionStateString);
 
 if (this._debuggerEnabled)
 return;
@@ -25284,6 +27750,11 @@ this._debuggerResumed();
 this._backForwardList = [];
 this._currentBackForwardIndex = -1;
 this._updateBackAndForwardButtons();
+
+for (var id in this._sourceFileIdToSourceFrame) {
+var sourceFrame = this._sourceFileIdToSourceFrame[id];
+sourceFrame.removeEventListener(WebInspector.SourceFrame.Events.Loaded, this._sourceFrameLoaded, this);
+}
 
 this._sourceFileIdToSourceFrame = {};
 this._sourceFileIdToFilesSelectOption = {};
@@ -25325,8 +27796,8 @@ showAnchorLocation: function(anchor)
 {
 function didRequestSourceMapping(mapping)
 {
-var location = mapping.scriptLocationToSourceLocation(anchor.getAttribute("line_number") - 1, 0);
-this._showSourceLine(sourceFile.id, location.lineNumber);
+var lineNumber = mapping.scriptLocationToSourceLine({lineNumber:anchor.getAttribute("line_number") - 1, columnNumber:0});
+this._showSourceLine(sourceFile.id, lineNumber);
 }
 var sourceFile = this._presentationModel.sourceFileForScriptURL(anchor.href);
 sourceFile.requestSourceMapping(didRequestSourceMapping.bind(this));
@@ -25336,17 +27807,6 @@ _showSourceLine: function(sourceFileId, lineNumber)
 {
 var sourceFrame = this._showSourceFrameAndAddToHistory(sourceFileId);
 sourceFrame.highlightLine(lineNumber);
-},
-
-handleShortcut: function(event)
-{
-var shortcut = WebInspector.KeyboardShortcut.makeKeyFromEvent(event);
-var handler = this._shortcuts[shortcut];
-if (handler) {
-handler(event);
-event.handled = true;
-} else
-this.sidebarPanes.callstack.handleShortcut(event);
 },
 
 _showSourceFrameAndAddToHistory: function(sourceFileId)
@@ -25395,7 +27855,7 @@ return sourceFrame || this._createSourceFrame(sourceFileId);
 _createSourceFrame: function(sourceFileId)
 {
 var sourceFile = this._presentationModel.sourceFile(sourceFileId);
-var delegate = new WebInspector.SourceFrameDelegateForScriptsPanel(this._presentationModel, sourceFileId);
+var delegate = new WebInspector.SourceFrameDelegateForScriptsPanel(this._presentationModel, sourceFileId, sourceFile.displayName);
 var sourceFrame = new WebInspector.SourceFrame(delegate, sourceFile.url);
 sourceFrame._sourceFileId = sourceFileId;
 sourceFrame.addEventListener(WebInspector.SourceFrame.Events.Loaded, this._sourceFrameLoaded, this);
@@ -25459,7 +27919,7 @@ this.sidebarPanes.scopechain.update(callFrame);
 this.sidebarPanes.watchExpressions.refreshExpressions();
 this.sidebarPanes.callstack.selectedCallFrame = this._presentationModel.selectedCallFrame;
 
-function didGetSourceLocation(sourceFileId, lineNumber, columnNumber)
+function didGetSourceLocation(sourceFileId, lineNumber)
 {
 if (!sourceFileId)
 return;
@@ -25472,7 +27932,7 @@ var sourceFrame = this._showSourceFrameAndAddToHistory(sourceFileId);
 sourceFrame.setExecutionLine(lineNumber);
 this._executionSourceFrame = sourceFrame;
 }
-callFrame.sourceLocation(didGetSourceLocation.bind(this));
+callFrame.sourceLine(didGetSourceLocation.bind(this));
 },
 
 _filesSelectChanged: function()
@@ -25519,6 +27979,7 @@ this.resize();
 
 _setPauseOnExceptions: function(pauseOnExceptionsState)
 {
+pauseOnExceptionsState = pauseOnExceptionsState || WebInspector.ScriptsPanel.PauseOnExceptionsState.DontPauseOnExceptions;
 function callback(error)
 {
 if (error)
@@ -25531,9 +27992,9 @@ else if (pauseOnExceptionsState == WebInspector.ScriptsPanel.PauseOnExceptionsSt
 this._pauseOnExceptionButton.title = WebInspector.UIString("Pause on uncaught exceptions.\nClick to Not pause on exceptions.");
 
 this._pauseOnExceptionButton.state = pauseOnExceptionsState;
-WebInspector.settings.pauseOnExceptionState = pauseOnExceptionsState;
+WebInspector.settings.pauseOnExceptionStateString = pauseOnExceptionsState;
 }
-DebuggerAgent.setPauseOnExceptionsState(pauseOnExceptionsState, callback.bind(this));
+DebuggerAgent.setPauseOnExceptions(pauseOnExceptionsState, callback.bind(this));
 },
 
 _updateDebuggerButtons: function()
@@ -25588,6 +28049,7 @@ this.sidebarPanes.callstack.update(null);
 this.sidebarPanes.scopechain.update(null);
 this.sidebarPanes.jsBreakpoints.clearBreakpointHighlight();
 if (Preferences.nativeInstrumentationEnabled) {
+this.sidebarPanes.domBreakpoints.clearBreakpointHighlight();
 this.sidebarPanes.eventListenerBreakpoints.clearBreakpointHighlight();
 this.sidebarPanes.xhrBreakpoints.clearBreakpointHighlight();
 }
@@ -25618,12 +28080,6 @@ this._showSourceFrame(this._backForwardList[++this._currentBackForwardIndex]);
 this._updateBackAndForwardButtons();
 },
 
-_toggleFormatSourceFiles: function()
-{
-this.reset();
-this._presentationModel.toggleFormatSourceFiles();
-},
-
 _enableDebugging: function()
 {
 if (this._debuggerEnabled)
@@ -25648,7 +28104,12 @@ WebInspector.debuggerModel.enableDebugger();
 
 _togglePauseOnExceptions: function()
 {
-this._setPauseOnExceptions((this._pauseOnExceptionButton.state + 1) % this._pauseOnExceptionButton.states);
+var nextStateMap = {};
+var stateEnum = WebInspector.ScriptsPanel.PauseOnExceptionsState;
+nextStateMap[stateEnum.DontPauseOnExceptions] = stateEnum.PauseOnAllExceptions;
+nextStateMap[stateEnum.PauseOnAllExceptions] = stateEnum.PauseOnUncaughtExceptions;
+nextStateMap[stateEnum.PauseOnUncaughtExceptions] = stateEnum.DontPauseOnExceptions;
+this._setPauseOnExceptions(nextStateMap[this._pauseOnExceptionButton.state]);
 },
 
 _togglePause: function()
@@ -25721,48 +28182,42 @@ var section = WebInspector.shortcutsHelp.section(WebInspector.UIString("Scripts 
 var handler, shortcut1, shortcut2;
 var platformSpecificModifier = WebInspector.KeyboardShortcut.Modifiers.CtrlOrMeta;
 
-this._shortcuts = {};
+var shortcuts = {};
 
 
 handler = this.pauseButton.click.bind(this.pauseButton);
 shortcut1 = WebInspector.KeyboardShortcut.makeDescriptor(WebInspector.KeyboardShortcut.Keys.F8);
-this._shortcuts[shortcut1.key] = handler;
+shortcuts[shortcut1.key] = handler;
 shortcut2 = WebInspector.KeyboardShortcut.makeDescriptor(WebInspector.KeyboardShortcut.Keys.Slash, platformSpecificModifier);
-this._shortcuts[shortcut2.key] = handler;
-section.addAlternateKeys([ shortcut1.name, shortcut2.name ], WebInspector.UIString("Continue"));
+shortcuts[shortcut2.key] = handler;
+section.addAlternateKeys([ shortcut1.name, shortcut2.name ], WebInspector.UIString("Pause/Continue"));
 
 
 handler = this.stepOverButton.click.bind(this.stepOverButton);
 shortcut1 = WebInspector.KeyboardShortcut.makeDescriptor(WebInspector.KeyboardShortcut.Keys.F10);
-this._shortcuts[shortcut1.key] = handler;
+shortcuts[shortcut1.key] = handler;
 shortcut2 = WebInspector.KeyboardShortcut.makeDescriptor(WebInspector.KeyboardShortcut.Keys.SingleQuote, platformSpecificModifier);
-this._shortcuts[shortcut2.key] = handler;
+shortcuts[shortcut2.key] = handler;
 section.addAlternateKeys([ shortcut1.name, shortcut2.name ], WebInspector.UIString("Step over"));
 
 
 handler = this.stepIntoButton.click.bind(this.stepIntoButton);
 shortcut1 = WebInspector.KeyboardShortcut.makeDescriptor(WebInspector.KeyboardShortcut.Keys.F11);
-this._shortcuts[shortcut1.key] = handler;
+shortcuts[shortcut1.key] = handler;
 shortcut2 = WebInspector.KeyboardShortcut.makeDescriptor(WebInspector.KeyboardShortcut.Keys.Semicolon, platformSpecificModifier);
-this._shortcuts[shortcut2.key] = handler;
+shortcuts[shortcut2.key] = handler;
 section.addAlternateKeys([ shortcut1.name, shortcut2.name ], WebInspector.UIString("Step into"));
 
 
 handler = this.stepOutButton.click.bind(this.stepOutButton);
 shortcut1 = WebInspector.KeyboardShortcut.makeDescriptor(WebInspector.KeyboardShortcut.Keys.F11, WebInspector.KeyboardShortcut.Modifiers.Shift);
-this._shortcuts[shortcut1.key] = handler;
+shortcuts[shortcut1.key] = handler;
 shortcut2 = WebInspector.KeyboardShortcut.makeDescriptor(WebInspector.KeyboardShortcut.Keys.Semicolon, WebInspector.KeyboardShortcut.Modifiers.Shift, platformSpecificModifier);
-this._shortcuts[shortcut2.key] = handler;
+shortcuts[shortcut2.key] = handler;
 section.addAlternateKeys([ shortcut1.name, shortcut2.name ], WebInspector.UIString("Step out"));
 
-var isMac = WebInspector.isMac();
-if (isMac)
-shortcut1 = WebInspector.KeyboardShortcut.makeDescriptor("l", WebInspector.KeyboardShortcut.Modifiers.Meta);
-else
-shortcut1 = WebInspector.KeyboardShortcut.makeDescriptor("g", WebInspector.KeyboardShortcut.Modifiers.Ctrl);
-this._shortcuts[shortcut1.key] = this.showGoToLineDialog.bind(this);
-section.addAlternateKeys([ shortcut1.name ], WebInspector.UIString("Go to Line"));
-this.sidebarPanes.callstack.registerShortcuts(section);
+this.sidebarPanes.callstack.registerShortcuts(section, shortcuts);
+this.registerShortcuts(shortcuts);
 },
 
 searchCanceled: function()
@@ -25833,23 +28288,24 @@ else
 this._searchView.jumpToPreviousSearchResult();
 },
 
-showGoToLineDialog: function(e)
+_toggleFormatSourceFiles: function()
 {
-var view = this.visibleView;
-if (view)
-WebInspector.GoToLineDialog.show(view);
+WebInspector.panels.scripts.reset();
+this._toggleFormatSourceFilesButton.toggled = !this._toggleFormatSourceFilesButton.toggled;
+this._presentationModel.setFormatSourceFiles(this._toggleFormatSourceFilesButton.toggled);
 }
 }
 
 WebInspector.ScriptsPanel.prototype.__proto__ = WebInspector.Panel.prototype;
 
 
-WebInspector.SourceFrameDelegateForScriptsPanel = function(model, sourceFileId)
+WebInspector.SourceFrameDelegateForScriptsPanel = function(model, sourceFileId, scriptName)
 {
 WebInspector.SourceFrameDelegate.call(this);
 this._model = model;
 this._sourceFileId = sourceFileId;
 this._popoverObjectGroup = "popover";
+this._scriptName = scriptName;
 }
 
 WebInspector.SourceFrameDelegateForScriptsPanel.prototype = {
@@ -25919,6 +28375,11 @@ WebInspector.panels.scripts.evaluateInSelectedCallFrame(string, this._popoverObj
 releaseEvaluationResult: function()
 {
 RuntimeAgent.releaseObjectGroup(this._popoverObjectGroup);
+},
+
+suggestedFileName: function()
+{
+return this._scriptName;
 }
 }
 
@@ -25976,7 +28437,11 @@ this._domains = {};
 this.sidebarElement.addEventListener("mousemove", this._onmousemove.bind(this), false);
 this.sidebarElement.addEventListener("mouseout", this._onmouseout.bind(this), false);
 
+this.registerShortcuts();
+
 WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceUpdated, this._refreshResource, this);
+
+WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.OnLoad, this._onLoadEventFired, this);
 }
 
 WebInspector.ResourcesPanel.prototype = {
@@ -26005,17 +28470,13 @@ if (this.visibleView && this.visibleView.resource)
 this._showResourceView(this.visibleView.resource);
 },
 
-loadEventFired: function()
+_onLoadEventFired: function()
 {
 this._initDefaultSelection();
 },
 
 _initDefaultSelection: function()
 {
-if (this._initializedDefaultSelection)
-return;
-
-this._initializedDefaultSelection = true;
 var itemURL = WebInspector.settings.resourcesLastSelectedItem;
 if (itemURL) {
 for (var treeElement = this.sidebarTree.children[0]; treeElement; treeElement = treeElement.traverseNextTreeElement(false, this.sidebarTree, true)) {
@@ -26031,7 +28492,7 @@ if (WebInspector.mainResource && this.resourcesListTreeElement && this.resources
 this.showResource(WebInspector.mainResource);
 },
 
-reset: function()
+_reset: function()
 {
 delete this._initializedDefaultSelection;
 this._origins = {};
@@ -26078,6 +28539,8 @@ WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.E
 WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.FrameNavigated, this._frameNavigated, this);
 WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.FrameDetached, this._frameDetached, this);
 WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.ResourceAdded, this._resourceAdded, this);
+WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.CachedResourcesLoaded, this._cachedResourcesLoaded, this); 
+WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.WillLoadCachedResources, this._resetResourcesTree, this); 
 
 function populateFrame(frameId)
 {
@@ -26091,47 +28554,24 @@ var resources = WebInspector.resourceTreeModel.resources(frameId);
 for (var i = 0; i < resources.length; ++i)
 this._resourceAdded({data:resources[i]});
 }
-populateFrame.call(this, 0);
+populateFrame.call(this, "");
+
 this._initDefaultSelection();
 },
 
 _frameAdded: function(event)
 {
 var frame = event.data;
-var frameId = frame.id;
 var parentFrameId = frame.parentId;
-var title = frame.name;
-var subtitle = new WebInspector.Resource(null, frame.url).displayName;
-this.addDocumentURL(frame.url);
-
-var frameTreeElement = this._treeElementForFrameId[frameId];
-if (frameTreeElement) {
-frameTreeElement.setTitles(title, subtitle);
-return;
-}
 
 var parentTreeElement = parentFrameId ? this._treeElementForFrameId[parentFrameId] : this.resourcesListTreeElement;
 if (!parentTreeElement) {
-console.warn("No frame with id:" + parentFrameId + " to route " + title + "/" + subtitle + " to.")
+console.warn("No frame with id:" + parentFrameId + " to route " + frame.name + "/" + frame.url + " to.")
 return;
 }
 
-var frameTreeElement = new WebInspector.FrameTreeElement(this, frameId, title, subtitle);
-this._treeElementForFrameId[frameId] = frameTreeElement;
-
-
-var children = parentTreeElement.children;
-for (var i = 0; i < children.length; ++i) {
-var child = children[i];
-if (!(child instanceof WebInspector.FrameTreeElement)) {
-parentTreeElement.insertChild(frameTreeElement, i);
-return;
-}
-if (child.displayName.localeCompare(frameTreeElement.displayName) > 0) {
-parentTreeElement.insertChild(frameTreeElement, i);
-return;
-}
-}
+var frameTreeElement = new WebInspector.FrameTreeElement(this, frame);
+this._treeElementForFrameId[frame.id] = frameTreeElement;
 parentTreeElement.appendChild(frameTreeElement);
 },
 
@@ -26141,6 +28581,7 @@ var frameId = event.data;
 var frameTreeElement = this._treeElementForFrameId[frameId];
 if (!frameTreeElement)
 return;
+
 delete this._treeElementForFrameId[frameId];
 if (frameTreeElement.parent)
 frameTreeElement.parent.removeChild(frameTreeElement);
@@ -26161,38 +28602,27 @@ if (!frameTreeElement) {
 return;
 }
 
-var resourceTreeElement = new WebInspector.FrameResourceTreeElement(this, resource);
-
-
-var children = frameTreeElement.children;
-for (var i = 0; i < children.length; ++i) {
-var child = children[i];
-if (!(child instanceof WebInspector.FrameResourceTreeElement))
-continue;
-
-if (resource.type === WebInspector.Resource.Type.Document ||
-(child._resource.type !== WebInspector.Resource.Type.Document && child._resource.displayName.localeCompare(resource.displayName) > 0)) {
-frameTreeElement.insertChild(resourceTreeElement, i);
-return;
-}
-}
-frameTreeElement.appendChild(resourceTreeElement);
+frameTreeElement.appendResource(resource);
 },
 
 _frameNavigated: function(event)
 {
-var frameId = event.data;
-if (!frameId) {
-
-this.resourcesListTreeElement.removeChildren();
-this._treeElementForFrameId = {};
-this.reset();
-return;
-}
-
+var frameId = event.data.frame.id;
 var frameTreeElement = this._treeElementForFrameId[frameId];
 if (frameTreeElement)
-frameTreeElement.removeChildren();        
+frameTreeElement.frameNavigated(event.data.frame);
+},
+
+_resetResourcesTree: function()
+{
+this.resourcesListTreeElement.removeChildren();
+this._treeElementForFrameId = {};
+this._reset();
+},
+
+_cachedResourcesLoaded: function()
+{
+this._initDefaultSelection();
 },
 
 _refreshResource: function(event)
@@ -26304,17 +28734,38 @@ return true;
 _showResourceView: function(resource)
 {
 var view = WebInspector.ResourceView.resourceViewForResource(resource);
-
-
-if (resource.baseRevision && view instanceof WebInspector.SourceFrame) {
-function callback(baseContent)
-{
-if (baseContent)
-this._applyDiffMarkup(view, baseContent, resource.content);
-}
-resource.baseRevision.requestContent(callback.bind(this));
-}
+this._fetchAndApplyDiffMarkup(view, resource);
 this._innerShowView(view);
+},
+
+_showRevisionView: function(revision)
+{
+if (!revision._view)
+revision._view = new WebInspector.RevisionSourceFrame(revision);
+var view = revision._view;
+this._fetchAndApplyDiffMarkup(view, revision.resource, revision);
+this._innerShowView(view);
+},
+
+_fetchAndApplyDiffMarkup: function(view, resource, revision)
+{
+var baseRevision = resource.history[0];
+if (!baseRevision)
+return;
+if (!(view instanceof WebInspector.SourceFrame))
+return;
+
+baseRevision.requestContent(step1.bind(this));
+
+function step1(baseContent)
+{
+(revision ? revision : resource).requestContent(step2.bind(this, baseContent));
+}
+
+function step2(baseContent, revisionContent)
+{
+this._applyDiffMarkup(view, baseContent, revisionContent);
+}
 },
 
 _applyDiffMarkup: function(view, baseContent, newContent) {
@@ -26594,7 +29045,7 @@ get searchableViews()
 var views = [];
 
 const visibleView = this.visibleView;
-if (visibleView.performSearch)
+if (visibleView && visibleView.performSearch)
 views.push(visibleView);
 
 function callback(resourceTreeElement)
@@ -26709,12 +29160,13 @@ delete this._previousHoveredElement;
 
 WebInspector.ResourcesPanel.prototype.__proto__ = WebInspector.Panel.prototype;
 
-WebInspector.BaseStorageTreeElement = function(storagePanel, representedObject, title, iconClasses, hasChildren)
+WebInspector.BaseStorageTreeElement = function(storagePanel, representedObject, title, iconClasses, hasChildren, noIcon)
 {
 TreeElement.call(this, "", representedObject, hasChildren);
 this._storagePanel = storagePanel;
 this._titleText = title;
 this._iconClasses = iconClasses;
+this._noIcon = noIcon;
 }
 
 WebInspector.BaseStorageTreeElement.prototype = {
@@ -26730,9 +29182,11 @@ var selectionElement = document.createElement("div");
 selectionElement.className = "selection";
 this.listItemElement.appendChild(selectionElement);
 
+if (!this._noIcon) {
 this.imageElement = document.createElement("img");
 this.imageElement.className = "icon";
 this.listItemElement.appendChild(this.imageElement);
+}
 
 this.titleElement = document.createElement("div");
 this.titleElement.className = "base-storage-tree-element-title";
@@ -26778,9 +29232,9 @@ return event.pageX >= left && event.pageX <= left + this.arrowToggleWidth && thi
 
 WebInspector.BaseStorageTreeElement.prototype.__proto__ = TreeElement.prototype;
 
-WebInspector.StorageCategoryTreeElement = function(storagePanel, categoryName, settingsKey, iconClasses)
+WebInspector.StorageCategoryTreeElement = function(storagePanel, categoryName, settingsKey, iconClasses, noIcon)
 {
-WebInspector.BaseStorageTreeElement.call(this, storagePanel, null, categoryName, iconClasses, true);
+WebInspector.BaseStorageTreeElement.call(this, storagePanel, null, categoryName, iconClasses, true, noIcon);
 this._expandedSettingKey = "resources" + settingsKey + "Expanded";
 WebInspector.settings.installApplicationSetting(this._expandedSettingKey, settingsKey === "Frames");
 this._categoryName = categoryName;
@@ -26817,14 +29271,29 @@ WebInspector.settings[this._expandedSettingKey] = false;
 }
 WebInspector.StorageCategoryTreeElement.prototype.__proto__ = WebInspector.BaseStorageTreeElement.prototype;
 
-WebInspector.FrameTreeElement = function(storagePanel, frameId, title, subtitle)
+WebInspector.FrameTreeElement = function(storagePanel, frame)
 {
 WebInspector.BaseStorageTreeElement.call(this, storagePanel, null, "", ["frame-storage-tree-item"]);
-this._frameId = frameId;
-this.setTitles(title, subtitle);
+this._frame = frame;
+this.frameNavigated(frame);
 }
 
 WebInspector.FrameTreeElement.prototype = {
+frameNavigated: function(frame)
+{
+this.removeChildren();
+this._frameId = frame.id;
+
+var title = frame.name;
+var subtitle = new WebInspector.Resource(null, frame.url).displayName;
+this.setTitles(title, subtitle);
+
+this._categoryElements = {};
+this._treeElementForResource = {};
+
+this._storagePanel.addDocumentURL(frame.url);
+},
+
 get itemURL()
 {
 return "frame://" + encodeURI(this._displayName);
@@ -26856,15 +29325,16 @@ return this._displayName;
 
 setTitles: function(title, subtitle)
 {
-this._displayName = "";
+this._displayName = title || "";
+if (subtitle)
+this._displayName += " (" + subtitle + ")";
+
 if (this.parent) {
 this.titleElement.textContent = title || "";
-this._displayName = title || "";
 if (subtitle) {
 var subtitleElement = document.createElement("span");
 subtitleElement.className = "base-storage-tree-element-subtitle";
 subtitleElement.textContent = "(" + subtitle + ")";
-this._displayName += " (" + subtitle + ")";
 this.titleElement.appendChild(subtitleElement);
 }
 } else {
@@ -26882,8 +29352,72 @@ DOMAgent.highlightFrame(this._frameId);
 this.listItemElement.removeStyleClass("hovered");
 DOMAgent.hideFrameHighlight();
 }
+},
+
+appendResource: function(resource)
+{
+if (this._treeElementForResource[resource.url])
+return;
+
+var categoryName = resource.category.name;
+var categoryElement = resource.category === WebInspector.resourceCategories.documents ? this : this._categoryElements[categoryName];
+if (!categoryElement) {
+categoryElement = new WebInspector.StorageCategoryTreeElement(this._storagePanel, resource.category.title, categoryName, null, true);
+this._categoryElements[resource.category.name] = categoryElement;
+this._insertInPresentationOrder(this, categoryElement);
+}
+var resourceTreeElement = new WebInspector.FrameResourceTreeElement(this._storagePanel, resource);
+this._insertInPresentationOrder(categoryElement, resourceTreeElement);
+resourceTreeElement._populateRevisions();
+
+this._treeElementForResource[resource.url] = resourceTreeElement;
+},
+
+appendChild: function(treeElement)
+{
+this._insertInPresentationOrder(this, treeElement);
+},
+
+_insertInPresentationOrder: function(parentTreeElement, childTreeElement)
+{
+
+function typeWeight(treeElement)
+{
+if (treeElement instanceof WebInspector.StorageCategoryTreeElement)
+return 2;
+if (treeElement instanceof WebInspector.FrameTreeElement)
+return 1;
+return 3;
+}
+
+function compare(treeElement1, treeElement2)
+{
+var typeWeight1 = typeWeight(treeElement1);
+var typeWeight2 = typeWeight(treeElement2);
+
+var result;
+if (typeWeight1 > typeWeight2)
+result = 1;
+else if (typeWeight1 < typeWeight2)
+result = -1;
+else {
+var title1 = treeElement1.displayName || treeElement1.titleText;
+var title2 = treeElement2.displayName || treeElement2.titleText;
+result = title1.localeCompare(title2);
+}
+return result;            
+}
+
+var children = parentTreeElement.children;
+var i;
+for (i = 0; i < children.length; ++i) {
+if (compare(childTreeElement, children[i]) < 0)
+break;
+}
+parentTreeElement.insertChild(childTreeElement, i);
 }
 }
+
 WebInspector.FrameTreeElement.prototype.__proto__ = WebInspector.BaseStorageTreeElement.prototype;
 
 WebInspector.FrameResourceTreeElement = function(storagePanel, resource)
@@ -26891,7 +29425,7 @@ WebInspector.FrameResourceTreeElement = function(storagePanel, resource)
 WebInspector.BaseStorageTreeElement.call(this, storagePanel, resource, resource.displayName, ["resource-sidebar-tree-item", "resources-category-" + resource.category.name]);
 this._resource = resource;
 this._resource.addEventListener("errors-warnings-updated", this._errorsWarningsUpdated, this);
-this._resource.addEventListener("content-changed", this._contentChanged, this);
+this._resource.addEventListener(WebInspector.Resource.Events.RevisionAdded, this._revisionAdded, this);
 this.tooltip = resource.url;
 }
 
@@ -26909,7 +29443,7 @@ this._storagePanel._showResourceView(this._resource);
 
 ondblclick: function(event)
 {
-PageAgent.openInInspectedWindow(this._resource.url);
+PageAgent.open(this._resource.url, true);
 },
 
 onattach: function()
@@ -26933,6 +29467,7 @@ this.listItemElement.insertBefore(this._statusElement, this.titleElement);
 
 this.listItemElement.draggable = true;
 this.listItemElement.addEventListener("dragstart", this._ondragstart.bind(this), false);
+this.listItemElement.addEventListener("contextmenu", this._handleContextMenuEvent.bind(this), true);
 },
 
 _ondragstart: function(event)
@@ -26940,6 +29475,34 @@ _ondragstart: function(event)
 event.dataTransfer.setData("text/plain", this._resource.content);
 event.dataTransfer.effectAllowed = "copy";
 return true;
+},
+
+_handleContextMenuEvent: function(event)
+{
+var contextMenu = new WebInspector.ContextMenu();
+contextMenu.appendItem(WebInspector.openLinkExternallyLabel(), WebInspector.openResource.bind(WebInspector, this._resource.url, false));
+this._appendSaveAsAction(contextMenu, event);
+contextMenu.show(event);
+},
+
+_appendSaveAsAction: function(contextMenu, event)
+{
+if (!Preferences.saveAsAvailable)
+return;
+
+if (this._resource.type !== WebInspector.Resource.Type.Document &&
+this._resource.type !== WebInspector.Resource.Type.Stylesheet &&
+this._resource.type !== WebInspector.Resource.Type.Script)
+return;
+
+function save()
+{
+var fileName = this._resource.displayName;
+this._resource.requestContent(InspectorFrontendHost.saveAs.bind(InspectorFrontendHost, fileName));
+}
+
+contextMenu.appendSeparator();
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Save as..." : "Save As..."), save.bind(this));
 },
 
 _setBubbleText: function(x)
@@ -27003,9 +29566,20 @@ if (this._resource.errors)
 this._bubbleElement.addStyleClass("error");
 },
 
-_contentChanged: function(event)
+_populateRevisions: function()
 {
-this.insertChild(new WebInspector.ResourceRevisionTreeElement(this._storagePanel, event.data.revision), 0);
+for (var i = 0; i < this._resource.history.length; ++i)
+this._appendRevision(this._resource.history[i]);
+},
+
+_revisionAdded: function(event)
+{
+this._appendRevision(event.data);
+},
+
+_appendRevision: function(revision)
+{
+this.insertChild(new WebInspector.ResourceRevisionTreeElement(this._storagePanel, revision), 0);
 var oldView = WebInspector.ResourceView.existingResourceViewForResource(this._resource);
 if (oldView) {
 var newView = WebInspector.ResourceView.recreateResourceView(this._resource);
@@ -27142,13 +29716,18 @@ WebInspector.ApplicationCacheTreeElement.prototype.__proto__ = WebInspector.Base
 WebInspector.ResourceRevisionTreeElement = function(storagePanel, revision)
 {
 var title = revision.timestamp ? revision.timestamp.toLocaleTimeString() : WebInspector.UIString("(original)");
-WebInspector.BaseStorageTreeElement.call(this, storagePanel, null, title, ["resource-sidebar-tree-item", "resources-category-" + revision.category.name]);
+WebInspector.BaseStorageTreeElement.call(this, storagePanel, null, title, ["resource-sidebar-tree-item", "resources-category-" + revision.resource.category.name]);
 if (revision.timestamp)
 this.tooltip = revision.timestamp.toLocaleString();
-this._resource = revision;
+this._revision = revision;
 }
 
 WebInspector.ResourceRevisionTreeElement.prototype = {
+get itemURL()
+{
+return this._revision.resource.url;
+},
+
 onattach: function()
 {
 WebInspector.BaseStorageTreeElement.prototype.onattach.call(this);
@@ -27160,20 +29739,33 @@ this.listItemElement.addEventListener("contextmenu", this._handleContextMenuEven
 onselect: function()
 {
 WebInspector.BaseStorageTreeElement.prototype.onselect.call(this);
-this._storagePanel._showResourceView(this._resource);
+this._storagePanel._showRevisionView(this._revision);
 },
 
 _ondragstart: function(event)
 {
-event.dataTransfer.setData("text/plain", this._resource.content);
+if (this._revision.content) {
+event.dataTransfer.setData("text/plain", this._revision.content);
 event.dataTransfer.effectAllowed = "copy";
 return true;
+}
 },
 
 _handleContextMenuEvent: function(event)
 {
 var contextMenu = new WebInspector.ContextMenu();
-contextMenu.appendItem(WebInspector.UIString("Revert to this revision"), this._resource.revertToThis.bind(this._resource));
+contextMenu.appendItem(WebInspector.UIString("Revert to this revision"), this._revision.revertToThis.bind(this._revision));
+
+if (Preferences.saveAsAvailable) {
+function save()
+{
+var fileName = this._revision.resource.displayName;
+this._revision.requestContent(InspectorFrontendHost.saveAs.bind(InspectorFrontendHost, fileName));
+}
+contextMenu.appendSeparator();
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Save as..." : "Save As..."), save.bind(this));
+}
+
 contextMenu.show(event);
 }
 }
@@ -27392,11 +29984,6 @@ var view = this._profiles[i]._profileView;
 if (view && ("dispose" in view))
 view.dispose();
 delete this._profiles[i]._profileView;
-var profile = this._profiles[i];
-if (profile.nodes) {
-delete profile.nodes;
-delete profile.strings;
-}
 }
 delete this.visibleView;
 
@@ -27449,14 +30036,14 @@ var buttonPos = message.indexOf("%s");
 if (buttonPos > -1) {
 var container = document.createDocumentFragment();
 var part1 = document.createElement("span");
-part1.innerHTML = message.substr(0, buttonPos);
+part1.textContent = message.substr(0, buttonPos);
 container.appendChild(part1);
 
 var button = new WebInspector.StatusBarButton(profileType.buttonTooltip, profileType.buttonStyle, profileType.buttonCaption);
 container.appendChild(button.element);
 
 var part2 = document.createElement("span");
-part2.innerHTML = message.substr(buttonPos + 2);
+part2.textContent = message.substr(buttonPos + 2);
 container.appendChild(part2);
 this.welcomeView.addMessage(container);
 } else
@@ -27631,6 +30218,7 @@ var profile = this._profilesIdMap[this._makeKey(uid, WebInspector.HeapSnapshotPr
 if (!profile)
 return;
 
+if (!Preferences.detailedHeapProfiles) {
 if (profile._loaded)
 callback(profile);
 else if (profile._is_loading)
@@ -27639,50 +30227,76 @@ else {
 profile._is_loading = true;
 profile._callbacks = [callback];
 profile._json = "";
-profile.sideBarElement.subtitle = WebInspector.UIString("Loading…");
+profile.sideBarElement.subtitle = WebInspector.UIString("Loading\u2026");
 ProfilerAgent.getProfile(profile.typeId, profile.uid);
+}
+} else {
+if (!profile.proxy)
+profile.proxy = (new WebInspector.HeapSnapshotWorker()).createObject("WebInspector.HeapSnapshotLoader");
+var proxy = profile.proxy;
+if (proxy.startLoading(callback)) {
+profile.sideBarElement.subtitle = WebInspector.UIString("Loading\u2026");
+ProfilerAgent.getProfile(profile.typeId, profile.uid);
+}
 }
 },
 
 _addHeapSnapshotChunk: function(uid, chunk)
 {
 var profile = this._profilesIdMap[this._makeKey(uid, WebInspector.HeapSnapshotProfileType.TypeId)];
-if (!profile || profile._loaded || !profile._is_loading)
+if (!profile)
 return;
-
+if (!Preferences.detailedHeapProfiles) {
+if (profile._loaded || !profile._is_loading)
+return;
 profile._json += chunk;
+} else {
+if (!profile.proxy)
+return;
+profile.proxy.pushJSONChunk(chunk);
+}
 },
 
 _finishHeapSnapshot: function(uid)
 {
 var profile = this._profilesIdMap[this._makeKey(uid, WebInspector.HeapSnapshotProfileType.TypeId)];
-if (!profile || profile._loaded || !profile._is_loading)
+if (!profile)
 return;
-
-var callbacks = profile._callbacks;
-delete profile._callbacks;
-profile.sideBarElement.subtitle = WebInspector.UIString("Parsing…");
-window.setTimeout(doParse, 0);
-
+if (!Preferences.detailedHeapProfiles) {
+if (profile._loaded || !profile._is_loading)
+return;
+profile.sideBarElement.subtitle = WebInspector.UIString("Parsing\u2026");
 function doParse()
 {
 var loadedSnapshot = JSON.parse(profile._json);
+var callbacks = profile._callbacks;
+delete profile._callbacks;
 delete profile._json;
 delete profile._is_loading;
 profile._loaded = true;
 profile.sideBarElement.subtitle = "";
 
-if (!Preferences.detailedHeapProfiles && WebInspector.DetailedHeapshotView.prototype.isDetailedSnapshot(loadedSnapshot)) {
+if (WebInspector.DetailedHeapshotView.prototype.isDetailedSnapshot(loadedSnapshot)) {
 WebInspector.panels.profiles._enableDetailedHeapProfiles(false);
 return;
 }
 
-if (!Preferences.detailedHeapProfiles)
 WebInspector.HeapSnapshotView.prototype.processLoadedSnapshot(profile, loadedSnapshot);
-else
-WebInspector.DetailedHeapshotView.prototype.processLoadedSnapshot(profile, loadedSnapshot);
 for (var i = 0; i < callbacks.length; ++i)
 callbacks[i](profile);
+}
+setTimeout(doParse, 0);
+} else {
+if (!profile.proxy)
+return;
+var proxy = profile.proxy;
+function parsed(snapshotProxy)
+{
+profile.proxy = snapshotProxy;
+profile.sideBarElement.subtitle = Number.bytesToString(snapshotProxy.totalSize);
+}
+if (proxy.finishLoading(parsed))
+profile.sideBarElement.subtitle = WebInspector.UIString("Parsing\u2026");
 }
 },
 
@@ -27896,13 +30510,14 @@ this._removeProfileHeader(this._temporaryTakingSnapshot);
 
 handleShortcut: function(event)
 {
-if (!Preferences.heapProfilerPresent || Preferences.detailedHeapProfiles)
-return;
+if (Preferences.heapProfilerPresent && !Preferences.detailedHeapProfiles) {
 var combo = ["U+004C", "U+0045", "U+0041", "U+004B", "U+005A"];  
 if (this._recognizeKeyboardCombo(combo, event)) {
 this._displayDetailedHeapProfilesEnabledHint();          
 this._enableDetailedHeapProfiles(true);
 }
+}
+WebInspector.Panel.prototype.handleShortcut.call(this, event);
 },
 
 _recognizeKeyboardCombo: function(combo, event)
@@ -28224,6 +30839,7 @@ resource.__proto__ = new Resource(request.arguments[0]);
 this._fire(resource);
 }
 this.onFinished = new EventSink("resource-finished", resourceDispatch);
+this.onNavigated = new EventSink("inspectedURLChanged");
 }
 
 Resources.prototype = {
@@ -28295,6 +30911,8 @@ extensionServer.sendRequest(request, callback && bind(callback, this, new Extens
 function PanelImpl(id)
 {
 this._id = id;
+this.onShown = new EventSink("panel-shown-" + id);
+this.onHidden = new EventSink("panel-hidden-" + id);
 }
 
 function PanelWithSidebarImpl(id)
@@ -28467,9 +31085,6 @@ return node;
 
 function InspectedWindow()
 {
-this.onDOMContentLoaded = new EventSink("inspectedPageDOMContentLoaded");
-this.onLoaded = new EventSink("inspectedPageLoaded");
-this.onNavigated = new EventSink("inspectedURLChanged");
 }
 
 InspectedWindow.prototype = {
@@ -28748,11 +31363,6 @@ window.addEventListener("message", this._onWindowMessage.bind(this), false);
 }
 
 WebInspector.ExtensionServer.prototype = {
-notifyPanelShown: function(panelName)
-{
-this._postNotification("panel-shown-" + panelName);
-},
-
 notifyObjectSelected: function(panelId, objectId)
 {
 this._postNotification("panel-objectSelected-" + panelId, objectId);
@@ -28763,19 +31373,20 @@ notifySearchAction: function(panelId, action, searchString)
 this._postNotification("panel-search-" + panelId, action, searchString);
 },
 
-notifyPageLoaded: function(milliseconds)
+notifyPanelShown: function(panelId)
 {
-this._postNotification("inspectedPageLoaded", milliseconds);
+this._postNotification("panel-shown-" + panelId);
 },
 
-notifyPageDOMContentLoaded: function(milliseconds)
+notifyPanelHidden: function(panelId)
 {
-this._postNotification("inspectedPageDOMContentLoaded", milliseconds);
+this._postNotification("panel-hidden-" + panelId);
 },
 
-notifyInspectedURLChanged: function()
+_inspectedURLChanged: function(event)
 {
-this._postNotification("inspectedURLChanged");
+var url = event.data;
+this._postNotification("inspectedURLChanged", url);
 },
 
 notifyInspectorReset: function()
@@ -28951,19 +31562,19 @@ _onReload: function(message)
 if (typeof message.userAgent === "string")
 PageAgent.setUserAgentOverride(message.userAgent);
 
-PageAgent.reloadPage(false);
+PageAgent.reload(false);
 return this._status.OK();
 },
 
 _onEvaluateOnInspectedPage: function(message, port)
 {
-function callback(error, resultPayload)
+function callback(error, resultPayload, wasThrown)
 {
 if (error)
 return;
 var resultObject = WebInspector.RemoteObject.fromPayload(resultPayload);
 var result = {};
-if (resultObject.isError())
+if (wasThrown)
 result.isException = true;
 result.value = resultObject.description;
 this._dispatchCallback(message.requestId, port, result);
@@ -29070,6 +31681,7 @@ initExtensions: function()
 {
 
 WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceFinished, this._notifyResourceFinished, this);
+WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.InspectedURLChanged, this._inspectedURLChanged, this);
 
 InspectorExtensionRegistry.getExtensionsAsync();
 },
@@ -29246,7 +31858,7 @@ this._setObject(WebInspector.RemoteObject.fromLocalObject(object), title);
 
 setExpression: function(expression, title)
 {
-RuntimeAgent.evaluate(expression, "extension-watch", false, this._onEvaluate.bind(this, title));
+RuntimeAgent.evaluate(expression, "extension-watch", true, this._onEvaluate.bind(this, title));
 },
 
 setPage: function(url)
@@ -29257,7 +31869,7 @@ WebInspector.extensionServer.createClientIframe(this.bodyElement, url);
 WebInspector.extensionServer.notifyExtensionSidebarUpdated(this._id);
 },
 
-_onEvaluate: function(title, error, result)
+_onEvaluate: function(title, error, result, wasThrown)
 {
 if (!error)
 this._setObject(WebInspector.RemoteObject.fromPayload(result), title);
@@ -29266,10 +31878,11 @@ this._setObject(WebInspector.RemoteObject.fromPayload(result), title);
 _setObject: function(object, title)
 {
 this.bodyElement.removeChildren();
-var section = new WebInspector.ObjectPropertiesSection(object, title, null, true);
+var section = new WebInspector.ObjectPropertiesSection(object, title);
 if (!title)
 section.headerElement.addStyleClass("hidden");
 section.expanded = true;
+section.editable = false;
 this.bodyElement.appendChild(section.element);
 WebInspector.extensionServer.notifyExtensionSidebarUpdated(this._id);
 }
@@ -29310,6 +31923,9 @@ this._constructCategories();
 this._launcherView = new WebInspector.AuditLauncherView(this.initiateAudit.bind(this));
 for (id in this.categoriesById)
 this._launcherView.addCategory(this.categoriesById[id]);
+
+WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.OnLoad, this._onLoadEventFired, this);
+WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.DOMContentLoaded, this._domContentLoadedEventFired, this);
 }
 
 WebInspector.AuditsPanel.prototype = {
@@ -29328,9 +31944,9 @@ get mainResourceLoadTime()
 return this._mainResourceLoadTime;
 },
 
-set mainResourceLoadTime(x)
+_onLoadEventFired: function(event)
 {
-this._mainResourceLoadTime = x;
+this._mainResourceLoadTime = event.data;
 this._didMainResourceLoad();
 },
 
@@ -29339,9 +31955,9 @@ get mainResourceDOMContentTime()
 return this._mainResourceDOMContentTime;
 },
 
-set mainResourceDOMContentTime(x)
+_domContentLoadedEventFired: function(event)
 {
-this._mainResourceDOMContentTime = x;
+this._mainResourceDOMContentTime = event.data;
 },
 
 get categoriesById()
@@ -29445,7 +32061,7 @@ this._reloadResources(initiateAuditCallback.bind(this, categories, launcherCallb
 _reloadResources: function(callback)
 {
 this._pageReloadCallback = callback;
-PageAgent.reloadPage(false);
+PageAgent.reload(false);
 },
 
 _didMainResourceLoad: function()
@@ -30083,18 +32699,6 @@ domainResources.push(needFullResources ? resource : resource.url);
 return domainToResourcesMap;
 }
 
-WebInspector.AuditRules.evaluateInTargetWindow = function(func, args, callback)
-{
-function mycallback(error, result)
-{
-if (!error && result)
-callback(JSON.parse(result.description));
-else
-callback(null);
-}
-RuntimeAgent.evaluate("JSON.stringify((" + func + ")(" + JSON.stringify(args) + "))", "", false, mycallback);
-}
-
 WebInspector.AuditRules.GzipRule = function()
 {
 WebInspector.AuditRule.call(this, "network-gzip", "Enable gzip compression");
@@ -30380,21 +32984,21 @@ summary.value = String.sprintf("%s (%d%%) of CSS is not used by the current page
 callback(result);
 }
 
-function routine(selectorArray)
+var foundSelectors = {};
+function queryCallback(boundSelectorsCallback, selector, styleSheets, testedSelectors, nodeId)
 {
-var result = {};
-for (var i = 0; i < selectorArray.length; ++i) {
-try {
-if (document.querySelector(selectorArray[i]))
-result[selectorArray[i]] = true;
-} catch(e) {
-
-}
-}
-return result;
+if (nodeId)
+foundSelectors[selector] = true;
+if (boundSelectorsCallback)
+boundSelectorsCallback(foundSelectors);
 }
 
-WebInspector.AuditRules.evaluateInTargetWindow(routine, [selectors], selectorsCallback.bind(null, callback, styleSheets, testedSelectors));
+function documentLoaded(selectors, document) {
+for (var i = 0; i < selectors.length; ++i)
+WebInspector.domAgent.querySelector(document.id, selectors[i], queryCallback.bind(null, i === selectors.length - 1 ? selectorsCallback.bind(null, callback, styleSheets, testedSelectors) : null, selectors[i], styleSheets, testedSelectors));
+}
+
+WebInspector.domAgent.requestDocument(documentLoaded.bind(null, selectors));
 }
 
 function styleSheetCallback(styleSheets, sourceURL, continuation, styleSheet)
@@ -30743,19 +33347,16 @@ doneCallback();
 
 function getStyles(nodeIds)
 {
-if (!nodeIds) {
-console.error("Failed to get styles");
-return;
-}
-for (var i = 0; i < nodeIds.length; ++i)
+for (var i = 0; nodeIds && i < nodeIds.length; ++i)
 WebInspector.cssModel.getStylesAsync(nodeIds[i], imageStylesReady.bind(this, nodeIds[i], i === nodeIds.length - 1));
 }
+
 function onDocumentAvailable(root)
 {
 WebInspector.domAgent.querySelectorAll(root.id, "img[src]", getStyles);
 }
-WebInspector.domAgent.requestDocument(onDocumentAvailable);
 
+WebInspector.domAgent.requestDocument(onDocumentAvailable);
 }
 }
 
@@ -30792,46 +33393,39 @@ summary.value = String.sprintf("CSS in the document body adversely impacts rende
 callback(result);
 }
 
-function routine()
+function externalStylesheetsReceived(root, inlineStyleNodeIds, nodeIds)
 {
-function allViews() {
-var views = [document.defaultView];
-var curView = 0;
-while (curView < views.length) {
-var view = views[curView];
-var frames = view.frames;
-for (var i = 0; i < frames.length; ++i) {
-if (frames[i] !== view)
-views.push(frames[i]);
-}
-++curView;
-}
-return views;
-}
-
-var views = allViews();
+if (!nodeIds)
+return;
+var externalStylesheetNodeIds = nodeIds;
+var result = null;
+if (inlineStyleNodeIds.length || externalStylesheetNodeIds.length) {
 var urlToViolationsArray = {};
-var found = false;
-for (var i = 0; i < views.length; ++i) {
-var view = views[i];
-if (!view.document)
-continue;
-
-var inlineStyles = view.document.querySelectorAll("body style");
-var inlineStylesheets = view.document.querySelectorAll("body link[rel~='stylesheet'][href]");
-if (!inlineStyles.length && !inlineStylesheets.length)
-continue;
-
-found = true;
-var inlineStylesheetHrefs = [];
-for (var j = 0; j < inlineStylesheets.length; ++j)
-inlineStylesheetHrefs.push(inlineStylesheets[j].href);
-urlToViolationsArray[view.location.href] = [inlineStyles.length, inlineStylesheetHrefs];
+var externalStylesheetHrefs = [];
+for (var j = 0; j < externalStylesheetNodeIds.length; ++j) {
+var linkNode = WebInspector.domAgent.nodeForId(externalStylesheetNodeIds[j]);
+var completeHref = WebInspector.completeURL(linkNode.ownerDocument.documentURL, linkNode.getAttribute("href"));
+externalStylesheetHrefs.push(completeHref || "<empty>");
 }
-return found ? urlToViolationsArray : null;
+urlToViolationsArray[root.documentURL] = [inlineStyleNodeIds.length, externalStylesheetHrefs];
+result = urlToViolationsArray;
+}
+evalCallback(result);
 }
 
-WebInspector.AuditRules.evaluateInTargetWindow(routine, [], evalCallback);
+function inlineStylesReceived(root, nodeIds)
+{
+if (!nodeIds)
+return;
+WebInspector.domAgent.querySelectorAll(root.id, "body link[rel~='stylesheet'][href]", externalStylesheetsReceived.bind(null, root, nodeIds));
+}
+
+function onDocumentAvailable(root)
+{
+WebInspector.domAgent.querySelectorAll(root.id, "body style", inlineStylesReceived.bind(null, root));
+}
+
+WebInspector.domAgent.requestDocument(onDocumentAvailable);
 }
 }
 
@@ -30865,20 +33459,40 @@ result.violationCount += cssBeforeInlineCount;
 callback(result);
 }
 
-function routine()
+function cssBeforeInlineReceived(lateStyleIds, nodeIds)
 {
-var lateStyles = document.querySelectorAll("head script[src] ~ link[rel~='stylesheet'][href]");
-var cssBeforeInlineCount = document.querySelectorAll("head link[rel~='stylesheet'][href] ~ script:not([src])").length;
-if (!lateStyles.length && !cssBeforeInlineCount)
-return null;
+if (!nodeIds)
+return;
 
+var cssBeforeInlineCount = nodeIds.length;
+var result = null;
+if (lateStyleIds.length || cssBeforeInlineCount) {
 var lateStyleUrls = [];
-for (var i = 0; i < lateStyles.length; ++i)
-lateStyleUrls.push(lateStyles[i].href);
-return [ lateStyleUrls, cssBeforeInlineCount ];
+for (var i = 0; i < lateStyleIds.length; ++i) {
+var lateStyleNode = WebInspector.domAgent.nodeForId(lateStyleIds[i]);
+var completeHref = WebInspector.completeURL(lateStyleNode.ownerDocument.documentURL, lateStyleNode.getAttribute("href"));
+lateStyleUrls.push(completeHref || "<empty>");
+}
+result = [ lateStyleUrls, cssBeforeInlineCount ];
 }
 
-WebInspector.AuditRules.evaluateInTargetWindow(routine, [], evalCallback.bind(this));
+evalCallback(result);
+}
+
+function lateStylesReceived(root, nodeIds)
+{
+if (!nodeIds)
+return;
+
+WebInspector.domAgent.querySelectorAll(root.id, "head link[rel~='stylesheet'][href] ~ script:not([src])", cssBeforeInlineReceived.bind(null, nodeIds));
+}
+
+function onDocumentAvailable(root)
+{
+WebInspector.domAgent.querySelectorAll(root.id, "head script[src] ~ link[rel~='stylesheet'][href]", lateStylesReceived.bind(null, root));
+}
+
+WebInspector.domAgent.requestDocument(onDocumentAvailable);
 }
 }
 
@@ -31221,8 +33835,10 @@ this._requestHeadersTreeElement.expanded = true;
 this._requestHeadersTreeElement.selectable = false;
 this._headersTreeOutline.appendChild(this._requestHeadersTreeElement);
 
-this._decodeHover = WebInspector.UIString("Double-Click to toggle between URL encoded and decoded formats");
 this._decodeRequestParameters = true;
+
+this._showRequestHeadersText = false;
+this._showResponseHeadersText = false;
 
 this._queryStringTreeElement = new TreeElement("", null, true);
 this._queryStringTreeElement.expanded = true;
@@ -31308,7 +33924,19 @@ _refreshParms: function(title, parms, parmsTreeElement)
 {
 parmsTreeElement.removeChildren();
 
-parmsTreeElement.titleHTML = title + "<span class=\"header-count\">" + WebInspector.UIString(" (%d)", parms.length) + "</span>";
+parmsTreeElement.listItemElement.removeChildren();
+parmsTreeElement.listItemElement.appendChild(document.createTextNode(title));
+
+var headerCount = document.createElement("span");
+headerCount.addStyleClass("header-count");
+headerCount.textContent = WebInspector.UIString(" (%d)", parms.length);
+parmsTreeElement.listItemElement.appendChild(headerCount);
+
+var toggleTitle = this._decodeRequestParameters ? WebInspector.UIString("view URL encoded") : WebInspector.UIString("view decoded");
+var toggleButton = this._createToggleButton(toggleTitle);
+toggleButton.addEventListener("click", this._toggleURLdecoding.bind(this));
+parmsTreeElement.listItemElement.appendChild(toggleButton);
+
 
 for (var i = 0; i < parms.length; ++i) {
 var name = parms[i].name;
@@ -31337,8 +33965,6 @@ title += "<div class=\"header-value source-code\">" + valueEscaped + "</div>";
 var parmTreeElement = new TreeElement(null, null, false);
 parmTreeElement.titleHTML = title;
 parmTreeElement.selectable = false;
-parmTreeElement.tooltip = this._decodeHover;
-parmTreeElement.ondblclick = this._toggleURLdecoding.bind(this);
 parmsTreeElement.appendChild(parmTreeElement);
 }
 },
@@ -31364,7 +33990,17 @@ _refreshRequestHeaders: function()
 var additionalRow = null;
 if (typeof this._resource.webSocketRequestKey3 !== "undefined")
 additionalRow = {header: "(Key3)", value: this._resource.webSocketRequestKey3};
+if (this._showRequestHeadersText)
+this._refreshHeadersText(WebInspector.UIString("Request Headers"), this._resource.requestHeadersText, this._requestHeadersTreeElement);
+else 
 this._refreshHeaders(WebInspector.UIString("Request Headers"), this._resource.sortedRequestHeaders, additionalRow, this._requestHeadersTreeElement);
+
+if (this._resource.requestHeadersText) { 
+var toggleButton = this._createHeadersToggleButton(this._showRequestHeadersText);
+toggleButton.addEventListener("click", this._toggleRequestHeadersText.bind(this));
+this._requestHeadersTreeElement.listItemElement.appendChild(toggleButton);
+}
+
 this._refreshFormData();
 },
 
@@ -31373,7 +34009,16 @@ _refreshResponseHeaders: function()
 var additionalRow = null;
 if (typeof this._resource.webSocketChallengeResponse !== "undefined")
 additionalRow = {header: "(Challenge Response)", value: this._resource.webSocketChallengeResponse};
+if (this._showResponseHeadersText)
+this._refreshHeadersText(WebInspector.UIString("Response Headers"), this._resource.responseHeadersText, this._responseHeadersTreeElement);
+else
 this._refreshHeaders(WebInspector.UIString("Response Headers"), this._resource.sortedResponseHeaders, additionalRow, this._responseHeadersTreeElement);
+
+if (this._resource.responseHeadersText) {
+var toggleButton = this._createHeadersToggleButton(this._showResponseHeadersText);
+toggleButton.addEventListener("click", this._toggleResponseHeadersText.bind(this));
+this._responseHeadersTreeElement.listItemElement.appendChild(toggleButton);
+}
 },
 
 _refreshHTTPInformation: function()
@@ -31404,15 +34049,26 @@ statusCodeImage + "<div class=\"header-value source-code\">" + statusTextEscaped
 }
 },
 
+_refreshHeadersTitle: function(title, headersTreeElement, isHeadersTextShown, headersLength)
+{
+headersTreeElement.listItemElement.removeChildren();
+headersTreeElement.listItemElement.appendChild(document.createTextNode(title));
+
+if (!isHeadersTextShown) {
+var headerCount = document.createElement("span");
+headerCount.addStyleClass("header-count");
+headerCount.textContent = WebInspector.UIString(" (%d)", headersLength);
+headersTreeElement.listItemElement.appendChild(headerCount);
+}
+},
+
 _refreshHeaders: function(title, headers, additionalRow, headersTreeElement)
 {
 headersTreeElement.removeChildren();
 
 var length = headers.length;
-headersTreeElement.titleHTML = title.escapeHTML() + "<span class=\"header-count\">" + WebInspector.UIString(" (%d)", length) + "</span>";
+this._refreshHeadersTitle(title, headersTreeElement, false, length);
 headersTreeElement.hidden = !length;
-
-var length = headers.length;
 for (var i = 0; i < length; ++i) {
 var title = "<div class=\"header-name\">" + headers[i].header.escapeHTML() + ":</div>";
 title += "<div class=\"header-value source-code\">" + headers[i].value.escapeHTML() + "</div>"
@@ -31432,6 +34088,49 @@ headerTreeElement.titleHTML = title;
 headerTreeElement.selectable = false;
 headersTreeElement.appendChild(headerTreeElement);
 }
+},
+
+_refreshHeadersText: function(title, headersText, headersTreeElement)
+{
+headersTreeElement.removeChildren();
+
+this._refreshHeadersTitle(title, headersTreeElement, true);
+var headerTreeElement = new TreeElement(null, null, false);
+headerTreeElement.selectable = false;
+headersTreeElement.appendChild(headerTreeElement);
+headerTreeElement.listItemElement.addStyleClass("headers-text");
+
+var headersTextElement = document.createElement("span");
+headersTextElement.addStyleClass("header-value");
+headersTextElement.addStyleClass("source-code");
+headersTextElement.textContent = String(headersText).trim();
+headerTreeElement.listItemElement.appendChild(headersTextElement);
+},
+
+_toggleRequestHeadersText: function(event)
+{
+this._showRequestHeadersText = !this._showRequestHeadersText;
+this._refreshRequestHeaders();
+},
+
+_toggleResponseHeadersText: function(event)
+{
+this._showResponseHeadersText = !this._showResponseHeadersText;
+this._refreshResponseHeaders();
+},
+
+_createToggleButton: function(title)
+{
+var button = document.createElement("span");
+button.addStyleClass("header-toggle");
+button.textContent = title;
+return button;
+},
+
+_createHeadersToggleButton: function(isHeadersTextShown)
+{
+var toggleTitle = isHeadersTextShown ? WebInspector.UIString("view parsed") : WebInspector.UIString("view source");
+return this._createToggleButton(toggleTitle);
 }
 }
 
@@ -31448,14 +34147,14 @@ this.element.addStyleClass("resource-cookies-view");
 
 this._resource = resource;
 
-resource.addEventListener("requestHeaders changed", this.show, this);
-resource.addEventListener("responseHeaders changed", this.show, this);
+resource.addEventListener("requestHeaders changed", this._refreshCookies, this);
+resource.addEventListener("responseHeaders changed", this._refreshCookies, this);
 }
 
 WebInspector.ResourceCookiesView.prototype = {
 show: function(parentElement)
 {
-if (!this._resource.requestCookies && !this._resource.responseCookies) {
+if (!this._gotCookies) {
 if (!this._emptyMsgElement) {
 this._emptyMsgElement = document.createElement("div");
 this._emptyMsgElement.className = "storage-empty-view";
@@ -31466,17 +34165,33 @@ WebInspector.View.prototype.show.call(this, parentElement);
 return;
 }
 
-if (this._emptyMsgElement)
-this._emptyMsgElement.parentElement.removeChild(this._emptyMsgElement);
+if (!this._cookiesTable)
+this._buildCookiesTable();
+WebInspector.View.prototype.show.call(this, parentElement);
+this._cookiesTable.updateWidths();
+},
 
-if (!this._cookiesTable) {
+get _gotCookies()
+{
+return !!(this._resource.requestCookies || this._resource.responseCookies);
+},
+
+_buildCookiesTable: function()
+{
+this.element.removeChildren();
+
 this._cookiesTable = new WebInspector.CookiesTable(null, true, true);
 this._cookiesTable.addCookiesFolder(WebInspector.UIString("Request Cookies"), this._resource.requestCookies);
 this._cookiesTable.addCookiesFolder(WebInspector.UIString("Response Cookies"), this._resource.responseCookies);
 this.element.appendChild(this._cookiesTable.element);
-}
+},
 
-WebInspector.View.prototype.show.call(this, parentElement);
+_refreshCookies: function()
+{
+delete this._cookiesTable;
+if (!this._gotCookies || !this.visible)
+return;
+this._buildCookiesTable();
 this._cookiesTable.updateWidths();
 }
 }
@@ -31659,7 +34374,7 @@ return;
 this._initialized = true;
 
 var obj = WebInspector.RemoteObject.fromLocalObject(this._parsedJSON);
-this.element.appendChild(new WebInspector.ObjectPropertiesSection(obj, obj.description, null, true).element);
+this.element.appendChild(new WebInspector.ObjectPropertiesSection(obj, obj.description).element);
 }
 }
 
@@ -31730,7 +34445,17 @@ delete this._isInFallbackSelection;
 
 _tabSelected: function(event)
 {
+if (event.data.isUserGesture)
 WebInspector.settings.resourceViewTab = event.data.tabId;
+this._installHighlightSupport(event.data.view);
+},
+
+_installHighlightSupport: function(view)
+{
+if (typeof view.highlightLine === "function")
+this.highlightLine = view.highlightLine.bind(view);
+else
+delete this.highlightLine;
 },
 
 resize: function()
@@ -31749,15 +34474,19 @@ WebInspector.NetworkItemView.prototype.__proto__ = WebInspector.View.prototype;
 WebInspector.ScriptFormatter = function()
 {
 this._worker = new Worker("ScriptFormatterWorker.js");
-this._worker.onmessage = this._handleMessage.bind(this);
-this._worker.onerror = this._handleError.bind(this);
+this._worker.onmessage = this._didFormatContent.bind(this);
 this._tasks = [];
 }
 
-WebInspector.ScriptFormatter.locationToPosition = function(lineEndings, lineNumber, columnNumber)
+WebInspector.ScriptFormatter.locationToPosition = function(lineEndings, location)
 {
-var position = lineNumber ? lineEndings[lineNumber - 1] + 1 : 0;
-return position + columnNumber;
+var position = location.lineNumber ? lineEndings[location.lineNumber - 1] + 1 : 0;
+return position + location.columnNumber;
+}
+
+WebInspector.ScriptFormatter.lineToPosition = function(lineEndings, lineNumber)
+{
+return this.locationToPosition(lineEndings, { lineNumber: lineNumber, columnNumber: 0 });
 }
 
 WebInspector.ScriptFormatter.positionToLocation = function(lineEndings, position)
@@ -31771,127 +34500,20 @@ location.columnNumber = position - lineEndings[location.lineNumber - 1] - 1;
 return location;
 }
 
-WebInspector.ScriptFormatter.findScriptRanges = function(lineEndings, scripts)
-{
-var scriptRanges = [];
-for (var i = 0; i < scripts.length; ++i) {
-var start = { lineNumber: scripts[i].lineOffset, columnNumber: scripts[i].columnOffset };
-start.position = WebInspector.ScriptFormatter.locationToPosition(lineEndings, start.lineNumber, start.columnNumber);
-var endPosition = start.position + scripts[i].length;
-var end = WebInspector.ScriptFormatter.positionToLocation(lineEndings, endPosition);
-end.position = endPosition;
-scriptRanges.push({ start: start, end: end, sourceID: scripts[i].sourceID });
-}
-scriptRanges.sort(function(x, y) { return x.start.position - y.start.position; });
-return scriptRanges;
-}
-
 WebInspector.ScriptFormatter.prototype = {
-formatContent: function(text, scripts, callback)
+formatContent: function(mimeType, content, callback)
 {
-var scriptRanges = WebInspector.ScriptFormatter.findScriptRanges(text.lineEndings(), scripts);
-var chunks = this._splitContentIntoChunks(text, scriptRanges);
-
-function didFormatChunks()
-{
-var result = this._buildContentFromChunks(chunks);
-callback(result.text, result.mapping);
-}
-this._formatChunks(chunks, 0, didFormatChunks.bind(this));
+content = content.replace(/\r\n?|[\n\u2028\u2029]/g, "\n").replace(/^\uFEFF/, '');
+var data = { mimeType: mimeType, content: content };
+this._tasks.push({ data: data, callback: callback });
+this._worker.postMessage(data);
 },
 
-_splitContentIntoChunks: function(text, scriptRanges)
-{
-var chunks = [];
-function addChunk(start, end, isScript)
-{
-var chunk = {};
-chunk.start = start;
-chunk.end = end;
-chunk.isScript = isScript;
-chunk.text = text.substring(start, end);
-chunks.push(chunk);
-}
-var currentPosition = 0;
-for (var i = 0; i < scriptRanges.length; ++i) {
-var start = scriptRanges[i].start.position;
-var end = scriptRanges[i].end.position;
-if (currentPosition < start)
-addChunk(currentPosition, start, false);
-addChunk(start, end, true);
-currentPosition = end;
-}
-if (currentPosition < text.length)
-addChunk(currentPosition, text.length, false);
-return chunks;
-},
-
-_formatChunks: function(chunks, index, callback)
-{
-while(true) {
-if (index === chunks.length) {
-callback();
-return;
-}
-var chunk = chunks[index++];
-if (chunk.isScript)
-break;
-}
-
-function didFormat(formattedSource, mapping)
-{
-chunk.text = formattedSource;
-chunk.mapping = mapping;
-this._formatChunks(chunks, index, callback);
-}
-this._formatScript(chunk.text, didFormat.bind(this));
-},
-
-_buildContentFromChunks: function(chunks)
-{
-var text = "";
-var mapping = { original: [], formatted: [] };
-for (var i = 0; i < chunks.length; ++i) {
-var chunk = chunks[i];
-mapping.original.push(chunk.start);
-mapping.formatted.push(text.length);
-if (chunk.isScript) {
-if (text)
-text += "\n";
-for (var j = 0; j < chunk.mapping.original.length; ++j) {
-mapping.original.push(chunk.mapping.original[j] + chunk.start);
-mapping.formatted.push(chunk.mapping.formatted[j] + text.length);
-}
-text += chunk.text;
-} else {
-if (text)
-text += "\n";
-text += chunk.text;
-}
-mapping.original.push(chunk.end);
-mapping.formatted.push(text.length);
-}
-return { text: text, mapping: mapping };
-},
-
-_formatScript: function(source, callback)
-{
-this._tasks.push({ source: source, callback: callback });
-this._worker.postMessage(source);
-},
-
-_handleMessage: function(event)
+_didFormatContent: function(event)
 {
 var task = this._tasks.shift();
-task.callback(event.data.formattedSource, event.data.mapping);
-},
-
-_handleError: function(event)
-{
-console.warn("Error in script formatter worker:", event);
-event.preventDefault()
-var task = this._tasks.shift();
-task.callback(task.source, { original: [], formatted: [] });
+event.data.mapping.originalLineEndings = task.data.content.lineEndings();
+task.callback(event.data.content, event.data.mapping);
 }
 }
 
@@ -31915,7 +34537,7 @@ return span;
 
 syntaxHighlightNode: function(node)
 {
-this._tokenizer.condition = this._tokenizer.initialCondition;
+this._tokenizer.condition = this._tokenizer.createInitialCondition();
 var lines = node.textContent.split("\n");
 node.removeChildren();
 
@@ -31984,6 +34606,7 @@ this._lines = [""];
 this._attributes = [];
 this._undoStack = [];
 this._noPunctuationRegex = /[^ !%&()*+,-.:;<=>?\[\]\^{|}~]+/;
+this._lineBreak = "\n";
 }
 
 WebInspector.TextEditorModel.prototype = {
@@ -31999,7 +34622,7 @@ return this._lines.length;
 
 get text()
 {
-return this._lines.join("\n");
+return this._lines.join(this._lineBreak);
 },
 
 line: function(lineNumber)
@@ -32016,9 +34639,12 @@ return this._lines[lineNumber].length;
 
 setText: function(range, text)
 {
-if (!range)
+text = text || "";
+if (!range) {
 range = new WebInspector.TextRange(0, 0, this._lines.length - 1, this._lines[this._lines.length - 1].length);
-var command = this._pushUndoableCommand(range, text);
+this._lineBreak = /\r\n/.test(text) ? "\r\n" : "\n";
+}
+var command = this._pushUndoableCommand(range);
 var newRange = this._innerSetText(range, text);
 command.range = newRange.clone();
 
@@ -32038,11 +34664,10 @@ this._eraseRange(range);
 if (text === "")
 return new WebInspector.TextRange(range.startLine, range.startColumn, range.startLine, range.startColumn);
 
-var newLines = text.split("\n");
+var newLines = text.split(/\r?\n/);
 this._replaceTabsIfNeeded(newLines);
 
 var prefix = this._lines[range.startLine].substring(0, range.startColumn);
-var prefixArguments = this._arguments
 var suffix = this._lines[range.startLine].substring(range.startColumn);
 
 var postCaret = prefix.length;
@@ -32136,13 +34761,13 @@ range = new WebInspector.TextRange(0, 0, this._lines.length - 1, this._lines[thi
 var clip = [];
 if (range.startLine === range.endLine) {
 clip.push(this._lines[range.startLine].substring(range.startColumn, range.endColumn));
-return clip.join("\n");
+return clip.join(this._lineBreak);
 }
 clip.push(this._lines[range.startLine].substring(range.startColumn));
 for (var i = range.startLine + 1; i < range.endLine; ++i)
 clip.push(this._lines[i]);
 clip.push(this._lines[range.endLine].substring(0, range.endColumn));
-return clip.join("\n");
+return clip.join(this._lineBreak);
 },
 
 setAttribute: function(line, name, value)
@@ -32168,7 +34793,7 @@ if (attrs)
 delete attrs[name];
 },
 
-_pushUndoableCommand: function(range, text)
+_pushUndoableCommand: function(range)
 {
 var command = {
 text: this.copyRange(range),
@@ -32187,29 +34812,29 @@ this._undoStack.push(command);
 return command;
 },
 
-undo: function()
+undo: function(callback)
 {
 this._markRedoableState();
 
 this._inUndo = true;
-var range = this._doUndo(this._undoStack);
+var range = this._doUndo(this._undoStack, callback);
 delete this._inUndo;
 
 return range;
 },
 
-redo: function()
+redo: function(callback)
 {
 this.markUndoableState();
 
 this._inRedo = true;
-var range = this._doUndo(this._redoStack);
+var range = this._doUndo(this._redoStack, callback);
 delete this._inRedo;
 
 return range;
 },
 
-_doUndo: function(stack)
+_doUndo: function(stack, callback)
 {
 var range = null;
 for (var i = stack.length - 1; i >= 0; --i) {
@@ -32217,6 +34842,8 @@ var command = stack[i];
 stack.length = i;
 
 range = this.setText(command.range, command.text);
+if (callback)
+callback(command.range, range);
 if (i > 0 && stack[i - 1].explicit)
 return range;
 }
@@ -32357,7 +34984,7 @@ _highlightLines: function(startLine, endLine)
 {
 
 var state = this._textModel.getAttribute(startLine - 1, "highlight");
-var postConditionStringified = state ? state.postConditionStringified : JSON.stringify(this._tokenizer.initialCondition);
+var postConditionStringified = state ? state.postConditionStringified : JSON.stringify(this._tokenizer.createInitialCondition());
 
 var tokensCount = 0;
 for (var lineNumber = startLine; lineNumber < endLine; ++lineNumber) {
@@ -32457,1646 +35084,6 @@ this._textModel.removeAttribute(lineNumber, "highlight-outdated");
 
 
 
-WebInspector.TextViewer = function(textModel, platform, url)
-{
-this._textModel = textModel;
-this._textModel.changeListener = this._textChanged.bind(this);
-
-this.element = document.createElement("div");
-this.element.className = "text-editor monospace";
-
-var enterTextChangeMode = this._enterInternalTextChangeMode.bind(this);
-var exitTextChangeMode = this._exitInternalTextChangeMode.bind(this);
-var syncScrollListener = this._syncScroll.bind(this);
-var syncDecorationsForLineListener = this._syncDecorationsForLine.bind(this);
-this._mainPanel = new WebInspector.TextEditorMainPanel(this._textModel, url, syncScrollListener, syncDecorationsForLineListener, enterTextChangeMode, exitTextChangeMode);
-this._gutterPanel = new WebInspector.TextEditorGutterPanel(this._textModel, syncDecorationsForLineListener);
-this.element.appendChild(this._mainPanel.element);
-this.element.appendChild(this._gutterPanel.element);
-
-
-this._gutterPanel.element.addEventListener("mousewheel", function(e) {
-this._mainPanel.element.dispatchEvent(e);
-}.bind(this), false)
-}
-
-WebInspector.TextViewer.prototype = {
-set mimeType(mimeType)
-{
-this._mainPanel.mimeType = mimeType;
-},
-
-set readOnly(readOnly)
-{
-this._mainPanel.readOnly = readOnly;
-},
-
-get readOnly()
-{
-return this._mainPanel.readOnly;
-},
-
-set startEditingListener(startEditingListener)
-{
-this._startEditingListener = startEditingListener;
-},
-
-set endEditingListener(endEditingListener)
-{
-this._endEditingListener = endEditingListener;
-},
-
-get textModel()
-{
-return this._textModel;
-},
-
-revealLine: function(lineNumber)
-{
-this._mainPanel.revealLine(lineNumber);
-},
-
-addDecoration: function(lineNumber, decoration)
-{
-this._mainPanel.addDecoration(lineNumber, decoration);
-this._gutterPanel.addDecoration(lineNumber, decoration);
-},
-
-removeDecoration: function(lineNumber, decoration)
-{
-this._mainPanel.removeDecoration(lineNumber, decoration);
-this._gutterPanel.removeDecoration(lineNumber, decoration);
-},
-
-markAndRevealRange: function(range)
-{
-this._mainPanel.markAndRevealRange(range);
-},
-
-highlightLine: function(lineNumber)
-{
-this._mainPanel.highlightLine(lineNumber);
-},
-
-clearLineHighlight: function()
-{
-this._mainPanel.clearLineHighlight();
-},
-
-freeCachedElements: function()
-{
-this._mainPanel.freeCachedElements();
-this._gutterPanel.freeCachedElements();
-},
-
-get scrollTop()
-{
-return this._mainPanel.element.scrollTop;
-},
-
-set scrollTop(scrollTop)
-{
-this._mainPanel.element.scrollTop = scrollTop;
-},
-
-get scrollLeft()
-{
-return this._mainPanel.element.scrollLeft;
-},
-
-set scrollLeft(scrollLeft)
-{
-this._mainPanel.element.scrollLeft = scrollLeft;
-},
-
-beginUpdates: function()
-{
-this._mainPanel.beginUpdates();
-this._gutterPanel.beginUpdates();
-},
-
-endUpdates: function()
-{
-this._mainPanel.endUpdates();
-this._gutterPanel.endUpdates();
-this._updatePanelOffsets();
-},
-
-resize: function()
-{
-this._mainPanel.resize();
-this._gutterPanel.resize();
-this._updatePanelOffsets();
-},
-
-
-_textChanged: function(oldRange, newRange, oldText, newText)
-{
-if (!this._internalTextChangeMode) {
-this._mainPanel.textChanged(oldRange, newRange);
-this._gutterPanel.textChanged(oldRange, newRange);
-this._updatePanelOffsets();
-}
-},
-
-_enterInternalTextChangeMode: function()
-{
-this._internalTextChangeMode = true;
-
-if (this._startEditingListener)
-this._startEditingListener();
-},
-
-_exitInternalTextChangeMode: function(oldRange, newRange)
-{
-this._internalTextChangeMode = false;
-
-
-this._gutterPanel.textChanged(oldRange, newRange);
-this._updatePanelOffsets();
-
-if (this._endEditingListener)
-this._endEditingListener(oldRange, newRange);
-},
-
-_updatePanelOffsets: function()
-{
-var lineNumbersWidth = this._gutterPanel.element.offsetWidth;
-if (lineNumbersWidth)
-this._mainPanel.element.style.setProperty("left", lineNumbersWidth + "px");
-else
-this._mainPanel.element.style.removeProperty("left"); 
-},
-
-_syncScroll: function()
-{
-
-setTimeout(function() {
-var mainElement = this._mainPanel.element;
-var gutterElement = this._gutterPanel.element;
-
-this._gutterPanel.syncClientHeight(mainElement.clientHeight);
-gutterElement.scrollTop = mainElement.scrollTop;
-}.bind(this), 0);
-},
-
-_syncDecorationsForLine: function(lineNumber)
-{
-if (lineNumber >= this._textModel.linesCount)
-return;
-
-var mainChunk = this._mainPanel.chunkForLine(lineNumber);
-if (mainChunk.linesCount === 1 && mainChunk.decorated) {
-var gutterChunk = this._gutterPanel.makeLineAChunk(lineNumber);
-var height = mainChunk.height;
-if (height)
-gutterChunk.element.style.setProperty("height", height + "px");
-else
-gutterChunk.element.style.removeProperty("height");
-} else {
-var gutterChunk = this._gutterPanel.chunkForLine(lineNumber);
-if (gutterChunk.linesCount === 1)
-gutterChunk.element.style.removeProperty("height");
-}
-}
-}
-
-WebInspector.TextEditorChunkedPanel = function(textModel)
-{
-this._textModel = textModel;
-
-this._defaultChunkSize = 50;
-this._paintCoalescingLevel = 0;
-this._domUpdateCoalescingLevel = 0;
-}
-
-WebInspector.TextEditorChunkedPanel.prototype = {
-get textModel()
-{
-return this._textModel;
-},
-
-revealLine: function(lineNumber)
-{
-if (lineNumber >= this._textModel.linesCount)
-return;
-
-var chunk = this.makeLineAChunk(lineNumber);
-chunk.element.scrollIntoViewIfNeeded();
-},
-
-addDecoration: function(lineNumber, decoration)
-{
-if (lineNumber >= this._textModel.linesCount)
-return;
-
-var chunk = this.makeLineAChunk(lineNumber);
-chunk.addDecoration(decoration);
-},
-
-removeDecoration: function(lineNumber, decoration)
-{
-if (lineNumber >= this._textModel.linesCount)
-return;
-
-var chunk = this.chunkForLine(lineNumber);
-chunk.removeDecoration(decoration);
-},
-
-textChanged: function(oldRange, newRange)
-{
-this._buildChunks();
-},
-
-_buildChunks: function()
-{
-this.beginDomUpdates();
-
-this._container.removeChildren();
-
-this._textChunks = [];
-for (var i = 0; i < this._textModel.linesCount; i += this._defaultChunkSize) {
-var chunk = this._createNewChunk(i, i + this._defaultChunkSize);
-this._textChunks.push(chunk);
-this._container.appendChild(chunk.element);
-}
-
-this._repaintAll();
-
-this.endDomUpdates();
-},
-
-makeLineAChunk: function(lineNumber)
-{
-if (!this._textChunks)
-this._buildChunks();
-
-var chunkNumber = this._chunkNumberForLine(lineNumber);
-var oldChunk = this._textChunks[chunkNumber];
-if (oldChunk.linesCount === 1)
-return oldChunk;
-
-return this._splitChunkOnALine(lineNumber, chunkNumber);
-},
-
-_splitChunkOnALine: function(lineNumber, chunkNumber)
-{
-this.beginDomUpdates();
-
-var oldChunk = this._textChunks[chunkNumber];
-var wasExpanded = oldChunk.expanded;
-oldChunk.expanded = false;
-
-var insertIndex = chunkNumber + 1;
-
-
-if (lineNumber > oldChunk.startLine) {
-var prefixChunk = this._createNewChunk(oldChunk.startLine, lineNumber);
-this._textChunks.splice(insertIndex++, 0, prefixChunk);
-this._container.insertBefore(prefixChunk.element, oldChunk.element);
-}
-
-
-var lineChunk = this._createNewChunk(lineNumber, lineNumber + 1);
-this._textChunks.splice(insertIndex++, 0, lineChunk);
-this._container.insertBefore(lineChunk.element, oldChunk.element);
-
-
-if (oldChunk.startLine + oldChunk.linesCount > lineNumber + 1) {
-var suffixChunk = this._createNewChunk(lineNumber + 1, oldChunk.startLine + oldChunk.linesCount);
-this._textChunks.splice(insertIndex, 0, suffixChunk);
-this._container.insertBefore(suffixChunk.element, oldChunk.element);
-}
-
-
-this._textChunks.splice(chunkNumber, 1);
-this._container.removeChild(oldChunk.element);
-
-if (wasExpanded) {
-if (prefixChunk)
-prefixChunk.expanded = true;
-lineChunk.expanded = true;
-if (suffixChunk)
-suffixChunk.expanded = true;
-}
-
-this.endDomUpdates();
-
-return lineChunk;
-},
-
-_scroll: function()
-{
-
-if (this.element.scrollLeft <= 2)
-this.element.scrollLeft = 0;
-
-this._scheduleRepaintAll();
-if (this._syncScrollListener)
-this._syncScrollListener();
-},
-
-_scheduleRepaintAll: function()
-{
-if (this._repaintAllTimer)
-clearTimeout(this._repaintAllTimer);
-this._repaintAllTimer = setTimeout(this._repaintAll.bind(this), 50);
-},
-
-beginUpdates: function()
-{
-this._paintCoalescingLevel++;
-},
-
-endUpdates: function()
-{
-this._paintCoalescingLevel--;
-if (!this._paintCoalescingLevel)
-this._repaintAll();
-},
-
-beginDomUpdates: function()
-{
-this._domUpdateCoalescingLevel++;
-},
-
-endDomUpdates: function()
-{
-this._domUpdateCoalescingLevel--;
-},
-
-_chunkNumberForLine: function(lineNumber)
-{
-function compareLineNumbers(value, chunk)
-{
-return value < chunk.startLine ? -1 : 1;
-}
-var insertBefore = insertionIndexForObjectInListSortedByFunction(lineNumber, this._textChunks, compareLineNumbers);
-return insertBefore - 1;
-},
-
-chunkForLine: function(lineNumber)
-{
-return this._textChunks[this._chunkNumberForLine(lineNumber)];
-},
-
-_findFirstVisibleChunkNumber: function(visibleFrom)
-{
-function compareOffsetTops(value, chunk)
-{
-return value < chunk.offsetTop ? -1 : 1;
-}
-var insertBefore = insertionIndexForObjectInListSortedByFunction(visibleFrom, this._textChunks, compareOffsetTops);
-return insertBefore - 1;
-},
-
-_findVisibleChunks: function(visibleFrom, visibleTo)
-{
-var from = this._findFirstVisibleChunkNumber(visibleFrom);
-for (var to = from + 1; to < this._textChunks.length; ++to) {
-if (this._textChunks[to].offsetTop >= visibleTo)
-break;
-}
-return { start: from, end: to };
-},
-
-_findFirstVisibleLineNumber: function(visibleFrom)
-{
-var chunk = this._textChunks[this._findFirstVisibleChunkNumber(visibleFrom)];
-if (!chunk.expanded)
-return chunk.startLine;
-
-var lineNumbers = [];
-for (var i = 0; i < chunk.linesCount; ++i) {
-lineNumbers.push(chunk.startLine + i);
-}
-
-function compareLineRowOffsetTops(value, lineNumber)
-{
-var lineRow = chunk.getExpandedLineRow(lineNumber);
-return value < lineRow.offsetTop ? -1 : 1;
-}
-var insertBefore = insertionIndexForObjectInListSortedByFunction(visibleFrom, lineNumbers, compareLineRowOffsetTops);
-return lineNumbers[insertBefore - 1];
-},
-
-_repaintAll: function()
-{
-delete this._repaintAllTimer;
-
-if (this._paintCoalescingLevel || this._dirtyLines)
-return;
-
-if (!this._textChunks)
-this._buildChunks();
-
-var visibleFrom = this.element.scrollTop;
-var visibleTo = this.element.scrollTop + this.element.clientHeight;
-
-if (visibleTo) {
-var result = this._findVisibleChunks(visibleFrom, visibleTo);
-this._expandChunks(result.start, result.end);
-}
-},
-
-_expandChunks: function(fromIndex, toIndex)
-{
-
-for (var i = 0; i < fromIndex; ++i)
-this._textChunks[i].expanded = false;
-for (var i = toIndex; i < this._textChunks.length; ++i)
-this._textChunks[i].expanded = false;
-for (var i = fromIndex; i < toIndex; ++i)
-this._textChunks[i].expanded = true;
-},
-
-_totalHeight: function(firstElement, lastElement)
-{
-lastElement = (lastElement || firstElement).nextElementSibling;
-if (lastElement)
-return lastElement.offsetTop - firstElement.offsetTop;
-
-var offsetParent = firstElement.offsetParent;
-if (offsetParent && offsetParent.scrollHeight > offsetParent.clientHeight)
-return offsetParent.scrollHeight - firstElement.offsetTop;
-
-var total = 0;
-while (firstElement && firstElement !== lastElement) {
-total += firstElement.offsetHeight;
-firstElement = firstElement.nextElementSibling;
-}
-return total;
-},
-
-resize: function()
-{
-this._repaintAll();
-}
-}
-
-WebInspector.TextEditorGutterPanel = function(textModel, syncDecorationsForLineListener)
-{
-WebInspector.TextEditorChunkedPanel.call(this, textModel);
-
-this._syncDecorationsForLineListener = syncDecorationsForLineListener;
-
-this.element = document.createElement("div");
-this.element.className = "text-editor-lines";
-
-this._container = document.createElement("div");
-this._container.className = "inner-container";
-this.element.appendChild(this._container);
-
-this.element.addEventListener("scroll", this._scroll.bind(this), false);
-
-this.freeCachedElements();
-this._buildChunks();
-}
-
-WebInspector.TextEditorGutterPanel.prototype = {
-freeCachedElements: function()
-{
-this._cachedRows = [];
-},
-
-_createNewChunk: function(startLine, endLine)
-{
-return new WebInspector.TextEditorGutterChunk(this, startLine, endLine);
-},
-
-textChanged: function(oldRange, newRange)
-{
-if (!this._textChunks) {
-this._buildChunks();
-return;
-}
-
-var linesDiff = newRange.linesCount - oldRange.linesCount;
-if (linesDiff) {
-
-for (var chunkNumber = this._textChunks.length - 1; chunkNumber >= 0 ; --chunkNumber) {
-var chunk = this._textChunks[chunkNumber];
-if (chunk.startLine + chunk.linesCount <= this._textModel.linesCount)
-break;
-chunk.expanded = false;
-this._container.removeChild(chunk.element);
-}
-this._textChunks.length = chunkNumber + 1;
-
-
-var totalLines = 0;
-if (this._textChunks.length) {
-var lastChunk = this._textChunks[this._textChunks.length - 1];
-totalLines = lastChunk.startLine + lastChunk.linesCount;
-}
-for (var i = totalLines; i < this._textModel.linesCount; i += this._defaultChunkSize) {
-var chunk = this._createNewChunk(i, i + this._defaultChunkSize);
-this._textChunks.push(chunk);
-this._container.appendChild(chunk.element);
-}
-this._repaintAll();
-} else {
-
-var chunkNumber = this._chunkNumberForLine(newRange.startLine);
-var chunk = this._textChunks[chunkNumber];
-while (chunk && chunk.startLine <= newRange.endLine) {
-if (chunk.linesCount === 1)
-this._syncDecorationsForLineListener(chunk.startLine);
-chunk = this._textChunks[++chunkNumber];
-}
-}
-},
-
-syncClientHeight: function(clientHeight)
-{
-if (this.element.offsetHeight > clientHeight)
-this._container.style.setProperty("padding-bottom", (this.element.offsetHeight - clientHeight) + "px");
-else
-this._container.style.removeProperty("padding-bottom");
-}
-}
-
-WebInspector.TextEditorGutterPanel.prototype.__proto__ = WebInspector.TextEditorChunkedPanel.prototype;
-
-WebInspector.TextEditorGutterChunk = function(textViewer, startLine, endLine)
-{
-this._textViewer = textViewer;
-this._textModel = textViewer._textModel;
-
-this.startLine = startLine;
-endLine = Math.min(this._textModel.linesCount, endLine);
-this.linesCount = endLine - startLine;
-
-this._expanded = false;
-
-this.element = document.createElement("div");
-this.element.lineNumber = startLine;
-this.element.className = "webkit-line-number";
-
-if (this.linesCount === 1) {
-
-
-var innerSpan = document.createElement("span");
-innerSpan.className = "webkit-line-number-inner";
-innerSpan.textContent = startLine + 1;
-var outerSpan = document.createElement("div");
-outerSpan.className = "webkit-line-number-outer";
-outerSpan.appendChild(innerSpan);
-this.element.appendChild(outerSpan);
-} else {
-var lineNumbers = [];
-for (var i = startLine; i < endLine; ++i)
-lineNumbers.push(i + 1);
-this.element.textContent = lineNumbers.join("\n");
-}
-}
-
-WebInspector.TextEditorGutterChunk.prototype = {
-addDecoration: function(decoration)
-{
-this._textViewer.beginDomUpdates();
-if (typeof decoration === "string")
-this.element.addStyleClass(decoration);
-this._textViewer.endDomUpdates();
-},
-
-removeDecoration: function(decoration)
-{
-this._textViewer.beginDomUpdates();
-if (typeof decoration === "string")
-this.element.removeStyleClass(decoration);
-this._textViewer.endDomUpdates();
-},
-
-get expanded()
-{
-return this._expanded;
-},
-
-set expanded(expanded)
-{
-if (this.linesCount === 1)
-this._textViewer._syncDecorationsForLineListener(this.startLine);
-
-if (this._expanded === expanded)
-return;
-
-this._expanded = expanded;
-
-if (this.linesCount === 1)
-return;
-
-this._textViewer.beginDomUpdates();
-
-if (expanded) {
-this._expandedLineRows = [];
-var parentElement = this.element.parentElement;
-for (var i = this.startLine; i < this.startLine + this.linesCount; ++i) {
-var lineRow = this._createRow(i);
-parentElement.insertBefore(lineRow, this.element);
-this._expandedLineRows.push(lineRow);
-}
-parentElement.removeChild(this.element);
-} else {
-var elementInserted = false;
-for (var i = 0; i < this._expandedLineRows.length; ++i) {
-var lineRow = this._expandedLineRows[i];
-var parentElement = lineRow.parentElement;
-if (parentElement) {
-if (!elementInserted) {
-elementInserted = true;
-parentElement.insertBefore(this.element, lineRow);
-}
-parentElement.removeChild(lineRow);
-}
-this._textViewer._cachedRows.push(lineRow);
-}
-delete this._expandedLineRows;
-}
-
-this._textViewer.endDomUpdates();
-},
-
-get height()
-{
-if (!this._expandedLineRows)
-return this._textViewer._totalHeight(this.element);
-return this._textViewer._totalHeight(this._expandedLineRows[0], this._expandedLineRows[this._expandedLineRows.length - 1]);
-},
-
-get offsetTop()
-{
-return (this._expandedLineRows && this._expandedLineRows.length) ? this._expandedLineRows[0].offsetTop : this.element.offsetTop;
-},
-
-_createRow: function(lineNumber)
-{
-var lineRow = this._textViewer._cachedRows.pop() || document.createElement("div");
-lineRow.lineNumber = lineNumber;
-lineRow.className = "webkit-line-number";
-lineRow.textContent = lineNumber + 1;
-return lineRow;
-}
-}
-
-WebInspector.TextEditorMainPanel = function(textModel, url, syncScrollListener, syncDecorationsForLineListener, enterTextChangeMode, exitTextChangeMode)
-{
-WebInspector.TextEditorChunkedPanel.call(this, textModel);
-
-this._syncScrollListener = syncScrollListener;
-this._syncDecorationsForLineListener = syncDecorationsForLineListener;
-this._enterTextChangeMode = enterTextChangeMode;
-this._exitTextChangeMode = exitTextChangeMode;
-
-this._url = url;
-this._highlighter = new WebInspector.TextEditorHighlighter(textModel, this._highlightDataReady.bind(this));
-this._readOnly = true;
-
-this.element = document.createElement("div");
-this.element.className = "text-editor-contents";
-this.element.tabIndex = 0;
-
-this._container = document.createElement("div");
-this._container.className = "inner-container";
-this._container.tabIndex = 0;
-this.element.appendChild(this._container);
-
-this.element.addEventListener("scroll", this._scroll.bind(this), false);
-
-
-
-
-
-this._handleDOMUpdatesCallback = this._handleDOMUpdates.bind(this);
-this._container.addEventListener("DOMCharacterDataModified", this._handleDOMUpdatesCallback, false);
-this._container.addEventListener("DOMNodeInserted", this._handleDOMUpdatesCallback, false);
-this._container.addEventListener("DOMSubtreeModified", this._handleDOMUpdatesCallback, false);
-
-this.freeCachedElements();
-this._buildChunks();
-}
-
-WebInspector.TextEditorMainPanel.prototype = {
-set mimeType(mimeType)
-{
-this._highlighter.mimeType = mimeType;
-},
-
-set readOnly(readOnly)
-{
-this.beginDomUpdates();
-this._readOnly = readOnly;
-if (this._readOnly)
-this._container.removeStyleClass("text-editor-editable");
-else
-this._container.addStyleClass("text-editor-editable");
-this.endDomUpdates();
-},
-
-get readOnly()
-{
-return this._readOnly;
-},
-
-markAndRevealRange: function(range)
-{
-if (this._rangeToMark) {
-var markedLine = this._rangeToMark.startLine;
-delete this._rangeToMark;
-
-if (!this._dirtyLines) {
-this.beginDomUpdates();
-var chunk = this.chunkForLine(markedLine);
-var wasExpanded = chunk.expanded;
-chunk.expanded = false;
-chunk.updateCollapsedLineRow();
-chunk.expanded = wasExpanded;
-this.endDomUpdates();
-} else
-this._paintLines(markedLine, markedLine + 1);
-}
-
-if (range) {
-this._rangeToMark = range;
-this.revealLine(range.startLine);
-var chunk = this.makeLineAChunk(range.startLine);
-this._paintLine(chunk.element);
-if (this._markedRangeElement)
-this._markedRangeElement.scrollIntoViewIfNeeded();
-}
-delete this._markedRangeElement;
-},
-
-highlightLine: function(lineNumber)
-{
-this.clearLineHighlight();
-this._highlightedLine = lineNumber;
-this.revealLine(lineNumber);
-this.addDecoration(lineNumber, "webkit-highlighted-line");
-},
-
-clearLineHighlight: function()
-{
-if (typeof this._highlightedLine === "number") {
-this.removeDecoration(this._highlightedLine, "webkit-highlighted-line");
-delete this._highlightedLine;
-}
-},
-
-freeCachedElements: function()
-{
-this._cachedSpans = [];
-this._cachedTextNodes = [];
-this._cachedRows = [];
-},
-
-_splitChunkOnALine: function(lineNumber, chunkNumber)
-{
-var selection = this._getSelection();
-var chunk = WebInspector.TextEditorChunkedPanel.prototype._splitChunkOnALine.call(this, lineNumber, chunkNumber);
-this._restoreSelection(selection);
-return chunk;
-},
-
-_buildChunks: function()
-{
-for (var i = 0; i < this._textModel.linesCount; ++i)
-this._textModel.removeAttribute(i, "highlight");
-
-WebInspector.TextEditorChunkedPanel.prototype._buildChunks.call(this);
-},
-
-_createNewChunk: function(startLine, endLine)
-{
-return new WebInspector.TextEditorMainChunk(this, startLine, endLine);
-},
-
-_expandChunks: function(fromIndex, toIndex)
-{
-var lastChunk = this._textChunks[toIndex - 1];
-var lastVisibleLine = lastChunk.startLine + lastChunk.linesCount;
-
-var selection = this._getSelection();
-
-this._muteHighlightListener = true;
-this._highlighter.highlight(lastVisibleLine);
-delete this._muteHighlightListener;
-
-this._restorePaintLinesOperationsCredit();
-WebInspector.TextEditorChunkedPanel.prototype._expandChunks.call(this, fromIndex, toIndex);
-
-this._restoreSelection(selection);
-},
-
-_highlightDataReady: function(fromLine, toLine)
-{
-if (this._muteHighlightListener)
-return;
-this._restorePaintLinesOperationsCredit();
-this._paintLines(fromLine, toLine, true  );
-},
-
-_schedulePaintLines: function(startLine, endLine)
-{
-if (startLine >= endLine)
-return;
-
-if (!this._scheduledPaintLines) {
-this._scheduledPaintLines = [ { startLine: startLine, endLine: endLine } ];
-this._paintScheduledLinesTimer = setTimeout(this._paintScheduledLines.bind(this), 10);
-} else {
-for (var i = 0; i < this._scheduledPaintLines.length; ++i) {
-var chunk = this._scheduledPaintLines[i];
-if (chunk.startLine <= endLine && chunk.endLine >= startLine) {
-chunk.startLine = Math.min(chunk.startLine, startLine);
-chunk.endLine = Math.max(chunk.endLine, endLine);
-return;
-}
-if (chunk.startLine > endLine) {
-this._scheduledPaintLines.splice(i, 0, { startLine: startLine, endLine: endLine });
-return;
-}
-}
-this._scheduledPaintLines.push({ startLine: startLine, endLine: endLine });
-}
-},
-
-_paintScheduledLines: function(skipRestoreSelection)
-{
-if (this._paintScheduledLinesTimer)
-clearTimeout(this._paintScheduledLinesTimer);
-delete this._paintScheduledLinesTimer;
-
-if (!this._scheduledPaintLines)
-return;
-
-
-if (this._dirtyLines || this._repaintAllTimer) {
-this._paintScheduledLinesTimer = setTimeout(this._paintScheduledLines.bind(this), 50);
-return;
-}
-
-var scheduledPaintLines = this._scheduledPaintLines;
-delete this._scheduledPaintLines;
-
-this._restorePaintLinesOperationsCredit();
-this._paintLineChunks(scheduledPaintLines, !skipRestoreSelection);
-},
-
-_restorePaintLinesOperationsCredit: function()
-{
-this._paintLinesOperationsCredit = 250;
-},
-
-_paintLines: function(fromLine, toLine, restoreSelection)
-{
-this._paintLineChunks([ { startLine: fromLine, endLine: toLine } ], restoreSelection);
-},
-
-_paintLineChunks: function(lineChunks, restoreSelection)
-{
-
-
-var visibleFrom = this.element.scrollTop;
-var firstVisibleLineNumber = this._findFirstVisibleLineNumber(visibleFrom);
-
-var chunk;
-var selection;
-var invisibleLineRows = [];
-for (var i = 0; i < lineChunks.length; ++i) {
-var lineChunk = lineChunks[i];
-if (this._dirtyLines || this._scheduledPaintLines) {
-this._schedulePaintLines(lineChunk.startLine, lineChunk.endLine);
-continue;
-}
-for (var lineNumber = lineChunk.startLine; lineNumber < lineChunk.endLine; ++lineNumber) {
-if (!chunk || lineNumber < chunk.startLine || lineNumber >= chunk.startLine + chunk.linesCount)
-chunk = this.chunkForLine(lineNumber);
-var lineRow = chunk.getExpandedLineRow(lineNumber);
-if (!lineRow)
-continue;
-if (lineNumber < firstVisibleLineNumber) {
-invisibleLineRows.push(lineRow);
-continue;
-}
-if (restoreSelection && !selection)
-selection = this._getSelection();
-this._paintLine(lineRow);
-if (this._paintLinesOperationsCredit < 0) {
-this._schedulePaintLines(lineNumber + 1, lineChunk.endLine);
-break;
-}
-}
-}
-
-for (var i = 0; i < invisibleLineRows.length; ++i) {
-if (restoreSelection && !selection)
-selection = this._getSelection();
-this._paintLine(invisibleLineRows[i]);
-}
-
-if (restoreSelection)
-this._restoreSelection(selection);
-},
-
-_paintLine: function(lineRow)
-{
-var lineNumber = lineRow.lineNumber;
-if (this._dirtyLines) {
-this._schedulePaintLines(lineNumber, lineNumber + 1);
-return;
-}
-
-this.beginDomUpdates();
-try {
-if (this._scheduledPaintLines || this._paintLinesOperationsCredit < 0) {
-this._schedulePaintLines(lineNumber, lineNumber + 1);
-return;
-}
-
-var highlight = this._textModel.getAttribute(lineNumber, "highlight");
-if (!highlight)
-return;
-
-lineRow.removeChildren();
-var line = this._textModel.line(lineNumber);
-if (!line)
-lineRow.appendChild(document.createElement("br"));
-
-var plainTextStart = -1;
-for (var j = 0; j < line.length;) {
-if (j > 1000) {
-
-if (plainTextStart === -1)
-plainTextStart = j;
-break;
-}
-var attribute = highlight[j];
-if (!attribute || !attribute.tokenType) {
-if (plainTextStart === -1)
-plainTextStart = j;
-j++;
-} else {
-if (plainTextStart !== -1) {
-this._appendTextNode(lineRow, line.substring(plainTextStart, j));
-plainTextStart = -1;
---this._paintLinesOperationsCredit;
-}
-this._appendSpan(lineRow, line.substring(j, j + attribute.length), attribute.tokenType);
-j += attribute.length;
---this._paintLinesOperationsCredit;
-}
-}
-if (plainTextStart !== -1) {
-this._appendTextNode(lineRow, line.substring(plainTextStart, line.length));
---this._paintLinesOperationsCredit;
-}
-if (lineRow.decorationsElement)
-lineRow.appendChild(lineRow.decorationsElement);
-} finally {
-if (this._rangeToMark && this._rangeToMark.startLine === lineNumber)
-this._markedRangeElement = highlightSearchResult(lineRow, this._rangeToMark.startColumn, this._rangeToMark.endColumn - this._rangeToMark.startColumn);
-this.endDomUpdates();
-}
-},
-
-_releaseLinesHighlight: function(lineRow)
-{
-if (!lineRow)
-return;
-if ("spans" in lineRow) {
-var spans = lineRow.spans;
-for (var j = 0; j < spans.length; ++j)
-this._cachedSpans.push(spans[j]);
-delete lineRow.spans;
-}
-if ("textNodes" in lineRow) {
-var textNodes = lineRow.textNodes;
-for (var j = 0; j < textNodes.length; ++j)
-this._cachedTextNodes.push(textNodes[j]);
-delete lineRow.textNodes;
-}
-this._cachedRows.push(lineRow);
-},
-
-_getSelection: function()
-{
-var selection = window.getSelection();
-if (!selection.rangeCount)
-return null;
-var selectionRange = selection.getRangeAt(0);
-
-if (!this._container.isAncestor(selectionRange.startContainer) || !this._container.isAncestor(selectionRange.endContainer))
-return null;
-var start = this._selectionToPosition(selectionRange.startContainer, selectionRange.startOffset);
-var end = selectionRange.collapsed ? start : this._selectionToPosition(selectionRange.endContainer, selectionRange.endOffset);
-if (selection.anchorNode === selectionRange.startContainer && selection.anchorOffset === selectionRange.startOffset)
-return new WebInspector.TextRange(start.line, start.column, end.line, end.column);
-else
-return new WebInspector.TextRange(end.line, end.column, start.line, start.column);
-},
-
-_restoreSelection: function(range)
-{
-if (!range)
-return;
-var start = this._positionToSelection(range.startLine, range.startColumn);
-var end = range.isEmpty() ? start : this._positionToSelection(range.endLine, range.endColumn);
-window.getSelection().setBaseAndExtent(start.container, start.offset, end.container, end.offset);
-},
-
-_selectionToPosition: function(container, offset)
-{
-if (container === this._container && offset === 0)
-return { line: 0, column: 0 };
-if (container === this._container && offset === 1)
-return { line: this._textModel.linesCount - 1, column: this._textModel.lineLength(this._textModel.linesCount - 1) };
-
-var lineRow = container.enclosingNodeOrSelfWithNodeName("DIV");
-var lineNumber = lineRow.lineNumber;
-if (container === lineRow && offset === 0)
-return { line: lineNumber, column: 0 };
-
-
-var column = 0;
-var node = lineRow.traverseNextTextNode(lineRow);
-while (node && node !== container) {
-var text = node.textContent;
-for (var i = 0; i < text.length; ++i) {
-if (text.charAt(i) === "\n") {
-lineNumber++;
-column = 0;
-} else
-column++;
-}
-node = node.traverseNextTextNode(lineRow);
-}
-
-if (node === container && offset) {
-var text = node.textContent;
-for (var i = 0; i < offset; ++i) {
-if (text.charAt(i) === "\n") {
-lineNumber++;
-column = 0;
-} else
-column++;
-}
-}
-return { line: lineNumber, column: column };
-},
-
-_positionToSelection: function(line, column)
-{
-var chunk = this.chunkForLine(line);
-
-var lineRow = chunk.linesCount === 1 ? chunk.element : chunk.getExpandedLineRow(line);
-if (lineRow)
-var rangeBoundary = lineRow.rangeBoundaryForOffset(column);
-else {
-var offset = column;
-for (var i = chunk.startLine; i < line; ++i)
-offset += this._textModel.lineLength(i) + 1; 
-lineRow = chunk.element;
-if (lineRow.firstChild)
-var rangeBoundary = { container: lineRow.firstChild, offset: offset };
-else
-var rangeBoundary = { container: lineRow, offset: 0 };
-}
-return rangeBoundary;
-},
-
-_appendSpan: function(element, content, className)
-{
-if (className === "html-resource-link" || className === "html-external-link") {
-element.appendChild(this._createLink(content, className === "html-external-link"));
-return;
-}
-
-var span = this._cachedSpans.pop() || document.createElement("span");
-span.className = "webkit-" + className;
-span.textContent = content;
-element.appendChild(span);
-if (!("spans" in element))
-element.spans = [];
-element.spans.push(span);
-},
-
-_appendTextNode: function(element, text)
-{
-var textNode = this._cachedTextNodes.pop();
-if (textNode)
-textNode.nodeValue = text;
-else
-textNode = document.createTextNode(text);
-element.appendChild(textNode);
-if (!("textNodes" in element))
-element.textNodes = [];
-element.textNodes.push(textNode);
-},
-
-_createLink: function(content, isExternal)
-{
-var quote = content.charAt(0);
-if (content.length > 1 && (quote === "\"" ||   quote === "'"))
-content = content.substring(1, content.length - 1);
-else
-quote = null;
-
-var a = WebInspector.linkifyURLAsNode(this._rewriteHref(content), content, null, isExternal);
-var span = document.createElement("span");
-span.className = "webkit-html-attribute-value";
-if (quote)
-span.appendChild(document.createTextNode(quote));
-span.appendChild(a);
-if (quote)
-span.appendChild(document.createTextNode(quote));
-return span;
-},
-
-_rewriteHref: function(hrefValue, isExternal)
-{
-if (!this._url || !hrefValue || hrefValue.indexOf("://") > 0)
-return hrefValue;
-return WebInspector.completeURL(this._url, hrefValue);
-},
-
-_handleDOMUpdates: function(e)
-{
-if (this._domUpdateCoalescingLevel)
-return;
-
-var target = e.target;
-if (target === this._container)
-return;
-
-var lineRow = target.enclosingNodeOrSelfWithClass("webkit-line-content");
-if (!lineRow)
-return;
-
-if (lineRow.decorationsElement && (lineRow.decorationsElement === target || lineRow.decorationsElement.isAncestor(target))) {
-if (this._syncDecorationsForLineListener)
-this._syncDecorationsForLineListener(lineRow.lineNumber);
-return;
-}
-
-if (this._readOnly)
-return;
-
-if (target === lineRow && e.type === "DOMNodeInserted") {
-
-delete lineRow.lineNumber;
-}
-
-var startLine = 0;
-for (var row = lineRow; row; row = row.previousSibling) {
-if (typeof row.lineNumber === "number") {
-startLine = row.lineNumber;
-break;
-}
-}
-
-var endLine = startLine + 1;
-for (var row = lineRow.nextSibling; row; row = row.nextSibling) {
-if (typeof row.lineNumber === "number") {
-endLine = row.lineNumber;
-break;
-}
-}
-
-if (target === lineRow && e.type === "DOMNodeRemoved") {
-
-delete lineRow.lineNumber;
-}
-
-if (this._dirtyLines) {
-this._dirtyLines.start = Math.min(this._dirtyLines.start, startLine);
-this._dirtyLines.end = Math.max(this._dirtyLines.end, endLine);
-} else {
-this._dirtyLines = { start: startLine, end: endLine };
-setTimeout(this._applyDomUpdates.bind(this), 0);
-
-this.markAndRevealRange(null);
-}
-},
-
-_applyDomUpdates: function()
-{
-if (!this._dirtyLines)
-return;
-
-
-if (this._readOnly) {
-delete this._dirtyLines;
-return;
-}
-
-
-this._enterTextChangeMode();
-
-var dirtyLines = this._dirtyLines;
-delete this._dirtyLines;
-
-var firstChunkNumber = this._chunkNumberForLine(dirtyLines.start);
-var startLine = this._textChunks[firstChunkNumber].startLine;
-var endLine = this._textModel.linesCount;
-
-
-var firstLineRow;
-if (firstChunkNumber) {
-var chunk = this._textChunks[firstChunkNumber - 1];
-firstLineRow = chunk.expanded ? chunk.getExpandedLineRow(chunk.startLine + chunk.linesCount - 1) : chunk.element;
-firstLineRow = firstLineRow.nextSibling;
-} else
-firstLineRow = this._container.firstChild;
-
-var lines = [];
-for (var lineRow = firstLineRow; lineRow; lineRow = lineRow.nextSibling) {
-if (typeof lineRow.lineNumber === "number" && lineRow.lineNumber >= dirtyLines.end) {
-endLine = lineRow.lineNumber;
-break;
-}
-
-lineRow.lineNumber = startLine + lines.length;
-this._collectLinesFromDiv(lines, lineRow);
-}
-
-
-var startOffset = 0;
-while (startLine < dirtyLines.start && startOffset < lines.length) {
-if (this._textModel.line(startLine) !== lines[startOffset])
-break;
-++startOffset;
-++startLine;
-}
-
-var endOffset = lines.length;
-while (endLine > dirtyLines.end && endOffset > startOffset) {
-if (this._textModel.line(endLine - 1) !== lines[endOffset - 1])
-break;
---endOffset;
---endLine;
-}
-
-lines = lines.slice(startOffset, endOffset);
-
-var selection = this._getSelection();
-
-if (lines.length === 0 && endLine < this._textModel.linesCount) {
-var oldRange = new WebInspector.TextRange(startLine, 0, endLine, 0);
-var newRange = this._textModel.setText(oldRange, "");
-} else {
-var oldRange = new WebInspector.TextRange(startLine, 0, endLine - 1, this._textModel.lineLength(endLine - 1));
-var newRange = this._textModel.setText(oldRange, lines.join("\n"));
-}
-
-this.beginDomUpdates();
-this._removeDecorationsInRange(oldRange);
-this._updateChunksForRanges(oldRange, newRange);
-this._updateHighlightsForRange(newRange);
-this._paintScheduledLines(true);
-this.endDomUpdates();
-
-this._restoreSelection(selection);
-
-this._exitTextChangeMode(oldRange, newRange);
-},
-
-_removeDecorationsInRange: function(range)
-{
-for (var i = this._chunkNumberForLine(range.startLine); i < this._textChunks.length; ++i) {
-var chunk = this._textChunks[i];
-if (chunk.startLine > range.endLine)
-break;
-chunk.removeAllDecorations();
-}
-},
-
-_updateChunksForRanges: function(oldRange, newRange)
-{
-
-var firstChunkNumber = this._chunkNumberForLine(oldRange.startLine);
-var lastChunkNumber = firstChunkNumber;
-while (lastChunkNumber + 1 < this._textChunks.length) {
-if (this._textChunks[lastChunkNumber + 1].startLine > oldRange.endLine)
-break;
-++lastChunkNumber;
-}
-
-var startLine = this._textChunks[firstChunkNumber].startLine;
-var linesCount = this._textChunks[lastChunkNumber].startLine + this._textChunks[lastChunkNumber].linesCount - startLine;
-var linesDiff = newRange.linesCount - oldRange.linesCount;
-linesCount += linesDiff;
-
-if (linesDiff) {
-
-for (var chunkNumber = lastChunkNumber + 1; chunkNumber < this._textChunks.length; ++chunkNumber)
-this._textChunks[chunkNumber].startLine += linesDiff;
-}
-
-var firstLineRow;
-if (firstChunkNumber) {
-var chunk = this._textChunks[firstChunkNumber - 1];
-firstLineRow = chunk.expanded ? chunk.getExpandedLineRow(chunk.startLine + chunk.linesCount - 1) : chunk.element;
-firstLineRow = firstLineRow.nextSibling;
-} else
-firstLineRow = this._container.firstChild;
-
-
-for (var chunkNumber = firstChunkNumber; chunkNumber <= lastChunkNumber; ++chunkNumber) {
-var chunk = this._textChunks[chunkNumber];
-var lineNumber = chunk.startLine;
-for (var lineRow = firstLineRow; lineRow && lineNumber < chunk.startLine + chunk.linesCount; lineRow = lineRow.nextSibling) {
-if (lineRow.lineNumber !== lineNumber || lineRow !== chunk.getExpandedLineRow(lineNumber) || lineRow.textContent !== this._textModel.line(lineNumber) || !lineRow.firstChild)
-break;
-++lineNumber;
-}
-if (lineNumber < chunk.startLine + chunk.linesCount)
-break;
-chunk.updateCollapsedLineRow();
-++firstChunkNumber;
-firstLineRow = lineRow;
-startLine += chunk.linesCount;
-linesCount -= chunk.linesCount;
-}
-
-if (firstChunkNumber > lastChunkNumber && linesCount === 0)
-return;
-
-
-var chunk = this._textChunks[lastChunkNumber + 1];
-var linesInLastChunk = linesCount % this._defaultChunkSize;
-if (chunk && !chunk.decorated && linesInLastChunk > 0 && linesInLastChunk + chunk.linesCount <= this._defaultChunkSize) {
-++lastChunkNumber;
-linesCount += chunk.linesCount;
-}
-
-var scrollTop = this.element.scrollTop;
-var scrollLeft = this.element.scrollLeft;
-
-
-var firstUnmodifiedLineRow = null;
-var chunk = this._textChunks[lastChunkNumber + 1];
-if (chunk) {
-firstUnmodifiedLineRow = chunk.expanded ? chunk.getExpandedLineRow(chunk.startLine) : chunk.element;
-}
-while (firstLineRow && firstLineRow !== firstUnmodifiedLineRow) {
-var lineRow = firstLineRow;
-firstLineRow = firstLineRow.nextSibling;
-this._container.removeChild(lineRow);
-}
-
-
-for (var chunkNumber = firstChunkNumber; linesCount > 0; ++chunkNumber) {
-var chunkLinesCount = Math.min(this._defaultChunkSize, linesCount);
-var newChunk = this._createNewChunk(startLine, startLine + chunkLinesCount);
-this._container.insertBefore(newChunk.element, firstUnmodifiedLineRow);
-
-if (chunkNumber <= lastChunkNumber)
-this._textChunks[chunkNumber] = newChunk;
-else
-this._textChunks.splice(chunkNumber, 0, newChunk);
-startLine += chunkLinesCount;
-linesCount -= chunkLinesCount;
-}
-if (chunkNumber <= lastChunkNumber)
-this._textChunks.splice(chunkNumber, lastChunkNumber - chunkNumber + 1);
-
-this.element.scrollTop = scrollTop;
-this.element.scrollLeft = scrollLeft;
-},
-
-_updateHighlightsForRange: function(range)
-{
-var visibleFrom = this.element.scrollTop;
-var visibleTo = this.element.scrollTop + this.element.clientHeight;
-
-var result = this._findVisibleChunks(visibleFrom, visibleTo);
-var chunk = this._textChunks[result.end - 1];
-var lastVisibleLine = chunk.startLine + chunk.linesCount;
-
-lastVisibleLine = Math.max(lastVisibleLine, range.endLine + 1);
-lastVisibleLine = Math.min(lastVisibleLine, this._textModel.linesCount);
-
-var updated = this._highlighter.updateHighlight(range.startLine, lastVisibleLine);
-if (!updated) {
-
-for (var i = this._chunkNumberForLine(range.startLine); i < this._textChunks.length; ++i)
-this._textChunks[i].expanded = false;
-}
-
-this._repaintAll();
-},
-
-_collectLinesFromDiv: function(lines, element)
-{
-var textContents = [];
-var node = element.traverseNextNode(element);
-while (node) {
-if (element.decorationsElement === node) {
-node = node.nextSibling;
-continue;
-}
-if (node.nodeName.toLowerCase() === "br")
-textContents.push("\n");
-else if (node.nodeType === Node.TEXT_NODE)
-textContents.push(node.textContent);
-node = node.traverseNextNode(element);
-}
-
-var textContent = textContents.join("");
-
-textContent = textContent.replace(/\n$/, "");
-
-textContents = textContent.split("\n");
-for (var i = 0; i < textContents.length; ++i)
-lines.push(textContents[i]);
-}
-}
-
-WebInspector.TextEditorMainPanel.prototype.__proto__ = WebInspector.TextEditorChunkedPanel.prototype;
-
-WebInspector.TextEditorMainChunk = function(textViewer, startLine, endLine)
-{
-this._textViewer = textViewer;
-this._textModel = textViewer._textModel;
-
-this.element = document.createElement("div");
-this.element.lineNumber = startLine;
-this.element.className = "webkit-line-content";
-this.element.addEventListener("DOMNodeRemoved", this._textViewer._handleDOMUpdatesCallback, false);
-
-this._startLine = startLine;
-endLine = Math.min(this._textModel.linesCount, endLine);
-this.linesCount = endLine - startLine;
-
-this._expanded = false;
-
-this.updateCollapsedLineRow();
-}
-
-WebInspector.TextEditorMainChunk.prototype = {
-addDecoration: function(decoration)
-{
-this._textViewer.beginDomUpdates();
-if (typeof decoration === "string")
-this.element.addStyleClass(decoration);
-else {
-if (!this.element.decorationsElement) {
-this.element.decorationsElement = document.createElement("div");
-this.element.decorationsElement.className = "webkit-line-decorations";
-this.element.appendChild(this.element.decorationsElement);
-}
-this.element.decorationsElement.appendChild(decoration);
-}
-this._textViewer.endDomUpdates();
-},
-
-removeDecoration: function(decoration)
-{
-this._textViewer.beginDomUpdates();
-if (typeof decoration === "string")
-this.element.removeStyleClass(decoration);
-else if (this.element.decorationsElement)
-this.element.decorationsElement.removeChild(decoration);
-this._textViewer.endDomUpdates();
-},
-
-removeAllDecorations: function()
-{
-this._textViewer.beginDomUpdates();
-this.element.className = "webkit-line-content";
-if (this.element.decorationsElement) {
-this.element.removeChild(this.element.decorationsElement);
-delete this.element.decorationsElement;
-}
-this._textViewer.endDomUpdates();
-},
-
-get decorated()
-{
-return this.element.className !== "webkit-line-content" || !!(this.element.decorationsElement && this.element.decorationsElement.firstChild);
-},
-
-get startLine()
-{
-return this._startLine;
-},
-
-set startLine(startLine)
-{
-this._startLine = startLine;
-this.element.lineNumber = startLine;
-if (this._expandedLineRows) {
-for (var i = 0; i < this._expandedLineRows.length; ++i)
-this._expandedLineRows[i].lineNumber = startLine + i;
-}
-},
-
-get expanded()
-{
-return this._expanded;
-},
-
-set expanded(expanded)
-{
-if (this._expanded === expanded)
-return;
-
-this._expanded = expanded;
-
-if (this.linesCount === 1) {
-if (expanded)
-this._textViewer._paintLine(this.element);
-return;
-}
-
-this._textViewer.beginDomUpdates();
-
-if (expanded) {
-this._expandedLineRows = [];
-var parentElement = this.element.parentElement;
-for (var i = this.startLine; i < this.startLine + this.linesCount; ++i) {
-var lineRow = this._createRow(i);
-parentElement.insertBefore(lineRow, this.element);
-this._expandedLineRows.push(lineRow);
-}
-parentElement.removeChild(this.element);
-this._textViewer._paintLines(this.startLine, this.startLine + this.linesCount);
-} else {
-var elementInserted = false;
-for (var i = 0; i < this._expandedLineRows.length; ++i) {
-var lineRow = this._expandedLineRows[i];
-var parentElement = lineRow.parentElement;
-if (parentElement) {
-if (!elementInserted) {
-elementInserted = true;
-parentElement.insertBefore(this.element, lineRow);
-}
-parentElement.removeChild(lineRow);
-}
-this._textViewer._releaseLinesHighlight(lineRow);
-}
-delete this._expandedLineRows;
-}
-
-this._textViewer.endDomUpdates();
-},
-
-get height()
-{
-if (!this._expandedLineRows)
-return this._textViewer._totalHeight(this.element);
-return this._textViewer._totalHeight(this._expandedLineRows[0], this._expandedLineRows[this._expandedLineRows.length - 1]);
-},
-
-get offsetTop()
-{
-return (this._expandedLineRows && this._expandedLineRows.length) ? this._expandedLineRows[0].offsetTop : this.element.offsetTop;
-},
-
-_createRow: function(lineNumber)
-{
-var lineRow = this._textViewer._cachedRows.pop() || document.createElement("div");
-lineRow.lineNumber = lineNumber;
-lineRow.className = "webkit-line-content";
-lineRow.addEventListener("DOMNodeRemoved", this._textViewer._handleDOMUpdatesCallback, false);
-lineRow.textContent = this._textModel.line(lineNumber);
-if (!lineRow.textContent)
-lineRow.appendChild(document.createElement("br"));
-return lineRow;
-},
-
-getExpandedLineRow: function(lineNumber)
-{
-if (!this._expanded || lineNumber < this.startLine || lineNumber >= this.startLine + this.linesCount)
-return null;
-if (!this._expandedLineRows)
-return this.element;
-return this._expandedLineRows[lineNumber - this.startLine];
-},
-
-updateCollapsedLineRow: function()
-{
-if (this.linesCount === 1 && this._expanded)
-return;
-
-var lines = [];
-for (var i = this.startLine; i < this.startLine + this.linesCount; ++i)
-lines.push(this._textModel.line(i));
-
-this.element.removeChildren();
-this.element.textContent = lines.join("\n");
-
-
-if (!lines[lines.length - 1])
-this.element.appendChild(document.createElement("br"));
-}
-}
-
-
-
-
-
 
 WebInspector.SourceTokenizer = function()
 {
@@ -34159,7 +35146,7 @@ var tokenizerClass = this._tokenizerConstructors[mimeType];
 var tokenizer = this._tokenizers[tokenizerClass];
 if (!tokenizer) {
 tokenizer = new WebInspector[tokenizerClass]();
-this._tokenizers[mimeType] = tokenizer;
+this._tokenizers[tokenizerClass] = tokenizer;
 }
 return tokenizer;
 }
@@ -34259,10 +35246,15 @@ this.case_COMMENT = 1002;
 this.case_DSTRING = 1003;
 this.case_SSTRING = 1004;
 
-this.initialCondition = { lexCondition: this._lexConditions.INITIAL, parseCondition: this._parseConditions.INITIAL }
+this.condition = this.createInitialCondition();
 }
 
 WebInspector.SourceCSSTokenizer.prototype = {
+createInitialCondition: function()
+{
+return { lexCondition: this._lexConditions.INITIAL, parseCondition: this._parseConditions.INITIAL };
+},
+
 _stringToken: function(cursor, stringEnds)
 {
 if (this._isPropertyValue())
@@ -35610,19 +36602,23 @@ SCRIPT: 16,
 STYLE: 32
 };
 
-this.initialCondition = { lexCondition: this._lexConditions.INITIAL, parseCondition: this._parseConditions.INITIAL };
-this.condition = this.initialCondition;
+this.condition = this.createInitialCondition();
 }
 
 WebInspector.SourceHTMLTokenizer.prototype = {
+createInitialCondition: function()
+{
+return { lexCondition: this._lexConditions.INITIAL, parseCondition: this._parseConditions.INITIAL };
+},
+
 set line(line) {
-if (this._internalJavaScriptTokenizer) {
+if (this._condition.internalJavaScriptTokenizerCondition) {
 var match = /<\/script/i.exec(line);
 if (match) {
 this._internalJavaScriptTokenizer.line = line.substring(0, match.index);
 } else
 this._internalJavaScriptTokenizer.line = line;
-} else if (this._internalCSSTokenizer) {
+} else if (this._condition.internalCSSTokenizerCondition) {
 var match = /<\/style/i.exec(line);
 if (match) {
 this._internalCSSTokenizer.line = line.substring(0, match.index);
@@ -35678,9 +36674,37 @@ return "html-resource-link";
 return "html-attribute-value";
 },
 
+get _internalJavaScriptTokenizer()
+{
+return WebInspector.SourceTokenizer.Registry.getInstance().getTokenizer("text/javascript");
+},
+
+get _internalCSSTokenizer()
+{
+return WebInspector.SourceTokenizer.Registry.getInstance().getTokenizer("text/css");
+},
+
+scriptStarted: function(cursor)
+{
+this._condition.internalJavaScriptTokenizerCondition = this._internalJavaScriptTokenizer.createInitialCondition();
+},
+
+scriptEnded: function(cursor)
+{
+},
+
+styleSheetStarted: function(cursor)
+{
+this._condition.internalCSSTokenizerCondition = this._internalCSSTokenizer.createInitialCondition();
+},
+
+styleSheetEnded: function(cursor)
+{
+},
+
 nextToken: function(cursor)
 {
-if (this._internalJavaScriptTokenizer) {
+if (this._condition.internalJavaScriptTokenizerCondition) {
 
 this.line = this._line;
 if (cursor !== this._internalJavaScriptTokenizer._line.length) {
@@ -35691,8 +36715,8 @@ this.tokenType = this._internalJavaScriptTokenizer.tokenType;
 this._condition.internalJavaScriptTokenizerCondition = this._internalJavaScriptTokenizer.condition;
 return result;
 } else if (cursor !== this._line.length)
-delete this._internalJavaScriptTokenizer;
-} else if (this._internalCSSTokenizer) {
+delete this._condition.internalJavaScriptTokenizerCondition;
+} else if (this._condition.internalCSSTokenizerCondition) {
 
 this.line = this._line;
 if (cursor !== this._internalCSSTokenizer._line.length) {
@@ -35703,7 +36727,7 @@ this.tokenType = this._internalCSSTokenizer.tokenType;
 this._condition.internalCSSTokenizerCondition = this._internalCSSTokenizer.condition;
 return result;
 } else if (cursor !== this._line.length)
-delete this._internalCSSTokenizer;
+delete this._condition.internalCSSTokenizerCondition;
 }
 
 var cursorOnEnter = cursor;
@@ -36083,6 +37107,7 @@ this.setLexCondition(this._lexConditions.TAG);
 {
 this.tokenType = "html-tag";
 this._condition.parseCondition = this._parseConditions.INITIAL;
+this.scriptEnded(cursor - 8);
 return cursor;
 }
 case 81:
@@ -36099,6 +37124,7 @@ this.setLexCondition(this._lexConditions.TAG);
 {
 this.tokenType = "html-tag";
 this._condition.parseCondition = this._parseConditions.INITIAL;
+this.styleSheetEnded(cursor - 7);
 return cursor;
 }
 
@@ -36228,19 +37254,13 @@ this.setLexCondition(this._lexConditions.INITIAL);
 {
 this.tokenType = "html-tag";
 if (this._condition.parseCondition & this._parseConditions.SCRIPT) {
-if (!this._internalJavaScriptTokenizer) {
-this._internalJavaScriptTokenizer = WebInspector.SourceTokenizer.Registry.getInstance().getTokenizer("text/javascript");
-this._condition.internalJavaScriptTokenizerCondition = this._internalJavaScriptTokenizer.initialCondition;
-}
+this.scriptStarted(cursor);
 
 return cursor;
 }
 
 if (this._condition.parseCondition & this._parseConditions.STYLE) {
-if (!this._internalCSSTokenizer) {
-this._internalCSSTokenizer = WebInspector.SourceTokenizer.Registry.getInstance().getTokenizer("text/css");
-this._condition.internalCSSTokenizerCondition = this._internalCSSTokenizer.initialCondition;
-}
+this.styleSheetStarted(cursor);
 
 return cursor;
 }
@@ -36362,11 +37382,15 @@ this.case_DSTRING = 1003;
 this.case_SSTRING = 1004;
 this.case_REGEX = 1005;
 
-this.initialCondition = { lexCondition: this._lexConditions.NODIV }
-this.condition = this.initialCondition;
+this.condition = this.createInitialCondition();
 }
 
 WebInspector.SourceJavaScriptTokenizer.prototype = {
+createInitialCondition: function()
+{
+return { lexCondition: this._lexConditions.NODIV };
+},
+
 nextToken: function(cursor)
 {
 var cursorOnEnter = cursor;
@@ -38898,7 +39922,8 @@ var dt = document.createElement("dt");
 dt.textContent = WebInspector.UIString("URL");
 infoListElement.appendChild(dt);
 var dd = document.createElement("dd");
-dd.appendChild(WebInspector.linkifyURLAsNode(this.resource.url));
+var externalResource = true;
+dd.appendChild(WebInspector.linkifyURLAsNode(this.resource.url, null, null, externalResource));
 infoListElement.appendChild(dd);
 
 this._container.appendChild(infoListElement);
@@ -40499,6 +41524,160 @@ WebInspector.CPUProfileType.prototype.__proto__ = WebInspector.ProfileType.proto
 
 
 
+WebInspector.HeapSnapshotLoader = function()
+{
+this._json = "";
+this._state = "find-snapshot-info";
+this._snapshot = {};
+}
+
+WebInspector.HeapSnapshotLoader.prototype = {
+_findBalancedCurlyBrackets: function()
+{
+var counter = 0;
+var openingBracket = "{".charCodeAt(0), closingBracket = "}".charCodeAt(0);
+for (var i = 0, l = this._json.length; i < l; ++i) {
+var character = this._json.charCodeAt(i);
+if (character === openingBracket)
+++counter;
+else if (character === closingBracket) {
+if (--counter === 0)
+return i + 1;
+}
+}
+return -1;
+},
+
+finishLoading: function()
+{
+if (!this._json)
+return null;
+this._parseStringsArray();
+this._json = "";
+var result = new WebInspector.HeapSnapshot(this._snapshot);
+this._json = "";
+this._snapshot = {};
+return result;
+},
+
+_parseNodes: function()
+{
+var index = 0;
+var char0 = "0".charCodeAt(0), char9 = "9".charCodeAt(0), closingBracket = "]".charCodeAt(0);
+var length = this._json.length;
+while (true) {
+while (index < length) {
+var code = this._json.charCodeAt(index);
+if (char0 <= code && code <= char9)
+break;
+else if (code === closingBracket) {
+this._json = this._json.slice(index + 1);
+
+this._snapshot.nodes = this._snapshot.nodes.slice(0);
+return false;
+}
+++index;
+}
+if (index === length) {
+this._json = "";
+return true;
+}
+var startIndex = index;
+while (index < length) {
+var code = this._json.charCodeAt(index);
+if (char0 > code || code > char9)
+break;
+++index;
+}
+if (index === length) {
+this._json = this._json.slice(startIndex);
+return true;
+}
+this._snapshot.nodes.push(parseInt(this._json.slice(startIndex, index)));
+}
+},
+
+_parseStringsArray: function()
+{
+var closingBracketIndex = this._json.lastIndexOf("]");
+if (closingBracketIndex === -1)
+throw new Error("Incomplete JSON");
+this._json = this._json.slice(0, closingBracketIndex + 1);
+this._snapshot.strings = JSON.parse(this._json);
+},
+
+pushJSONChunk: function(chunk)
+{
+this._json += chunk;
+switch (this._state) {
+case "find-snapshot-info": {
+var snapshotToken = "\"snapshot\"";
+var snapshotTokenIndex = this._json.indexOf(snapshotToken);
+if (snapshotTokenIndex === -1)
+throw new Error("Snapshot token not found");
+this._json = this._json.slice(snapshotTokenIndex + snapshotToken.length + 1);
+this._state = "parse-snapshot-info";
+this.pushJSONChunk("");
+break;
+}
+case "parse-snapshot-info": {
+var closingBracketIndex = this._findBalancedCurlyBrackets();
+if (closingBracketIndex === -1)
+return;
+this._snapshot.snapshot = JSON.parse(this._json.slice(0, closingBracketIndex));
+this._json = this._json.slice(closingBracketIndex);
+this._state = "find-nodes";
+this.pushJSONChunk("");
+break;
+}
+case "find-nodes": {
+var nodesToken = "\"nodes\"";
+var nodesTokenIndex = this._json.indexOf(nodesToken);
+if (nodesTokenIndex === -1)
+return;
+var bracketIndex = this._json.indexOf("[", nodesTokenIndex);
+if (bracketIndex === -1)
+return;
+this._json = this._json.slice(bracketIndex + 1);
+this._state = "parse-nodes-meta-info";
+this.pushJSONChunk("");
+break;
+}
+case "parse-nodes-meta-info": {
+var closingBracketIndex = this._findBalancedCurlyBrackets();
+if (closingBracketIndex === -1)
+return;
+this._snapshot.nodes = [JSON.parse(this._json.slice(0, closingBracketIndex))];
+this._json = this._json.slice(closingBracketIndex);
+this._state = "parse-nodes";
+this.pushJSONChunk("");
+break;          
+}
+case "parse-nodes": {
+if (this._parseNodes())
+return;
+this._state = "find-strings";
+this.pushJSONChunk("");
+break;
+}
+case "find-strings": {
+var stringsToken = "\"strings\"";
+var stringsTokenIndex = this._json.indexOf(stringsToken);
+if (stringsTokenIndex === -1)
+return;
+var bracketIndex = this._json.indexOf("[", stringsTokenIndex);
+if (bracketIndex === -1)
+return;
+this._json = this._json.slice(bracketIndex);
+this._state = "accumulate-strings";
+break;
+}
+case "accumulate-strings":
+break;
+}
+}
+};
+
 WebInspector.HeapSnapshotArraySlice = function(snapshot, arrayName, start, end)
 {
 
@@ -40953,7 +42132,7 @@ this.node.nodeIndex = this.node._nextNodeIndex;
 
 WebInspector.HeapSnapshot = function(profile)
 {
-this.uid = profile.uid;
+this.uid = profile.snapshot.uid;
 this._nodes = profile.nodes;
 this._strings = profile.strings;
 
@@ -40997,14 +42176,14 @@ dispose: function()
 {
 delete this._nodes;
 delete this._strings;
-delete this._idsList;
 delete this._retainers;
 delete this._retainerIndex;
 delete this._nodeIndex;
 if (this._aggregates) {
 delete this._aggregates;
-this._aggregatesWithIndexes = false;
+this._aggregatesIndexesSorted = false;
 }
+delete this._baseNodeIds;
 },
 
 get _allNodes()
@@ -41023,10 +42202,15 @@ for (var iter = this._allNodes; iter.hasNext(); iter.next())
 return this._nodeCount;
 },
 
-restore: function(profile)
+nodeFieldValuesByIndex: function(fieldName, indexes)
 {
-this._nodes = profile.nodes;
-this._strings = profile.strings;
+var node = new WebInspector.HeapSnapshotNode(this);
+var result = new Array(indexes.length);
+for (var i = 0, l = indexes.length; i < l; ++i) {
+node.nodeIndex = indexes[i];
+result[i] = node[fieldName];
+}
+return result;
 },
 
 get rootNode()
@@ -41044,18 +42228,6 @@ get totalSize()
 return this.rootNode.retainedSize;
 },
 
-hasId: function(id)
-{
-return this.nodeIds.binaryIndexOf(id, this._numbersComparator) >= 0;
-},
-
-get nodeIds()
-{
-if (!this._idsList)
-this._buildIdsList();
-return this._idsList;
-},
-
 _retainersForNode: function(node)
 {
 if (!this._retainers)
@@ -41066,12 +42238,12 @@ var retIndexTo = this._getRetainerIndex(node._nextNodeIndex);
 return new WebInspector.HeapSnapshotArraySlice(this, "_retainers", retIndexFrom, retIndexTo);
 },
 
-aggregates: function(withNodeIndexes)
+aggregates: function(sortedIndexes)
 {
 if (!this._aggregates)
 this._buildAggregates();
-if (withNodeIndexes && !this._aggregatesWithIndexes)
-this._buildAggregatesIndexes();
+if (sortedIndexes && !this._aggregatesIndexesSorted)
+this._sortAggregateIndexes();
 return this._aggregates;
 },
 
@@ -41130,19 +42302,15 @@ var clss = this._aggregates[className];
 clss.self += node.selfSize;
 if (node.retainedSize > clss.maxRet)
 clss.maxRet = node.retainedSize;
-}
-},
-
-_buildAggregatesIndexes: function()
-{
-for (var iter = this._allNodes; iter.hasNext(); iter.next()) {
-var node = iter.node;
-var className = node.className;
-var clss = this._aggregates[className];
-if (clss)
 clss.idxs.push(node.nodeIndex);
 }
 
+for (var className in this._aggregates)
+this._aggregates[className].idxs = this._aggregates[className].idxs.slice(0);
+},
+
+_sortAggregateIndexes: function()
+{
 var nodeA = new WebInspector.HeapSnapshotNode(this);
 var nodeB = new WebInspector.HeapSnapshotNode(this);
 for (var clss in this._aggregates)
@@ -41153,18 +42321,7 @@ nodeB.nodeIndex = idxB;
 return nodeA.id < nodeB.id ? -1 : 1;
 });
 
-this._aggregatesWithIndexes = true;
-},
-
-_buildIdsList: function()
-{
-var count = 0;
-for (var nodesIter = this._allNodes; nodesIter.hasNext(); nodesIter.next(), ++count);
-this._idsList = new Array(count);
-count = 0;
-for (nodesIter = this._allNodes; nodesIter.hasNext(); nodesIter.next(), ++count)
-this._idsList[count] = nodesIter.node.id;
-this._idsList.sort(this._numbersComparator);
+this._aggregatesIndexesSorted = true;
 },
 
 _buildNodeIndex: function()
@@ -41233,14 +42390,66 @@ this._nodes[globalObjEdge._edges._start + globalObjEdge.edgeIndex + this._edgeTy
 _numbersComparator: function(a, b)
 {
 return a < b ? -1 : (a > b ? 1 : 0);
+},
+
+baseSnapshotHasNode: function(baseSnapshotId, className, nodeId)
+{
+return this._baseNodeIds[baseSnapshotId][className].binaryIndexOf(nodeId, this._numbersComparator) !== -1;
+},
+
+pushBaseIds: function(baseSnapshotId, className, nodeIds)
+{
+if (!this._baseNodeIds)
+this._baseNodeIds = [];
+if (!this._baseNodeIds[baseSnapshotId])
+this._baseNodeIds[baseSnapshotId] = {};
+this._baseNodeIds[baseSnapshotId][className] = nodeIds;
+},
+
+createDiff: function(className)
+{
+return new WebInspector.HeapSnapshotsDiff(this, className);
+},
+
+_parseFilter: function(filter)
+{
+if (!filter)
+return null;
+var parsedFilter = eval("(function(){return " + filter + "})()");
+return parsedFilter.bind(this);
+},
+
+createEdgesProvider: function(nodeIndex, filter)
+{
+return new WebInspector.HeapSnapshotEdgesProvider(this, nodeIndex, this._parseFilter(filter));
+},
+
+createNodesProvider: function(filter)
+{
+return new WebInspector.HeapSnapshotNodesProvider(this, this._parseFilter(filter));
+},
+
+createNodesProviderForClass: function(className)
+{
+return new WebInspector.HeapSnapshotNodesProvider(this, null, className);
+},
+
+createPathFinder: function(targetNodeIndex, skipHidden)
+{
+return new WebInspector.HeapSnapshotPathFinder(this, targetNodeIndex, skipHidden);
+},
+
+updateStaticData: function()
+{
+return {nodeCount: this.nodeCount, rootNodeIndex: this._rootNodeIndex, totalSize: this.totalSize, uid: this.uid};
 }
 };
 
-WebInspector.HeapSnapshotFilteredOrderedIterator = function(iterator, filter)
+WebInspector.HeapSnapshotFilteredOrderedIterator = function(iterator, filter, iterationOrder)
 {
 this._filter = filter;
 this._iterator = iterator;
-this._iterationOrder = null;
+this._iterationOrder = iterationOrder ? iterationOrder.slice(0) : null;
 this._position = 0;
 this._lastComparator = null;
 }
@@ -41302,6 +42511,25 @@ next: function()
 {
 ++this._position;
 },
+
+serializeNextItems: function(count)
+{
+var result = new Array(count);
+for (var i = 0 ; i < count && this.hasNext(); ++i, this.next())
+result[i] = this._serialize(this.item);
+result.length = i;
+result.hasNext = this.hasNext();
+result.totalLength = this.length;
+return result;
+},
+
+sortAndRewind: function(comparator)
+{
+var result = this.sort(comparator);
+if (result)
+this.first();
+return result;
+}
 }
 
 WebInspector.HeapSnapshotFilteredOrderedIterator.prototype.createComparator = function(fieldNames)
@@ -41317,6 +42545,11 @@ WebInspector.HeapSnapshotFilteredOrderedIterator.call(this, new WebInspector.Hea
 }
 
 WebInspector.HeapSnapshotEdgesProvider.prototype = {
+_serialize: function(edge)
+{
+return {name: edge.name, node: WebInspector.HeapSnapshotNodesProvider.prototype._serialize(edge.node), nodeIndex: edge.nodeIndex, type: edge.type};
+},
+
 sort: function(comparator)
 {
 if (this._lastComparator === comparator)
@@ -41393,13 +42626,21 @@ return true;
 
 WebInspector.HeapSnapshotEdgesProvider.prototype.__proto__ = WebInspector.HeapSnapshotFilteredOrderedIterator.prototype;
 
-WebInspector.HeapSnapshotNodesProvider = function(snapshot, filter)
+WebInspector.HeapSnapshotNodesProvider = function(snapshot, filter, className)
 {
 this.snapshot = snapshot;
+if (!className)
 WebInspector.HeapSnapshotFilteredOrderedIterator.call(this, snapshot._allNodes, filter);
+else
+WebInspector.HeapSnapshotFilteredOrderedIterator.call(this, snapshot._allNodes, null, snapshot.aggregates(false)[className].idxs);
 }
 
 WebInspector.HeapSnapshotNodesProvider.prototype = {
+_serialize: function(node)
+{
+return {id: node.id, name: node.name, nodeIndex: node.nodeIndex, retainedSize: node.retainedSize, selfSize: node.selfSize, type: node.type};
+},
+
 sort: function(comparator)
 {
 if (this._lastComparator === comparator)
@@ -41440,14 +42681,14 @@ return true;
 
 WebInspector.HeapSnapshotNodesProvider.prototype.__proto__ = WebInspector.HeapSnapshotFilteredOrderedIterator.prototype;
 
-WebInspector.HeapSnapshotPathFinder = function(snapshot, targetNodeIndex)
+WebInspector.HeapSnapshotPathFinder = function(snapshot, targetNodeIndex, skipHidden)
 {
 this._snapshot = snapshot;
 this._maxLength = 1;
 this._lengthLimit = 15;
 this._targetNodeIndex = targetNodeIndex;
 this._currentPath = null;
-this._skipHidden = !WebInspector.DetailedHeapshotView.prototype.showHiddenData;
+this._skipHidden = skipHidden;
 this._rootChildren = this._fillRootChildren();
 }
 
@@ -41463,7 +42704,7 @@ if (!this._buildNextPath())
 return null;
 }
 if (this._isPathFound())
-return {path:this._pathToString(this._currentPath), len:this._currentPath.length};
+return {path:this._pathToString(this._currentPath), route:this._pathToRoute(this._currentPath), len:this._currentPath.length};
 }
 
 return false;
@@ -41471,7 +42712,16 @@ return false;
 
 updateRoots: function(filter)
 {
+if (filter)
+filter = eval("(function(){return " + filter + "})()");
 this._rootChildren = this._fillRootChildren(filter);  
+this._reset();
+},
+
+_reset: function()
+{
+this._maxLength = 1;
+this._currentPath = null;
 },
 
 _fillRootChildren: function(filter)
@@ -41528,7 +42778,7 @@ return edge.isInvisible
 _nextEdgeIter: function()
 {
 var iter = this._lastEdgeIter;
-while (this._skipEdge(iter.item) && iter.hasNext())
+while (iter.hasNext() && this._skipEdge(iter.item))
 iter.next();
 return iter;
 },
@@ -41539,6 +42789,7 @@ if (this._currentPath !== null) {
 var iter = this._lastEdgeIter;
 while (true) {
 iter.next();
+iter = this._nextEdgeIter();
 if (iter.hasNext())
 return true;
 while (true) {
@@ -41594,8 +42845,494 @@ sPath.push(path[j].item.toString());
 sPath.push(this._nodeToString(path[path.length - 1].item.node));
 sPath.reverse();
 return sPath.join("");
+},
+
+_pathToRoute: function(path)
+{
+if (!path)
+return [];
+var route = [];
+route.push(this._targetNodeIndex);
+for (var i = 0; i < path.length; ++i)
+route.push(path[i].item.nodeIndex);
+route.reverse();
+return route;
 }
 };
+
+WebInspector.HeapSnapshotsDiff = function(snapshot, className)
+{
+this._snapshot = snapshot;
+this._className = className;
+};
+
+WebInspector.HeapSnapshotsDiff.prototype = {
+calculate: function()
+{
+var aggregates = this._snapshot.aggregates(true)[this._className];
+var indexes = aggregates ? aggregates.idxs : [];
+var i = 0, l = this._baseIds.length;
+var j = 0, m = indexes.length;
+var diff = { addedCount: 0, removedCount: 0, addedSize: 0, removedSize: 0 };
+
+var nodeB = new WebInspector.HeapSnapshotNode(this._snapshot, indexes[j]);
+while (i < l && j < m) {
+var nodeAId = this._baseIds[i];
+if (nodeAId < nodeB.id) {
+diff.removedCount++;
+diff.removedSize += this._baseSelfSizes[i];
+++i;
+} else if (nodeAId > nodeB.id) {
+diff.addedCount++;
+diff.addedSize += nodeB.selfSize;
+nodeB.nodeIndex = indexes[++j];                
+} else {
+++i;
+nodeB.nodeIndex = indexes[++j];                
+}
+}
+while (i < l) {
+diff.removedCount++;
+diff.removedSize += this._baseSelfSizes[i];
+++i;
+}
+while (j < m) {
+diff.addedCount++;
+diff.addedSize += nodeB.selfSize;
+nodeB.nodeIndex = indexes[++j];
+}
+diff.countDelta = diff.addedCount - diff.removedCount;
+diff.sizeDelta = diff.addedSize - diff.removedSize;
+return diff;
+},
+
+pushBaseIds: function(baseIds)
+{
+this._baseIds = baseIds;
+},
+
+pushBaseSelfSizes: function(baseSelfSizes)
+{
+this._baseSelfSizes = baseSelfSizes;
+}
+};
+
+
+
+
+
+WebInspector.HeapSnapshotRealWorker = function()
+{
+this._worker = new Worker("HeapSnapshotWorker.js");
+this._worker.addEventListener("message", this._messageReceived.bind(this), false);
+}
+
+WebInspector.HeapSnapshotRealWorker.prototype = {
+_messageReceived: function(event)
+{
+this.dispatchEventToListeners("message", event.data);
+},
+
+postMessage: function(message)
+{
+this._worker.postMessage(message);
+},
+
+terminate: function()
+{
+this._worker.terminate();
+}
+};
+
+WebInspector.HeapSnapshotRealWorker.prototype.__proto__ = WebInspector.Object.prototype;
+
+WebInspector.HeapSnapshotFakeWorker = function()
+{
+this._dispatcher = new WebInspector.HeapSnapshotWorkerDispatcher(window, this._postMessageFromWorker.bind(this));
+}
+
+WebInspector.HeapSnapshotFakeWorker.prototype = {
+postMessage: function(message)
+{
+function dispatch()
+{
+if (this._dispatcher)
+this._dispatcher.dispatchMessage({data: message});
+}
+setTimeout(dispatch.bind(this), 0);
+},
+
+terminate: function()
+{
+this._dispatcher = null;
+},
+
+_postMessageFromWorker: function(message)
+{
+function send()
+{
+this.dispatchEventToListeners("message", message);
+}
+setTimeout(send.bind(this), 0);
+}
+};
+
+WebInspector.HeapSnapshotFakeWorker.prototype.__proto__ = WebInspector.Object.prototype;
+
+WebInspector.HeapSnapshotWorker = function()
+{
+this._nextObjectId = 1;
+this._nextCallId = 1;
+this._callbacks = [];
+
+this._worker = typeof InspectorTest === "undefined" ? new WebInspector.HeapSnapshotRealWorker() : new WebInspector.HeapSnapshotFakeWorker();
+this._worker.addEventListener("message", this._messageReceived.bind(this), false);
+}
+
+WebInspector.HeapSnapshotWorker.prototype = {
+createObject: function(constructorName)
+{
+var proxyConstructorFunction = this._findFunction(constructorName + "Proxy");
+var objectId = this._nextObjectId++;
+var proxy = new proxyConstructorFunction(this, objectId);
+this._postMessage({callId: this._nextCallId++, disposition: "create", objectId: objectId, methodName: constructorName});
+return proxy;
+},
+
+dispose: function()
+{
+this._worker.terminate();
+},
+
+disposeObject: function(objectId)
+{
+this._postMessage({callId: this._nextCallId++, disposition: "dispose", objectId: objectId});
+},
+
+callGetter: function(callback, objectId, getterName)
+{
+var callId = this._nextCallId++;
+this._callbacks[callId] = callback;
+this._postMessage({callId: callId, disposition: "getter", objectId: objectId, methodName: getterName});
+},
+
+callFactoryMethod: function(callback, objectId, methodName, proxyConstructorName)
+{
+var callId = this._nextCallId++;
+var methodArguments = Array.prototype.slice.call(arguments, 4);
+var newObjectId = this._nextObjectId++;
+var proxyConstructorFunction = this._findFunction(proxyConstructorName);
+if (callback) {
+function wrapCallback(remoteResult)
+{
+callback(remoteResult ? new proxyConstructorFunction(this, newObjectId) : null);
+}
+this._callbacks[callId] = wrapCallback.bind(this);
+this._postMessage({callId: callId, disposition: "factory", objectId: objectId, methodName: methodName, methodArguments: methodArguments, newObjectId: newObjectId});
+return null;
+} else {
+this._postMessage({callId: callId, disposition: "factory", objectId: objectId, methodName: methodName, methodArguments: methodArguments, newObjectId: newObjectId});
+return new proxyConstructorFunction(this, newObjectId);
+}
+},
+
+callMethod: function(callback, objectId, methodName)
+{
+var callId = this._nextCallId++;
+var methodArguments = Array.prototype.slice.call(arguments, 3);
+if (callback)
+this._callbacks[callId] = callback;
+this._postMessage({callId: callId, disposition: "method", objectId: objectId, methodName: methodName, methodArguments: methodArguments});
+},
+
+_findFunction: function(name)
+{
+var path = name.split(".");
+var result = window;
+for (var i = 0; i < path.length; ++i)
+result = result[path[i]];
+return result;
+},
+
+_messageReceived: function(event)
+{
+var data = event.data;
+if (!this._callbacks[data.callId])
+return;
+var callback = this._callbacks[data.callId];
+delete this._callbacks[data.callId];
+callback(data.result);
+},
+
+_postMessage: function(message)
+{
+this._worker.postMessage(message);      
+}
+};
+
+WebInspector.HeapSnapshotProxyObject = function(worker, objectId)
+{
+this._worker = worker;
+this._objectId = objectId;
+}
+
+WebInspector.HeapSnapshotProxyObject.prototype = {
+_callWorker: function(workerMethodName, args)
+{
+args.splice(1, 0, this._objectId);
+return this._worker[workerMethodName].apply(this._worker, args);
+},
+
+dispose: function()
+{
+this._worker.disposeObject(this._objectId);
+},
+
+disposeWorker: function()
+{
+this._worker.dispose();
+},
+
+callFactoryMethod: function(callback, methodName, proxyConstructorName)
+{
+return this._callWorker("callFactoryMethod", Array.prototype.slice.call(arguments, 0));
+},
+
+callGetter: function(callback, getterName)
+{
+return this._callWorker("callGetter", Array.prototype.slice.call(arguments, 0));
+},
+
+callMethod: function(callback, methodName)
+{
+return this._callWorker("callMethod", Array.prototype.slice.call(arguments, 0));
+}
+};
+
+WebInspector.HeapSnapshotLoaderProxy = function(worker, objectId)
+{
+WebInspector.HeapSnapshotProxyObject.call(this, worker, objectId);
+this._loading = false;
+this._loaded = false;
+}
+
+WebInspector.HeapSnapshotLoaderProxy.prototype = {
+finishLoading: function(callback)
+{
+if (!this._loading)
+return false;
+var loadCallbacks = this._onLoadCallbacks;
+loadCallbacks.splice(0, 0, callback);
+delete this._onLoadCallbacks;
+this._loading = false;
+this._loaded = true;
+function callLoadCallbacks(snapshotProxy)
+{
+for (var i = 0; i < loadCallbacks.length; ++i)
+loadCallbacks[i](snapshotProxy);
+}
+function updateStaticData(snapshotProxy)
+{
+this.dispose();
+snapshotProxy.updateStaticData(callLoadCallbacks);
+}
+this.callFactoryMethod(updateStaticData.bind(this), "finishLoading", "WebInspector.HeapSnapshotProxy");
+return true;
+},
+
+get loaded()
+{
+return this._loaded;
+},
+
+startLoading: function(callback)
+{
+if (!this._loading) {
+this._onLoadCallbacks = [callback];
+this._loading = true;
+return true;
+} else {
+this._onLoadCallbacks.push(callback);
+return false;
+}
+},
+
+pushJSONChunk: function(chunk)
+{
+if (!this._loading)
+return;
+this.callMethod(null, "pushJSONChunk", chunk);
+}
+};
+
+WebInspector.HeapSnapshotLoaderProxy.prototype.__proto__ = WebInspector.HeapSnapshotProxyObject.prototype;
+
+WebInspector.HeapSnapshotProxy = function(worker, objectId)
+{
+WebInspector.HeapSnapshotProxyObject.call(this, worker, objectId);
+}
+
+WebInspector.HeapSnapshotProxy.prototype = {
+aggregates: function(sortedIndexes, callback)
+{
+this.callMethod(callback, "aggregates", sortedIndexes);
+},
+
+createDiff: function(className)
+{
+return this.callFactoryMethod(null, "createDiff",  "WebInspector.HeapSnapshotsDiffProxy", className);
+},
+
+createEdgesProvider: function(nodeIndex, filter)
+{
+return this.callFactoryMethod(null, "createEdgesProvider", "WebInspector.HeapSnapshotProviderProxy", nodeIndex, filter);
+},
+
+createNodesProvider: function(filter)
+{
+return this.callFactoryMethod(null, "createNodesProvider", "WebInspector.HeapSnapshotProviderProxy", filter);
+},
+
+createNodesProviderForClass: function(className)
+{
+return this.callFactoryMethod(null, "createNodesProviderForClass", "WebInspector.HeapSnapshotProviderProxy", className);
+},
+
+createPathFinder: function(targetNodeIndex)
+{
+return this.callFactoryMethod(null, "createPathFinder", "WebInspector.HeapSnapshotPathFinderProxy", targetNodeIndex);
+},
+
+dispose: function()
+{
+this.disposeWorker();
+},
+
+finishLoading: function()
+{
+return false;
+},
+
+get loaded()
+{
+return !!this._objectId;
+},
+
+get nodeCount()
+{
+return this._staticData.nodeCount;
+},
+
+nodeFieldValuesByIndex: function(fieldName, indexes, callback)
+{
+this.callMethod(callback, "nodeFieldValuesByIndex", fieldName, indexes);
+},
+
+pushBaseIds: function(snapshotId, className, nodeIds)
+{
+this.callMethod(null, "pushBaseIds", snapshotId, className, nodeIds);
+},
+
+get rootNodeIndex()
+{
+return this._staticData.rootNodeIndex;
+},
+
+updateStaticData: function(callback)
+{
+function dataReceived(staticData)
+{
+this._staticData = staticData;
+callback(this);
+}
+this.callMethod(dataReceived.bind(this), "updateStaticData");
+},
+
+startLoading: function(callback)
+{
+setTimeout(callback, 0);
+return false;
+},
+
+get totalSize()
+{
+return this._staticData.totalSize;
+},
+
+get uid()
+{
+return this._staticData.uid;
+}
+};
+
+WebInspector.HeapSnapshotProxy.prototype.__proto__ = WebInspector.HeapSnapshotProxyObject.prototype;
+
+WebInspector.HeapSnapshotProviderProxy = function(worker, objectId)
+{
+WebInspector.HeapSnapshotProxyObject.call(this, worker, objectId);
+}
+
+WebInspector.HeapSnapshotProviderProxy.prototype = {
+isEmpty: function(callback)
+{
+this.callGetter(callback, "isEmpty");
+},
+
+serializeNextItems: function(count, callback)
+{
+this.callMethod(callback, "serializeNextItems", count);
+},
+
+sortAndRewind: function(comparator, callback)
+{
+this.callMethod(callback, "sortAndRewind", comparator);
+}
+};
+
+WebInspector.HeapSnapshotProviderProxy.prototype.__proto__ = WebInspector.HeapSnapshotProxyObject.prototype;
+
+WebInspector.HeapSnapshotPathFinderProxy = function(worker, objectId)
+{
+WebInspector.HeapSnapshotProxyObject.call(this, worker, objectId);
+}
+
+WebInspector.HeapSnapshotPathFinderProxy.prototype = {
+findNext: function(callback)
+{
+this.callMethod(callback, "findNext");
+},
+
+updateRoots: function(filter)
+{
+this.callMethod(null, "updateRoots", filter);
+}
+};
+
+WebInspector.HeapSnapshotPathFinderProxy.prototype.__proto__ = WebInspector.HeapSnapshotProxyObject.prototype;
+
+WebInspector.HeapSnapshotsDiffProxy = function(worker, objectId)
+{
+WebInspector.HeapSnapshotProxyObject.call(this, worker, objectId);
+}
+
+WebInspector.HeapSnapshotsDiffProxy.prototype = {
+calculate: function(callback)
+{
+this.callMethod(callback, "calculate");
+},
+
+pushBaseIds: function(baseIds)
+{
+this.callMethod(null, "pushBaseIds", baseIds);
+},
+
+pushBaseSelfSizes: function(baseSelfSizes)
+{
+this.callMethod(null, "pushBaseSelfSizes", baseSelfSizes);
+}
+};
+
+WebInspector.HeapSnapshotsDiffProxy.prototype.__proto__ = WebInspector.HeapSnapshotProxyObject.prototype;
 
 
 
@@ -42608,10 +44345,70 @@ WebInspector.HeapSnapshotProfileType.prototype.__proto__ = WebInspector.ProfileT
 
 
 
-WebInspector.HeapSnapshotGridNode = function(tree, hasChildren, populateCount)
+WebInspector.HeapSnapshotWorkerDispatcher = function(globalObject, postMessage)
+{
+this._objects = [];
+this._global = globalObject;
+this._postMessage = postMessage;
+}
+
+WebInspector.HeapSnapshotWorkerDispatcher.prototype = {
+_findFunction: function(name)
+{
+var path = name.split(".");
+var result = this._global;
+for (var i = 0; i < path.length; ++i)
+result = result[path[i]];
+return result;
+},
+
+dispatchMessage: function(event)
+{
+var data = event.data;
+switch (data.disposition) {
+case "create": {
+var constructorFunction = this._findFunction(data.methodName);
+this._objects[data.objectId] = new constructorFunction();
+this._postMessage({callId: data.callId});
+break;
+}
+case "dispose": {
+delete this._objects[data.objectId];
+this._postMessage({callId: data.callId});
+break;
+}
+case "getter": {
+var object = this._objects[data.objectId];
+var result = object[data.methodName];
+this._postMessage({callId: data.callId, result: result});
+break;
+}
+case "factory": {
+var object = this._objects[data.objectId];
+var result = object[data.methodName].apply(object, data.methodArguments);
+if (result)
+this._objects[data.newObjectId] = result;            
+this._postMessage({callId: data.callId, result: !!result});
+break;
+}
+case "method": {
+var object = this._objects[data.objectId];
+var result = object[data.methodName].apply(object, data.methodArguments);
+this._postMessage({callId: data.callId, result: result});
+break;
+}
+}
+}
+};
+
+
+
+
+
+WebInspector.HeapSnapshotGridNode = function(tree, hasChildren)
 {
 WebInspector.DataGridNode.call(this, null, hasChildren);
-this._defaultPopulateCount = populateCount;
+this._defaultPopulateCount = tree._defaultPopulateCount;
 this._provider = null;
 this.addEventListener("populate", this._populate, this);
 }
@@ -42625,26 +44422,36 @@ cell.addStyleClass("highlight");
 return cell;
 },
 
-_populate: function(event)
+dispose: function()
 {
-WebInspector.PleaseWaitMessage.prototype.startAction(this.dataGrid.element, doPopulate.bind(this));
-
-function doPopulate()
-{
-this._provider.sort(this.comparator());
-this._provider.first();
-this.populateChildren();
-this.removeEventListener("populate", this._populate, this);
-}
+if (this._provider)
+this._provider.dispose();
+for (var node = this.children[0]; node; node = node.traverseNextNode(true, this, true))
+if (node.dispose)
+node.dispose();
 },
 
-populateChildren: function(provider, howMany, atIndex)
+_populate: function(event)
 {
+this.removeEventListener("populate", this._populate, this);
+function sorted(ignored)
+{
+this.populateChildren();
+}
+WebInspector.PleaseWaitMessage.prototype.show(this.dataGrid.element);
+this._provider.sortAndRewind(this.comparator(), sorted.bind(this));
+},
+
+populateChildren: function(provider, howMany, atIndex, afterPopulate, suppressNotifyAboutCompletion)
+{
+WebInspector.PleaseWaitMessage.prototype.show(this.dataGrid.element);
 if (!howMany && provider) {
 howMany = provider.instanceCount;
 provider.instanceCount = 0;
 }
 provider = provider || this._provider;
+if (!("instanceCount" in provider))
+provider.instanceCount = 0;
 howMany = howMany || this._defaultPopulateCount;
 atIndex = atIndex || this.children.length;
 var haveSavedChildren = !!this._savedChildren;
@@ -42655,8 +44462,13 @@ haveSavedChildren = true;
 break;
 }
 }
-for ( ; howMany > 0 && provider.hasNext(); provider.next(), ++provider.instanceCount, --howMany) {
-var item = provider.item;
+
+function childrenRetrieved(items)
+{
+var hasNext = items.hasNext;
+var length = items.totalLength;
+for (var i = 0, l = items.length; i < l; ++i) {
+var item = items[i];
 if (haveSavedChildren) {
 var hash = this._childHashForEntity(item);
 if (hash in this._savedChildren) {
@@ -42664,10 +44476,28 @@ this.insertChild(this._savedChildren[hash], atIndex++);
 continue;
 }
 }
-this.insertChild(this._createChildNode(provider), atIndex++);
+this.insertChild(this._createChildNode(item, provider), atIndex++);
 }
-if (provider.hasNext())
-this.insertChild(new WebInspector.ShowMoreDataGridNode(this.populateChildren.bind(this, provider), this._defaultPopulateCount, provider.length), atIndex++);
+provider.instanceCount += items.length;
+
+if (hasNext)
+this.insertChild(new WebInspector.ShowMoreDataGridNode(this.populateChildren.bind(this, provider), this._defaultPopulateCount, length), atIndex++);
+if (afterPopulate)
+afterPopulate();
+if (!suppressNotifyAboutCompletion) {
+function notify()
+{
+this.dispatchEventToListeners("populate complete");
+}
+setTimeout(notify.bind(this), 0);
+}
+WebInspector.PleaseWaitMessage.prototype.hide();
+}
+function callSerialize()
+{
+provider.serializeNextItems(howMany, childrenRetrieved.bind(this));
+}
+setTimeout(callSerialize.bind(this), 0);
 },
 
 _saveChildren: function()
@@ -42682,31 +44512,37 @@ this._savedChildren[this._childHashForNode(child)] = child;
 
 sort: function()
 {
-var comparator = this.comparator();
-WebInspector.PleaseWaitMessage.prototype.startAction(this.dataGrid.element, doSort.bind(this));
-
-function doSort()
+WebInspector.PleaseWaitMessage.prototype.showAndWaitFor(this.dataGrid.element, this.dataGrid, "sorting complete");
+this.dataGrid.recursiveSortingEnter();
+function afterSort(sorted)
 {
-if (!this._provider.sort(comparator))
+if (!sorted) {
+this.dataGrid.recursiveSortingLeave();
 return;
+}
 this._saveChildren();
 this.removeChildren();
-this._provider.first();
-this.populateChildren(this._provider);
+
+function afterPopulate()
+{
 for (var i = 0, l = this.children.length; i < l; ++i) {
 var child = this.children[i];
 if (child.expanded)
 child.sort();
 }
+this.dataGrid.recursiveSortingLeave();
 }
+this.populateChildren(this._provider, null, null, afterPopulate.bind(this));
+}
+this._provider.sortAndRewind(this.comparator(), afterSort.bind(this));
 }
 };
 
 WebInspector.HeapSnapshotGridNode.prototype.__proto__ = WebInspector.DataGridNode.prototype;
 
-WebInspector.HeapSnapshotGenericObjectNode = function(tree, node, hasChildren, populateCount)
+WebInspector.HeapSnapshotGenericObjectNode = function(tree, node)
 {
-WebInspector.HeapSnapshotGridNode.call(this, tree, hasChildren, populateCount);
+WebInspector.HeapSnapshotGridNode.call(this, tree, false);
 this._name = node.name;
 this._type = node.type;
 this._shallowSize = node.selfSize;
@@ -42747,7 +44583,7 @@ return cell;
 
 get _countPercent()
 {
-return this._count / this.tree.snapshot.nodeCount * 100.0;
+return this._count / this.dataGrid.snapshot.nodeCount * 100.0;
 },
 
 get data()
@@ -42796,36 +44632,45 @@ return this._retainedSize / this.dataGrid.snapshot.totalSize * 100.0;
 get _shallowSizePercent()
 {
 return this._shallowSize / this.dataGrid.snapshot.totalSize * 100.0;
+},
+
+_updateHasChildren: function()
+{
+function isEmptyCallback(isEmpty)
+{
+this.hasChildren = !isEmpty;
+}
+this._provider.isEmpty(isEmptyCallback.bind(this));
 }
 }
 
 WebInspector.HeapSnapshotGenericObjectNode.prototype.__proto__ = WebInspector.HeapSnapshotGridNode.prototype;
 
-WebInspector.HeapSnapshotObjectNode = function(tree, edge)
+WebInspector.HeapSnapshotObjectNode = function(tree, isFromBaseSnapshot, edge)
 {
-var provider = this._createProvider(tree.snapshot, edge.nodeIndex);
-WebInspector.HeapSnapshotGenericObjectNode.call(this, tree, edge.node, !provider.isEmpty, 100);
+WebInspector.HeapSnapshotGenericObjectNode.call(this, tree, edge.node);
 this._referenceName = edge.name;
 this._referenceType = edge.type;
-this._provider = provider;
+this._isFromBaseSnapshot = isFromBaseSnapshot;
+this._provider = this._createProvider(!isFromBaseSnapshot ? tree.snapshot : tree.baseSnapshot, edge.nodeIndex);
+this._updateHasChildren();
 }
 
 WebInspector.HeapSnapshotObjectNode.prototype = {
-_createChildNode: function(provider)
+_createChildNode: function(item)
 {
-return new WebInspector.HeapSnapshotObjectNode(this.dataGrid, provider.item);
+return new WebInspector.HeapSnapshotObjectNode(this.dataGrid, this._isFromBaseSnapshot, item);
 },
 
 _createProvider: function(snapshot, nodeIndex)
 {
 var showHiddenData = WebInspector.DetailedHeapshotView.prototype.showHiddenData;
-return new WebInspector.HeapSnapshotEdgesProvider(
-snapshot,
+return snapshot.createEdgesProvider(
 nodeIndex,
-function(edge) {
-return !edge.isInvisible
-&& (showHiddenData || (!edge.isHidden && !edge.node.isHidden));
-});
+"function(edge) {" +
+"    return !edge.isInvisible" +
+"        && (" + showHiddenData + " || (!edge.isHidden && !edge.node.isHidden));" +
+"}");
 },
 
 _childHashForEntity: function(edge)
@@ -42892,28 +44737,27 @@ WebInspector.HeapSnapshotObjectNode.prototype.__proto__ = WebInspector.HeapSnaps
 
 WebInspector.HeapSnapshotInstanceNode = function(tree, baseSnapshot, snapshot, node)
 {
-var provider = this._createProvider(baseSnapshot || snapshot, node.nodeIndex);  
-WebInspector.HeapSnapshotGenericObjectNode.call(this, tree, node, !provider.isEmpty, 100);
+WebInspector.HeapSnapshotGenericObjectNode.call(this, tree, node);
 this._isDeletedNode = !!baseSnapshot;
-this._provider = provider;    
+this._provider = this._createProvider(baseSnapshot || snapshot, node.nodeIndex);
+this._updateHasChildren();
 };
 
 WebInspector.HeapSnapshotInstanceNode.prototype = {
-_createChildNode: function(provider)
+_createChildNode: function(item)
 {
-return new WebInspector.HeapSnapshotObjectNode(this.dataGrid, provider.item);
+return new WebInspector.HeapSnapshotObjectNode(this.dataGrid, this._isDeletedNode, item);
 },
 
 _createProvider: function(snapshot, nodeIndex)
 {
 var showHiddenData = WebInspector.DetailedHeapshotView.prototype.showHiddenData;
-return new WebInspector.HeapSnapshotEdgesProvider(
-snapshot,
+return snapshot.createEdgesProvider(
 nodeIndex,
-function(edge) {
-return !edge.isInvisible
-&& (showHiddenData || (!edge.isHidden && !edge.node.isHidden));
-});
+"function(edge) {" +
+"    return !edge.isInvisible" +
+"        && (" + showHiddenData + " || (!edge.isHidden && !edge.node.isHidden));" +
+"}");
 },
 
 _childHashForEntity: function(edge)
@@ -42960,6 +44804,11 @@ data["removedCount"] = "";
 data["removedSize"] = "";
 }
 return data;
+},
+
+get isDeletedNode()
+{
+return this._isDeletedNode;
 }
 }
 
@@ -42967,28 +44816,23 @@ WebInspector.HeapSnapshotInstanceNode.prototype.__proto__ = WebInspector.HeapSna
 
 WebInspector.HeapSnapshotConstructorNode = function(tree, className, aggregate)
 {
-WebInspector.HeapSnapshotGridNode.call(this, tree, aggregate.count > 0, 100);
+WebInspector.HeapSnapshotGridNode.call(this, tree, aggregate.count > 0);
 this._name = className;
 this._count = aggregate.count;
 this._shallowSize = aggregate.self;
 this._retainedSize = aggregate.maxRet;
-this._provider = this._createNodesProvider(tree.snapshot, aggregate.type, className);
+this._provider = this._createNodesProvider(tree.snapshot, className);
 }
 
 WebInspector.HeapSnapshotConstructorNode.prototype = {
-_createChildNode: function(provider)
+_createChildNode: function(item)
 {
-return new WebInspector.HeapSnapshotInstanceNode(this.dataGrid, null, this.dataGrid.snapshot, provider.item);
+return new WebInspector.HeapSnapshotInstanceNode(this.dataGrid, null, this.dataGrid.snapshot, item);
 },
 
-_createNodesProvider: function(snapshot, nodeType, nodeClassName)
+_createNodesProvider: function(snapshot, className)
 {
-return new WebInspector.HeapSnapshotNodesProvider(
-snapshot,
-function (node) {
-return node.type === nodeType
-&& (nodeClassName === null || node.className === nodeClassName);
-});
+return snapshot.createNodesProviderForClass(className);
 },
 
 comparator: function()
@@ -43049,95 +44893,104 @@ this._it2 = it2;
 }
 
 WebInspector.HeapSnapshotIteratorsTuple.prototype = {
-first: function()
+dispose: function()
 {
-this._it1.first();
-this._it2.first();
+this._it1.dispose();
+this._it2.dispose();
 },
 
-sort: function(comparator)
+sortAndRewind: function(comparator, callback)
 {
-this._it1.sort(comparator);
-this._it2.sort(comparator);
+function afterSort(ignored)
+{
+this._it2.sortAndRewind(comparator, callback);
+}
+this._it1.sortAndRewind(comparator, afterSort.bind(this));
 }
 };
 
 WebInspector.HeapSnapshotDiffNode = function(tree, className, baseAggregate, aggregate)
 {
-if (!baseAggregate)
-baseAggregate = { count: 0, self: 0, maxRet: 0, type:aggregate.type, name:aggregate.name, idxs: [] };
-if (!aggregate)
-aggregate = { count: 0, self: 0, maxRet: 0, type:baseAggregate.type, name:baseAggregate.name, idxs: [] };
-WebInspector.HeapSnapshotGridNode.call(this, tree, true, 50);
+WebInspector.HeapSnapshotGridNode.call(this, tree, true);
 this._name = className;
-this._calculateDiff(tree.baseSnapshot, tree.snapshot, baseAggregate.idxs, aggregate.idxs);
-this._provider = this._createNodesProvider(tree.baseSnapshot, tree.snapshot, aggregate.type, className);
+this._baseIndexes = baseAggregate ? baseAggregate.idxs : [];
+this._indexes = aggregate ? aggregate.idxs : [];
+this._provider = this._createNodesProvider(tree.baseSnapshot, tree.snapshot, aggregate ? aggregate.type : baseAggregate.type, className);
 }
 
 WebInspector.HeapSnapshotDiffNode.prototype = {
-_calculateDiff: function(baseSnapshot, snapshot, baseIndexes, currentIndexes)
+calculateDiff: function(dataGrid, callback)
 {
-var i = 0, l = baseIndexes.length;
-var j = 0, m = currentIndexes.length;
-this._addedCount = 0;
-this._removedCount = 0;
-this._addedSize = 0;
-this._removedSize = 0;
-var nodeA = new WebInspector.HeapSnapshotNode(baseSnapshot);
-var nodeB = new WebInspector.HeapSnapshotNode(snapshot);
-nodeA.nodeIndex = baseIndexes[i];
-nodeB.nodeIndex = currentIndexes[j];
-while (i < l && j < m) {
-if (nodeA.id < nodeB.id) {
-this._removedCount++;
-this._removedSize += nodeA.selfSize;
-nodeA.nodeIndex = baseIndexes[++i];
-} else if (nodeA.id > nodeB.id) {
-this._addedCount++;
-this._addedSize += nodeB.selfSize;
-nodeB.nodeIndex = currentIndexes[++j];                
-} else {
-nodeA.nodeIndex = baseIndexes[++i];
-nodeB.nodeIndex = currentIndexes[++j];                
+var diff = dataGrid.snapshot.createDiff(this._name);
+
+function diffCalculated(diffResult)
+{
+diff.dispose();
+this._addedCount = diffResult.addedCount;
+this._removedCount = diffResult.removedCount;
+this._countDelta = diffResult.countDelta;
+this._addedSize = diffResult.addedSize;
+this._removedSize = diffResult.removedSize;
+this._sizeDelta = diffResult.sizeDelta;
+this._baseIndexes = null;
+this._indexes = null;
+callback(this._addedSize === 0 && this._removedSize === 0);
 }
+function baseSelfSizesReceived(baseSelfSizes)
+{
+diff.pushBaseSelfSizes(baseSelfSizes);
+diff.calculate(diffCalculated.bind(this));
 }
-while (i < l) {
-this._removedCount++;
-this._removedSize += nodeA.selfSize;
-nodeA.nodeIndex = baseIndexes[++i];
+function baseIdsReceived(baseIds)
+{
+diff.pushBaseIds(baseIds);
+dataGrid.snapshot.pushBaseIds(dataGrid.baseSnapshot.uid, this._name, baseIds);
+dataGrid.baseSnapshot.nodeFieldValuesByIndex("selfSize", this._baseIndexes, baseSelfSizesReceived.bind(this));
 }
-while (j < m) {
-this._addedCount++;
-this._addedSize += nodeB.selfSize;
-nodeB.nodeIndex = currentIndexes[++j];                
+function idsReceived(ids)
+{
+dataGrid.baseSnapshot.pushBaseIds(dataGrid.snapshot.uid, this._name, ids);
 }
-this._countDelta = this._addedCount - this._removedCount;
-this._sizeDelta = this._addedSize - this._removedSize;
+dataGrid.baseSnapshot.nodeFieldValuesByIndex("id", this._baseIndexes, baseIdsReceived.bind(this));
+dataGrid.snapshot.nodeFieldValuesByIndex("id", this._indexes, idsReceived.bind(this));
 },
 
-_createChildNode: function(provider)
+_createChildNode: function(item, provider)
 {
 if (provider === this._provider._it1)
-return new WebInspector.HeapSnapshotInstanceNode(this.dataGrid, null, provider.snapshot, provider.item);
+return new WebInspector.HeapSnapshotInstanceNode(this.dataGrid, null, provider.snapshot, item);
 else
-return new WebInspector.HeapSnapshotInstanceNode(this.dataGrid, provider.snapshot, null, provider.item);
+return new WebInspector.HeapSnapshotInstanceNode(this.dataGrid, provider.snapshot, null, item);
 },
 
 _createNodesProvider: function(baseSnapshot, snapshot, nodeType, nodeClassName)
 {
+var className = this._name;
 return new WebInspector.HeapSnapshotIteratorsTuple(
 createProvider(snapshot, baseSnapshot), createProvider(baseSnapshot, snapshot));
 
 function createProvider(snapshot, otherSnapshot)
 {
-return new WebInspector.HeapSnapshotNodesProvider(
-snapshot,
-function (node) {
-return node.type === nodeType
-&& (nodeClassName === null || node.className === nodeClassName)
-&& !otherSnapshot.hasId(node.id);
-});
+var otherSnapshotId = otherSnapshot.uid;
+var provider = snapshot.createNodesProvider(
+"function (node) {" +
+"     return node.type === \"" + nodeType + "\" " +
+(nodeClassName !== null ? "&& node.className === \"" + nodeClassName + "\"" : "") +
+"         && !this.baseSnapshotHasNode(" + otherSnapshotId + ", \"" + className + "\", node.id);" +
+"}");
+provider.snapshot = snapshot;
+return provider;
 }
+},
+
+_childHashForEntity: function(node)
+{
+return node.id;
+},
+
+_childHashForNode: function(childNode)
+{
+return childNode.snapshotNodeId;
 },
 
 comparator: function()
@@ -43156,16 +45009,22 @@ sizeDelta: ["selfSize", sortAscending, "id", true]
 return WebInspector.HeapSnapshotFilteredOrderedIterator.prototype.createComparator(sortFields);
 },
 
-populateChildren: function(provider, howMany, atIndex)
+populateChildren: function(provider, howMany, atIndex, afterPopulate)
 {
 if (!provider && !howMany) {
-WebInspector.HeapSnapshotGridNode.prototype.populateChildren.call(this, this._provider._it1, this._defaultPopulateCount);
-WebInspector.HeapSnapshotGridNode.prototype.populateChildren.call(this, this._provider._it2, this._defaultPopulateCount);
+var firstProviderPopulated = function()
+{
+WebInspector.HeapSnapshotGridNode.prototype.populateChildren.call(this, this._provider._it2, this._defaultPopulateCount, atIndex, afterPopulate);
+};
+WebInspector.HeapSnapshotGridNode.prototype.populateChildren.call(this, this._provider._it1, this._defaultPopulateCount, atIndex, firstProviderPopulated.bind(this), true);
 } else if (!howMany) {
-WebInspector.HeapSnapshotGridNode.prototype.populateChildren.call(this, this._provider._it1);
-WebInspector.HeapSnapshotGridNode.prototype.populateChildren.call(this, this._provider._it2);
+var firstProviderPopulated = function()
+{
+WebInspector.HeapSnapshotGridNode.prototype.populateChildren.call(this, this._provider._it2, null, atIndex, afterPopulate);
+};
+WebInspector.HeapSnapshotGridNode.prototype.populateChildren.call(this, this._provider._it1, null, atIndex, firstProviderPopulated.bind(this), true);
 } else
-WebInspector.HeapSnapshotGridNode.prototype.populateChildren.call(this, provider, howMany, atIndex);
+WebInspector.HeapSnapshotGridNode.prototype.populateChildren.call(this, provider, howMany, atIndex, afterPopulate);
 },
 
 _signForDelta: function(delta)
@@ -43190,11 +45049,6 @@ data["removedSize"] = Number.bytesToString(this._removedSize);
 data["sizeDelta"] = WebInspector.UIString("%s%s", this._signForDelta(this._sizeDelta), Number.bytesToString(Math.abs(this._sizeDelta)));
 
 return data;
-},
-
-get zeroDiff()
-{
-return this._addedCount === 0 && this._removedCount === 0;
 }
 };
 
@@ -43202,28 +45056,27 @@ WebInspector.HeapSnapshotDiffNode.prototype.__proto__ = WebInspector.HeapSnapsho
 
 WebInspector.HeapSnapshotDominatorObjectNode = function(tree, node)
 {
-var provider = this._createProvider(tree.snapshot, node.nodeIndex);
-WebInspector.HeapSnapshotGenericObjectNode.call(this, tree, node, !provider.isEmpty, 25);
-this._provider = provider;
+WebInspector.HeapSnapshotGenericObjectNode.call(this, tree, node);
+this._provider = this._createProvider(tree.snapshot, node.nodeIndex);
+this._updateHasChildren();
 };
 
 WebInspector.HeapSnapshotDominatorObjectNode.prototype = {
-_createChildNode: function(provider)
+_createChildNode: function(item)
 {
-return new WebInspector.HeapSnapshotDominatorObjectNode(this.dataGrid, provider.item);
+return new WebInspector.HeapSnapshotDominatorObjectNode(this.dataGrid, item);
 },
 
 _createProvider: function(snapshot, nodeIndex)
 {
 var showHiddenData = WebInspector.DetailedHeapshotView.prototype.showHiddenData;
-return new WebInspector.HeapSnapshotNodesProvider(
-snapshot,
-function (node) {
-var dominatorIndex = node.dominatorIndex;
-return dominatorIndex === nodeIndex
-&& dominatorIndex !== node.nodeIndex
-&& (showHiddenData || !node.isHidden);
-});
+return snapshot.createNodesProvider(
+"function (node) {" +
+"     var dominatorIndex = node.dominatorIndex;" +
+"     return dominatorIndex === " + nodeIndex + 
+"         && dominatorIndex !== node.nodeIndex" +
+"         && (" + showHiddenData + " || !node.isHidden);" +
+"}");
 },
 
 _childHashForEntity: function(node)
@@ -43263,6 +45116,7 @@ targetPrototype._childHashForNode = sourcePrototype._childHashForNode;
 targetPrototype.comparator = sourcePrototype.comparator;
 targetPrototype._createChildNode = sourcePrototype._createChildNode;
 targetPrototype._createProvider = sourcePrototype._createProvider;
+targetPrototype.dispose = sourcePrototype.dispose;
 targetPrototype.populateChildren = sourcePrototype.populateChildren;
 targetPrototype._saveChildren = sourcePrototype._saveChildren;
 targetPrototype.sort = sourcePrototype.sort;
@@ -43272,32 +45126,6 @@ targetPrototype.sort = sourcePrototype.sort;
 
 
 
-WebInspector.HeapSnapshotContainmentDataGrid = function()
-{
-var columns = {
-object: { title: WebInspector.UIString("Object"), disclosure: true, sortable: true, sort: "ascending" },
-shallowSize: { title: WebInspector.UIString("Shallow Size"), width: "90px", sortable: true },
-retainedSize: { title: WebInspector.UIString("Retained Size"), width: "90px", sortable: true }
-};
-WebInspector.DataGrid.call(this, columns);
-this.addEventListener("sorting changed", this.sort, this);
-this._defaultPopulateCount = 100;
-}
-
-WebInspector.HeapSnapshotContainmentDataGrid.prototype = {
-setDataSource: function(snapshotView, snapshot)
-{
-this.snapshotView = snapshotView;
-this.snapshot = snapshot;
-this.snapshotNodeIndex = this.snapshot.rootNodeIndex;
-this._provider = this._createProvider(snapshot, this.snapshotNodeIndex);
-this.sort();
-}
-};
-
-MixInSnapshotNodeFunctions(WebInspector.HeapSnapshotObjectNode.prototype, WebInspector.HeapSnapshotContainmentDataGrid.prototype);
-WebInspector.HeapSnapshotContainmentDataGrid.prototype.__proto__ = WebInspector.DataGrid.prototype;
-
 WebInspector.HeapSnapshotSortableDataGrid = function(columns)
 {
 WebInspector.DataGrid.call(this, columns);
@@ -43305,10 +45133,26 @@ this.addEventListener("sorting changed", this.sortingChanged, this);
 }
 
 WebInspector.HeapSnapshotSortableDataGrid.prototype = {
+dispose: function()
+{
+for (var i = 0, l = this.children.length; i < l; ++i)
+this.children[i].dispose();
+},
+
+resetSortingCache: function()
+{
+delete this._lastSortColumnIdentifier;
+delete this._lastSortAscending;
+},
+
 sortingChanged: function()
 {
 var sortAscending = this.sortOrder === "ascending";
 var sortColumnIdentifier = this.sortColumnIdentifier;
+if (this._lastSortColumnIdentifier === sortColumnIdentifier && this._lastSortAscending === sortAscending)
+return;
+this._lastSortColumnIdentifier = sortColumnIdentifier;
+this._lastSortAscending = sortAscending;
 var sortFields = this._sortFields(sortColumnIdentifier, sortAscending);
 
 function SortByTwoFields(nodeA, nodeB)
@@ -43328,11 +45172,17 @@ result = -result;
 return result;
 }
 
+WebInspector.PleaseWaitMessage.prototype.showAndWaitFor(this.element, this, "sorting complete");
+function sort()
+{
 this._performSorting(SortByTwoFields);
+}
+setTimeout(sort.bind(this), 0);
 },
 
 _performSorting: function(sortFunction)
 {
+this.recursiveSortingEnter();
 var children = this.children;
 this.removeChildren();
 children.sort(sortFunction);
@@ -43342,10 +45192,97 @@ this.appendChild(child);
 if (child.expanded)
 child.sort();
 }
+this.recursiveSortingLeave();
+},
+
+recursiveSortingEnter: function()
+{
+if (!("_recursiveSortingDepth" in this))
+this._recursiveSortingDepth = 1;
+else
+++this._recursiveSortingDepth;
+},
+
+recursiveSortingLeave: function()
+{
+if (!("_recursiveSortingDepth" in this))
+return;
+if (!--this._recursiveSortingDepth) {
+delete this._recursiveSortingDepth;
+this.dispatchEventToListeners("sorting complete");
+}
 }
 };
 
 WebInspector.HeapSnapshotSortableDataGrid.prototype.__proto__ = WebInspector.DataGrid.prototype;
+
+WebInspector.HeapSnapshotContainmentDataGrid = function()
+{
+var columns = {
+object: { title: WebInspector.UIString("Object"), disclosure: true, sortable: true, sort: "ascending" },
+shallowSize: { title: WebInspector.UIString("Shallow Size"), width: "90px", sortable: true },
+retainedSize: { title: WebInspector.UIString("Retained Size"), width: "90px", sortable: true }
+};
+WebInspector.HeapSnapshotSortableDataGrid.call(this, columns);
+}
+
+WebInspector.HeapSnapshotContainmentDataGrid.prototype = {
+_defaultPopulateCount: 100,
+
+expandRoute: function(route)
+{
+function nextStep(parent, hopIndex)
+{
+if (hopIndex >= route.length) {
+parent.element.scrollIntoViewIfNeeded(true);
+parent.select();
+return;
+}
+var nodeIndex = route[hopIndex];
+for (var i = 0, l = parent.children.length; i < l; ++i) {
+var child = parent.children[i];
+if (child.snapshotNodeIndex === nodeIndex) {
+if (child.expanded)
+nextStep(child, hopIndex + 1);
+else {
+function afterExpand()
+{
+child.removeEventListener("populate complete", afterExpand, null);
+var lastChild = child.children[child.children.length - 1];
+if (!lastChild.showAll)
+nextStep(child, hopIndex + 1);
+else {
+child.addEventListener("populate complete", afterExpand, null);
+lastChild.showAll.click();
+}
+}
+child.addEventListener("populate complete", afterExpand, null);
+child.expand();
+}
+break;
+}
+}
+}
+nextStep(this, 0);
+},
+
+setDataSource: function(snapshotView, snapshot)
+{
+this.snapshotView = snapshotView;
+this.snapshot = snapshot;
+this.snapshotNodeIndex = this.snapshot.rootNodeIndex;
+this._provider = this._createProvider(snapshot, this.snapshotNodeIndex);
+this.sort();
+},
+
+sortingChanged: function()
+{
+this.sort();
+}
+};
+
+MixInSnapshotNodeFunctions(WebInspector.HeapSnapshotObjectNode.prototype, WebInspector.HeapSnapshotContainmentDataGrid.prototype);
+WebInspector.HeapSnapshotContainmentDataGrid.prototype.__proto__ = WebInspector.HeapSnapshotSortableDataGrid.prototype;
 
 WebInspector.HeapSnapshotConstructorsDataGrid = function()
 {
@@ -43359,6 +45296,8 @@ WebInspector.HeapSnapshotSortableDataGrid.call(this, columns);
 }
 
 WebInspector.HeapSnapshotConstructorsDataGrid.prototype = {
+_defaultPopulateCount: 100,
+
 _sortFields: function(sortColumn, sortAscending)
 {
 return {
@@ -43374,14 +45313,17 @@ setDataSource: function(snapshotView, snapshot)
 this.snapshotView = snapshotView;
 this.snapshot = snapshot;
 this.populateChildren();
-this.sortingChanged();
 },
 
 populateChildren: function()
 {
-var aggregates = this.snapshot.aggregates();
+function aggregatesReceived(aggregates)
+{
 for (var constructor in aggregates)
 this.appendChild(new WebInspector.HeapSnapshotConstructorNode(this, constructor, aggregates[constructor]));
+this.sortingChanged();
+}
+this.snapshot.aggregates(false, aggregatesReceived.bind(this));
 }
 };
 
@@ -43391,7 +45333,6 @@ WebInspector.HeapSnapshotDiffDataGrid = function()
 {
 var columns = {
 object: { title: WebInspector.UIString("Constructor"), disclosure: true, sortable: true },
-
 addedCount: { title: WebInspector.UIString("# New"), width: "72px", sortable: true, sort: "descending" },
 removedCount: { title: WebInspector.UIString("# Deleted"), width: "72px", sortable: true },
 
@@ -43404,6 +45345,8 @@ WebInspector.HeapSnapshotSortableDataGrid.call(this, columns);
 }
 
 WebInspector.HeapSnapshotDiffDataGrid.prototype = {
+_defaultPopulateCount: 50,
+
 _sortFields: function(sortColumn, sortAscending)
 {
 return {
@@ -43426,29 +45369,46 @@ this.snapshot = snapshot;
 setBaseDataSource: function(baseSnapshot)
 {
 this.baseSnapshot = baseSnapshot;
+this.dispose();
 this.removeChildren();
-if (this.baseSnapshot !== this.snapshot) {
-this.populateChildren();
-this.sortingChanged();
+this.resetSortingCache();
+if (this.baseSnapshot === this.snapshot) {
+this.dispatchEventToListeners("sorting complete");
+return;
 }
+this.populateChildren();        
 },
 
 populateChildren: function()
 {
-var baseClasses = this.baseSnapshot.aggregates(true);
-var classes = this.snapshot.aggregates(true);
-for (var clss in baseClasses) {
-var node = new WebInspector.HeapSnapshotDiffNode(this, clss, baseClasses[clss], classes[clss]);
-if (!node.zeroDiff)
-this.appendChild(node);
-}
+function baseAggregatesReceived(baseClasses)
+{
+function aggregatesReceived(classes)
+{
+var nodeCount = 0;
+var nodes = [];
+for (var clss in baseClasses)
+nodes.push(new WebInspector.HeapSnapshotDiffNode(this, clss, baseClasses[clss], classes[clss]));
 for (clss in classes) {
-if (!(clss in baseClasses)) {
-var node = new WebInspector.HeapSnapshotDiffNode(this, clss, null, classes[clss]);
-if (!node.zeroDiff)
-this.appendChild(node);
+if (!(clss in baseClasses))
+nodes.push(new WebInspector.HeapSnapshotDiffNode(this, clss, null, classes[clss]));
+}
+nodeCount = nodes.length;
+function addNodeIfNonZeroDiff(boundNode, zeroDiff)
+{
+if (!zeroDiff)
+this.appendChild(boundNode);
+if (!--nodeCount)
+this.sortingChanged();
+}
+for (var i = 0, l = nodes.length; i < l; ++i) {
+var node = nodes[i];
+node.calculateDiff(this, addNodeIfNonZeroDiff.bind(this, node));
 }
 }
+this.snapshot.aggregates(true, aggregatesReceived.bind(this));
+}
+this.baseSnapshot.aggregates(true, baseAggregatesReceived.bind(this));
 }
 };
 
@@ -43461,12 +45421,12 @@ object: { title: WebInspector.UIString("Object"), disclosure: true, sortable: tr
 shallowSize: { title: WebInspector.UIString("Shallow Size"), width: "90px", sortable: true },
 retainedSize: { title: WebInspector.UIString("Retained Size"), width: "90px", sort: "descending", sortable: true }
 };
-WebInspector.DataGrid.call(this, columns);
-this.addEventListener("sorting changed", this.sort, this);
-this._defaultPopulateCount = 25;
+WebInspector.HeapSnapshotSortableDataGrid.call(this, columns);
 }
 
 WebInspector.HeapSnapshotDominatorsDataGrid.prototype = {
+_defaultPopulateCount: 25,
+
 setDataSource: function(snapshotView, snapshot)
 {
 this.snapshotView = snapshotView;
@@ -43474,11 +45434,16 @@ this.snapshot = snapshot;
 this.snapshotNodeIndex = this.snapshot.rootNodeIndex;
 this._provider = this._createProvider(snapshot, this.snapshotNodeIndex);
 this.sort();
+},
+
+sortingChanged: function()
+{
+this.sort();
 }
 };
 
 MixInSnapshotNodeFunctions(WebInspector.HeapSnapshotDominatorObjectNode.prototype, WebInspector.HeapSnapshotDominatorsDataGrid.prototype);
-WebInspector.HeapSnapshotDominatorsDataGrid.prototype.__proto__ = WebInspector.DataGrid.prototype;
+WebInspector.HeapSnapshotDominatorsDataGrid.prototype.__proto__ = WebInspector.HeapSnapshotSortableDataGrid.prototype;
 
 WebInspector.HeapSnapshotRetainingPathsList = function()
 {
@@ -43487,9 +45452,16 @@ path: { title: WebInspector.UIString("Retaining path"), sortable: true },
 len: { title: WebInspector.UIString("Length"), width: "90px", sortable: true, sort: "ascending" }
 };
 WebInspector.HeapSnapshotSortableDataGrid.call(this, columns);
+this._defaultPopulateCount = 100;
 }
 
 WebInspector.HeapSnapshotRetainingPathsList.prototype = {
+dispose: function()
+{
+if (this.pathFinder)
+this.pathFinder.dispose();
+}, 
+
 _sortFields: function(sortColumn, sortAscending)
 {
 return {
@@ -43498,42 +45470,49 @@ len: ["len", sortAscending, "path", true]
 }[sortColumn];
 },
 
+_resetPaths: function()
+{
+this._setRootChildrenForFinder();
+this.removeChildren();
+this.resetSortingCache();
+this._counter = 0;
+this.showNext(this._defaultPopulateCount);
+},
+
 setDataSource: function(snapshotView, snapshot, nodeIndex, prefix)
 {
 this.snapshotView = snapshotView;
 this._prefix = prefix;
 
-if (this.pathFinder)
+if (this.pathFinder) {
 this.searchCancelled();
-
-this.pathFinder = new WebInspector.HeapSnapshotPathFinder(snapshot, nodeIndex);
-this._setRootChildrenForFinder();
-
-this.removeChildren();
-
-this._counter = 0;
-this.showNext(100);
+this.pathFinder.dispose();
+}
+this.pathFinder = snapshot.createPathFinder(nodeIndex, !WebInspector.DetailedHeapshotView.prototype.showHiddenData);
+this._resetPaths();
 },
 
 refresh: function()
 {
-this.removeChildren();
-this._counter = 0;
 delete this._cancel;
-this._setRootChildrenForFinder();
-this.showNext(100);
+this._resetPaths();
+},
+
+reset: function()
+{
+delete this._cancel;
+this.removeChildren();
+this.resetSortingCache();
+this._counter = 0;
+this.appendChild(new WebInspector.DataGridNode({path:WebInspector.UIString("Click on an object to show retaining paths"), len:""}, false));
 },
 
 showNext: function(pathsCount)
 {
 WebInspector.PleaseWaitMessage.prototype.show(this.element, this.searchCancelled.bind(this, pathsCount));
-window.setTimeout(startSearching.bind(this), 500);
 
-function startSearching()
+function pathFound(result)
 {
-if (this._cancel !== this.pathFinder) {
-if (this._counter < pathsCount) {
-var result = this.pathFinder.findNext();
 if (result === null) {
 WebInspector.PleaseWaitMessage.prototype.hide();
 if (!this.children.length)
@@ -43542,16 +45521,27 @@ return;
 } else if (result !== false) {
 if (this._prefix)
 result.path = this._prefix + result.path;
-this.appendChild(new WebInspector.DataGridNode(result, false));
+var node = new WebInspector.DataGridNode(result, false);
+node.route = result.route;
+this.appendChild(node);
 ++this._counter;
 }
-window.setTimeout(startSearching.bind(this), 0);
+setTimeout(startSearching.bind(this), 0);
+}
+
+function startSearching()
+{
+if (this._cancel === this.pathFinder)
 return;
-} else
+delete this._cancel;
+if (this._counter < pathsCount)
+this.pathFinder.findNext(pathFound.bind(this));
+else {
 this.searchCancelled.call(this, pathsCount);
+delete this._cancel;
 }
-this._cancel = false;
 }
+startSearching.call(this);
 },
 
 searchCancelled: function(pathsCount)
@@ -43561,19 +45551,16 @@ this._counter = 0;
 this._cancel = this.pathFinder;
 if (pathsCount) {
 this.appendChild(new WebInspector.ShowMoreDataGridNode(this.showNext.bind(this), pathsCount));
+this.resetSortingCache();
 this.sortingChanged();
 }
 },
 
 _setRootChildrenForFinder: function()
 {
-function FilterDOMWindow(node)
-{
-return node.name === "DOMWindow";
-}
-
 if (this.snapshotView.isTracingToWindowObjects)
-this.pathFinder.updateRoots(FilterDOMWindow);
+this.pathFinder.updateRoots(
+"function (node) { return node.name === \"DOMWindow\"; }");
 else
 this.pathFinder.updateRoots();
 },
@@ -43584,8 +45571,9 @@ function DataExtractorWrapper(nodeA, nodeB)
 {
 return sortFunction(nodeA.data, nodeB.data);
 }
-
+this.recursiveSortingEnter();
 this.sortNodes(DataExtractorWrapper);
+this.recursiveSortingLeave();
 }
 };
 
@@ -43652,9 +45640,11 @@ retainingPathsTitleDiv.appendChild(retainingPathsTitle);
 retainingPathsTitleDiv.appendChild(this.retainingPathsRoot);
 retainmentView.element.appendChild(retainingPathsTitleDiv);
 this.retainmentDataGrid = new WebInspector.HeapSnapshotRetainingPathsList();
+this.retainmentDataGrid.element.addEventListener("click", this._mouseClickInRetainmentGrid.bind(this), true);
 retainmentView.element.appendChild(this.retainmentDataGrid.element);
 retainmentView.visible = true;
 this.element.appendChild(retainmentView.element);
+this.retainmentDataGrid.reset();
 
 this.dataGrid = this.constructorsDataGrid;
 this.currentView = this.constructorsView;
@@ -43663,20 +45653,17 @@ this.viewSelectElement = document.createElement("select");
 this.viewSelectElement.className = "status-bar-item";
 this.viewSelectElement.addEventListener("change", this._changeView.bind(this), false);
 
-var classesViewOption = document.createElement("option");
-classesViewOption.label = WebInspector.UIString("Summary");
-var diffViewOption = document.createElement("option");
-diffViewOption.label = WebInspector.UIString("Comparison");
-var containmentViewOption = document.createElement("option");
-containmentViewOption.label = WebInspector.UIString("Containment");
-var dominatorsViewOption = document.createElement("option");
-dominatorsViewOption.label = WebInspector.UIString("Dominators");
-this.viewSelectElement.appendChild(classesViewOption);
-this.viewSelectElement.appendChild(diffViewOption);
-this.viewSelectElement.appendChild(containmentViewOption);
-this.viewSelectElement.appendChild(dominatorsViewOption);
-this.views = ["Summary", "Comparison", "Containment", "Dominators"];
+this.views = [{title: "Summary", view: this.constructorsView, grid: this.constructorsDataGrid},
+{title: "Comparison", view: this.diffView, grid: this.diffDataGrid},
+{title: "Containment", view: this.containmentView, grid: this.containmentDataGrid},
+{title: "Dominators", view: this.dominatorView, grid: this.dominatorDataGrid}];
 this.views.current = 0;
+for (var i = 0; i < this.views.length; ++i) {
+var view = this.views[i];
+var option = document.createElement("option");
+option.label = WebInspector.UIString(view.title);
+this.viewSelectElement.appendChild(option);
+}
 
 this._profileUid = profile.uid;
 
@@ -43694,12 +45681,12 @@ var popoverHelper = new WebInspector.PopoverHelper(this.element, this._getHoverA
 
 this._loadProfile(this._profileUid, profileCallback.bind(this));
 
-function profileCallback(profile)
+function profileCallback()
 {
 var list = this._profiles();
 var profileIndex;
 for (var i = 0; i < list.length; ++i)
-if (list[i].uid === profile.uid) {
+if (list[i].uid === this._profileUid) {
 profileIndex = i;
 break;
 }
@@ -43715,10 +45702,14 @@ this._updatePercentButton();
 WebInspector.DetailedHeapshotView.prototype = {
 dispose: function()
 {
-if (this._profileWrapper)
-this._profileWrapper.dispose();
-if (this._baseProfileWrapper)
-this._baseProfileWrapper.dispose();
+this.profileWrapper.dispose();
+if (this.baseProfile)
+this.baseProfileWrapper.dispose();
+this.containmentDataGrid.dispose();
+this.constructorsDataGrid.dispose();
+this.diffDataGrid.dispose();
+this.dominatorDataGrid.dispose();
+this.retainmentDataGrid.dispose();
 },
 
 get statusBarItems()
@@ -43733,9 +45724,7 @@ return this.parent.getProfile(WebInspector.HeapSnapshotProfileType.TypeId, this.
 
 get profileWrapper()
 {
-if (!this._profileWrapper)
-this._profileWrapper = new WebInspector.HeapSnapshot(this.profile);
-return this._profileWrapper;
+return this.profile.proxy;
 },
 
 get baseProfile()
@@ -43745,34 +45734,25 @@ return this.parent.getProfile(WebInspector.HeapSnapshotProfileType.TypeId, this.
 
 get baseProfileWrapper()
 {
-if (!this._baseProfileWrapper) {
-if (this.baseProfile !== this.profile)
-this._baseProfileWrapper = new WebInspector.HeapSnapshot(this.baseProfile);
-else
-this._baseProfileWrapper = this.profileWrapper;
-}
-return this._baseProfileWrapper;
+return this.baseProfile.proxy;
 },
 
 show: function(parentElement)
 {
 WebInspector.View.prototype.show.call(this, parentElement);
-if (!this.profile._loaded)
+if (!this.profileWrapper.loaded)
 this._loadProfile(this._profileUid, profileCallback1.bind(this));
 else
-profileCallback1.call(this, this.profile);
+profileCallback1.call(this);
 
-function profileCallback1(profile) {
-this.profileWrapper.restore(profile);
-if (this.baseProfile && !this.baseProfile._loaded)
+function profileCallback1() {
+if (this.baseProfile && !this.baseProfileWrapper.loaded)
 this._loadProfile(this._baseProfileUid, profileCallback2.bind(this));
 else
-profileCallback2.call(this, this.baseProfile);
+profileCallback2.call(this);
 }
 
-function profileCallback2(profile) {
-if (profile)
-this.baseProfileWrapper.restore(profile);
+function profileCallback2() {
 this.currentView.show();
 this.dataGrid.updateWidths();
 }
@@ -43941,15 +45921,11 @@ return;
 this._baseProfileUid = this._profiles()[this.baseSelectElement.selectedIndex].uid;
 this._loadProfile(this._baseProfileUid, baseProfileLoaded.bind(this));
 
-function baseProfileLoaded(profile)
+function baseProfileLoaded()
 {
 delete this._baseProfileWrapper;
 this.baseProfile._lastShown = Date.now();
-WebInspector.PleaseWaitMessage.prototype.startAction(this.currentView.element, showDiffData.bind(this));
-}
-
-function showDiffData()
-{
+WebInspector.PleaseWaitMessage.prototype.showAndWaitFor(this.currentView.element, this.diffDataGrid, "sorting complete");
 this.diffDataGrid.setBaseDataSource(this.baseProfileWrapper);
 }
 
@@ -43999,10 +45975,51 @@ var row = event.target.enclosingNodeOrSelfWithNodeName("tr");
 if (!row)
 return;
 var nodeItem = row._dataGridNode;
-if (!nodeItem || nodeItem.isEventWithinDisclosureTriangle(event) || !nodeItem.snapshotNodeIndex)
+if (!nodeItem || nodeItem.isEventWithinDisclosureTriangle(event))
 return;
-
+if (nodeItem.snapshotNodeIndex)
 this.retainmentDataGrid.setDataSource(this, nodeItem.isDeletedNode ? nodeItem.dataGrid.baseSnapshot : nodeItem.dataGrid.snapshot, nodeItem.snapshotNodeIndex, nodeItem.isDeletedNode ? this.baseSelectElement.childNodes[this.baseSelectElement.selectedIndex].label + " | " : "");
+else
+this.retainmentDataGrid.reset();
+},
+
+_mouseClickInRetainmentGrid: function(event)
+{
+var cell = event.target.enclosingNodeOrSelfWithNodeName("td");
+if (!cell || (!cell.hasStyleClass("path-column")))
+return;
+var row = event.target.enclosingNodeOrSelfWithNodeName("tr");
+var nodeItem = row._dataGridNode;
+if (!nodeItem)
+return;
+function expandRoute()
+{
+this.dataGrid.expandRoute(nodeItem.route);
+}
+this.changeView("Containment", expandRoute.bind(this));
+},
+
+changeView: function(viewTitle, callback)
+{
+var viewIndex = null;
+for (var i = 0; i < this.views.length; ++i)
+if (this.views[i].title === viewTitle) {
+viewIndex = i;
+break;
+}
+if (this.views.current === viewIndex) {
+setTimeout(callback, 0);
+return;
+}
+var grid = this.views[viewIndex].grid;
+function sortingComplete()
+{
+grid.removeEventListener("sorting complete", sortingComplete, this);
+setTimeout(callback, 0);
+}
+this.views[viewIndex].grid.addEventListener("sorting complete", sortingComplete, this);
+this.viewSelectElement.selectedIndex = viewIndex;
+this._changeView({target: {selectedIndex: viewIndex}});      
 },
 
 _changeView: function(event)
@@ -44014,21 +46031,12 @@ return;
 
 this.views.current = event.target.selectedIndex;
 this.currentView.hide();
-if (this.views[this.views.current] === "Containment") {
-this.currentView = this.containmentView;
-this.dataGrid = this.containmentDataGrid;
-} else if (this.views[this.views.current] === "Summary") {
-this.currentView = this.constructorsView;
-this.dataGrid = this.constructorsDataGrid;
-} else if (this.views[this.views.current] === "Comparison") {
-this.currentView = this.diffView;
-this.dataGrid = this.diffDataGrid;
-} else if (this.views[this.views.current] === "Dominators") {
-this.currentView = this.dominatorView;
-this.dataGrid = this.dominatorDataGrid;
-}
+var view = this.views[this.views.current];
+this.currentView = view.view;
+this.dataGrid = view.grid;
 this.currentView.show();
 this.refreshVisibleData();
+this.dataGrid.updateWidths();
 if (this.currentView === this.diffView) {
 this.baseSelectElement.removeStyleClass("hidden");
 if (!this.dataGrid.snapshotView) {
@@ -44037,13 +46045,10 @@ this._changeBase();
 }
 } else {
 this.baseSelectElement.addStyleClass("hidden");
-if (!this.dataGrid.snapshotView)
-WebInspector.PleaseWaitMessage.prototype.startAction(this.currentView.element, loadData.bind(this));
-}
-
-function loadData()
-{
+if (!this.dataGrid.snapshotView) {
+WebInspector.PleaseWaitMessage.prototype.showAndWaitFor(this.currentView.element, this.dataGrid, "sorting complete");
 this.dataGrid.setDataSource(this, this.profileWrapper);
+}
 }
 
 if (!this.currentQuery || !this._searchFinishedCallback || !this._searchResults)
@@ -44099,13 +46104,19 @@ this.refreshShowAsPercents();
 
 _showStringContentPopup: function(span)
 {
-var snapshotNode = new WebInspector.HeapSnapshotNode(this.profileWrapper, span.snapshotNodeIndex);
 var stringContentElement = document.createElement("span");
 stringContentElement.className = "monospace console-formatted-string";
 stringContentElement.style.whiteSpace = "pre";
-stringContentElement.textContent = "\"" + snapshotNode.name + "\"";
+
 var popover = new WebInspector.Popover(stringContentElement);
+function displayString(names)
+{
+if (names.length > 0) {
+stringContentElement.textContent = "\"" + names[0] + "\"";          
 popover.show(span);
+}
+}
+this.profileWrapper.nodeFieldValuesByIndex("name", [span.snapshotNodeIndex], displayString);
 return popover;
 },
 
@@ -44248,7 +46259,6 @@ WebInspector.DetailedHeapshotProfileType.prototype.__proto__ = WebInspector.Prof
 WebInspector.DebuggerModel = function()
 {
 this._debuggerPausedDetails = {};
-this._breakpoints = {};
 this._scripts = {};
 
 InspectorBackend.registerDomainDispatcher("Debugger", new WebInspector.DebuggerDispatcher(this));
@@ -44283,16 +46293,15 @@ this.dispatchEventToListeners(WebInspector.DebuggerModel.Events.DebuggerWasEnabl
 
 _debuggerWasDisabled: function()
 {
-this._breakpoints = {};
 this.dispatchEventToListeners(WebInspector.DebuggerModel.Events.DebuggerWasDisabled);
 },
 
-continueToLocation: function(sourceID, lineNumber, columnNumber)
+continueToLocation: function(location)
 {
-DebuggerAgent.continueToLocation(sourceID, lineNumber, columnNumber);
+DebuggerAgent.continueToLocation(location);
 },
 
-setBreakpoint: function(url, lineNumber, columnNumber, condition, enabled, callback)
+setBreakpoint: function(url, lineNumber, columnNumber, condition, callback)
 {
 
 var minColumnNumber = 0;
@@ -44305,62 +46314,35 @@ columnNumber = Math.max(columnNumber, minColumnNumber);
 
 function didSetBreakpoint(error, breakpointId, locations)
 {
-var breakpoint;
-if (!error && breakpointId) {
-breakpoint = new WebInspector.Breakpoint(breakpointId, url, "", lineNumber, columnNumber, condition, enabled);
-breakpoint.locations = locations;
-this._breakpoints[breakpointId] = breakpoint;
-}
 if (callback)
-callback(breakpoint);
+callback(error ? null : breakpointId, locations);
 }
-DebuggerAgent.setBreakpointByUrl(url, lineNumber, columnNumber, condition, enabled, didSetBreakpoint.bind(this));
+DebuggerAgent.setBreakpointByUrl(url, lineNumber, columnNumber, condition, didSetBreakpoint.bind(this));
 },
 
-setBreakpointBySourceId: function(sourceID, lineNumber, columnNumber, condition, enabled, callback)
+setBreakpointBySourceId: function(location, condition, callback)
 {
-function didSetBreakpoint(error, breakpointId, actualLineNumber, actualColumnNumber)
+function didSetBreakpoint(error, breakpointId, actualLocation)
 {
-var breakpoint;
-if (!error && breakpointId) {
-breakpoint = new WebInspector.Breakpoint(breakpointId, "", sourceID, lineNumber, columnNumber, condition, enabled);
-breakpoint.addLocation(sourceID, actualLineNumber, actualColumnNumber);
-this._breakpoints[breakpointId] = breakpoint;
-}
 if (callback)
-callback(breakpoint);
+callback(error ? null : breakpointId, [actualLocation]);
 }
-DebuggerAgent.setBreakpoint(sourceID, lineNumber, columnNumber, condition, enabled, didSetBreakpoint.bind(this));
+DebuggerAgent.setBreakpoint(location, condition, didSetBreakpoint.bind(this));
 },
 
-removeBreakpoint: function(breakpointId)
+removeBreakpoint: function(breakpointId, callback)
 {
-DebuggerAgent.removeBreakpoint(breakpointId);
-delete this._breakpoints[breakpointId];
+DebuggerAgent.removeBreakpoint(breakpointId, callback);
 },
 
-_breakpointResolved: function(breakpointId, sourceID, lineNumber, columnNumber)
+_breakpointResolved: function(breakpointId, location)
 {
-var breakpoint = this._breakpoints[breakpointId];
-breakpoint.addLocation(sourceID, lineNumber, columnNumber);
-this.dispatchEventToListeners(WebInspector.DebuggerModel.Events.BreakpointResolved, breakpoint);
-},
-
-get breakpoints()
-{
-return this._breakpoints;
+this.dispatchEventToListeners(WebInspector.DebuggerModel.Events.BreakpointResolved, {breakpointId: breakpointId, location: location});
 },
 
 reset: function()
 {
 this._debuggerPausedDetails = {};
-for (var id in this._breakpoints) {
-var breakpoint = this._breakpoints[id];
-if (!breakpoint.url)
-delete this._breakpoints[id];
-else
-breakpoint.locations = [];
-}
 this._scripts = {};
 this.dispatchEventToListeners(WebInspector.DebuggerModel.Events.Reset);
 },
@@ -44425,16 +46407,16 @@ this._debuggerPausedDetails = {};
 this.dispatchEventToListeners(WebInspector.DebuggerModel.Events.DebuggerResumed);
 },
 
-_parsedScriptSource: function(sourceID, sourceURL, lineOffset, columnOffset, length, scriptWorldType)
+_parsedScriptSource: function(sourceID, sourceURL, startLine, startColumn, endLine, endColumn, isContentScript)
 {
-var script = new WebInspector.Script(sourceID, sourceURL, lineOffset, columnOffset, length, undefined, undefined, scriptWorldType);
+var script = new WebInspector.Script(sourceID, sourceURL, startLine, startColumn, endLine, endColumn, undefined, undefined, isContentScript);
 this._scripts[sourceID] = script;
 this.dispatchEventToListeners(WebInspector.DebuggerModel.Events.ParsedScriptSource, script);
 },
 
 _failedToParseScriptSource: function(sourceURL, source, startingLine, errorLine, errorMessage)
 {
-var script = new WebInspector.Script(null, sourceURL, startingLine, errorLine, errorMessage, undefined);
+var script = new WebInspector.Script(null, sourceURL, startingLine, 0, 0, 0, errorLine, errorMessage, undefined);
 this.dispatchEventToListeners(WebInspector.DebuggerModel.Events.FailedToParseScriptSource, script);
 }
 }
@@ -44473,9 +46455,9 @@ debuggerWasDisabled: function()
 this._debuggerModel._debuggerWasDisabled();
 },
 
-scriptParsed: function(sourceID, sourceURL, lineOffset, columnOffset, length, scriptWorldType)
+scriptParsed: function(sourceID, sourceURL, startLine, startColumn, endLine, endColumn, isContentScript)
 {
-this._debuggerModel._parsedScriptSource(sourceID, sourceURL, lineOffset, columnOffset, length, scriptWorldType);
+this._debuggerModel._parsedScriptSource(sourceID, sourceURL, startLine, startColumn, endLine, endColumn, isContentScript);
 },
 
 scriptFailedToParse: function(sourceURL, source, startingLine, errorLine, errorMessage)
@@ -44497,7 +46479,9 @@ WebInspector.DebuggerPresentationModel = function()
 {
 this._sourceFiles = {};
 this._messages = [];
-this._presentationBreakpoints = {};
+this._breakpointsByDebuggerId = {};
+this._breakpointsWithoutSourceFile = {};
+
 this._presentationCallFrames = [];
 this._selectedCallFrameIndex = 0;
 
@@ -44507,7 +46491,9 @@ WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.Fa
 WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.BreakpointResolved, this._breakpointResolved, this);
 WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.DebuggerPaused, this._debuggerPaused, this);
 WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.DebuggerResumed, this._debuggerResumed, this);
-WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.Reset, this._reset, this);
+WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.Reset, this._debuggerReset, this);
+
+new WebInspector.DebuggerPresentationModelResourceBinding(this);
 }
 
 WebInspector.DebuggerPresentationModel.Events = {
@@ -44524,7 +46510,7 @@ CallFrameSelected: "call-frame-selected"
 WebInspector.DebuggerPresentationModel.prototype = {
 _debuggerWasEnabled: function()
 {
-this._restoreBreakpoints();
+this._restoreBreakpointsFromSettings();
 },
 
 sourceFile: function(sourceFileId)
@@ -44545,18 +46531,16 @@ this._sourceFiles[sourceFileId].requestContent(callback);
 _parsedScriptSource: function(event)
 {
 this._addScript(event.data);
-this._refreshBreakpoints();
 },
 
 _failedToParseScriptSource: function(event)
 {
 this._addScript(event.data);
-this._refreshBreakpoints();
 },
 
 _addScript: function(script)
 {
-var sourceFileId = script.sourceURL || script.sourceID;
+var sourceFileId = this._createSourceFileId(script.sourceURL, script.sourceID);
 var sourceFile = this._sourceFiles[sourceFileId];
 if (sourceFile) {
 sourceFile.addScript(script);
@@ -44570,61 +46554,74 @@ this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.Sour
 if (!this._formatSourceFiles)
 sourceFile = new WebInspector.SourceFile(sourceFileId, script, contentChanged.bind(this));
 else
-sourceFile = new WebInspector.FormattedSourceFile(sourceFileId, script, contentChanged.bind(this), this._formatter);
+sourceFile = new WebInspector.FormattedSourceFile(sourceFileId, script, contentChanged.bind(this), this._formatter());
 this._sourceFiles[sourceFileId] = sourceFile;
+
+this._restoreBreakpoints(sourceFile);
+
 this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.SourceFileAdded, sourceFile);
 },
 
-_refreshBreakpoints: function()
+_restoreBreakpoints: function(sourceFile)
 {
-var breakpoints = WebInspector.debuggerModel.breakpoints;
-for (var id in breakpoints) {
-if (!(id in this._presentationBreakpoints))
-this._breakpointAdded(breakpoints[id]);
+var pendingBreakpoints = this._breakpointsWithoutSourceFile[sourceFile.id];
+for (var i = 0; pendingBreakpoints && i < pendingBreakpoints.length; ++i) {
+var breakpointData = pendingBreakpoints[i];
+if ("debuggerId" in breakpointData) {
+var breakpoint = new WebInspector.PresentationBreakpoint(sourceFile, breakpointData.lineNumber, breakpointData.condition, breakpointData.enabled);
+this._bindDebuggerId(breakpoint, breakpointData.debuggerId);
+this._breakpointAdded(breakpoint);
+} else
+this.setBreakpoint(sourceFile.id, breakpointData.lineNumber, breakpointData.condition, breakpointData.enabled, true);
 }
+delete this._breakpointsWithoutSourceFile[sourceFile.id];
 },
 
 canEditScriptSource: function(sourceFileId)
 {
-if (!Preferences.canEditScriptSource)
+if (!Preferences.canEditScriptSource || this._formatSourceFiles)
 return false;
 var script = this._scriptForSourceFileId(sourceFileId);
-return  !script.lineOffset && !script.columnOffset;
+return !script.lineOffset && !script.columnOffset;
 },
 
 editScriptSource: function(sourceFileId, newSource, callback)
 {
 var script = this._scriptForSourceFileId(sourceFileId);
 var sourceFile = this._sourceFiles[sourceFileId];
-var oldSource = sourceFile.content;
-function didEditScriptSource(error)
+
+function didEditScriptSource(oldSource, error)
 {
-callback(error);
-if (error)
-return;
+if (!error) {
+sourceFile.content = newSource;
 
-this._updateBreakpointsAfterLiveEdit(sourceFileId, oldSource, newSource);
-
-var resource = WebInspector.resourceForURL(script.sourceURL);
-if (resource) {
-var revertHandle = this.editScriptSource.bind(this, sourceFileId, oldSource, sourceFile.reload.bind(sourceFile));
-resource.setContent(newSource, revertHandle);
+var resource = WebInspector.resourceForURL(sourceFile.url);
+if (resource)
+resource.addRevision(newSource);
 }
 
-if (WebInspector.debuggerModel.callFrames)
+callback(error);
+
+if (!error && WebInspector.debuggerModel.callFrames)
 this._debuggerPaused();
 }
-WebInspector.debuggerModel.editScriptSource(script.sourceID, newSource, didEditScriptSource.bind(this));
+
+var oldSource = sourceFile.requestContent(didReceiveSource.bind(this));
+function didReceiveSource(oldSource)
+{
+WebInspector.debuggerModel.editScriptSource(script.sourceID, newSource, didEditScriptSource.bind(this, oldSource));
+}
 },
 
 _updateBreakpointsAfterLiveEdit: function(sourceFileId, oldSource, newSource)
 {
+var sourceFile = this._sourceFiles[sourceFileId];
+
 
 var diff = Array.diff(oldSource.split("\n"), newSource.split("\n"));
-for (var id in this._presentationBreakpoints) {
-var breakpoint = this._presentationBreakpoints[id];
-if (breakpoint.sourceFileId !== sourceFileId)
-continue;
+for (var lineNumber in sourceFile.breakpoints) {
+var breakpoint = sourceFile.breakpoints[lineNumber];
+
 var lineNumber = breakpoint.lineNumber;
 this.removeBreakpoint(sourceFileId, lineNumber);
 
@@ -44647,16 +46644,27 @@ this.setBreakpoint(sourceFileId, newLineNumber, breakpoint.condition, breakpoint
 }
 },
 
-toggleFormatSourceFiles: function()
+setFormatSourceFiles: function(formatSourceFiles)
 {
-this._formatSourceFiles = !this._formatSourceFiles;
-if (this._formatSourceFiles && !this._formatter)
-this._formatter = new WebInspector.ScriptFormatter();
+if (this._formatSourceFiles === formatSourceFiles)
+return;
+
+this._formatSourceFiles = formatSourceFiles;
+
+for (var id in this._sourceFiles) {
+var sourceFile = this._sourceFiles[id];
+for (var line in sourceFile.breakpoints)
+this._removeBreakpointFromDebugger(sourceFile.breakpoints[line]);
+}
+
+for (var id in this._breakpointsWithoutSourceFile) {
+var breakpoints = this._breakpointsWithoutSourceFile[id];
+for (var i = 0; i < breakpoints.length; ++i)
+this._removeBreakpointFromDebugger(breakpoints[i]);
+}
 
 var messages = this._messages;
-this._sourceFiles = {};
-this._messages = [];
-this._presentationBreakpoints = {};
+this._reset();
 
 var scripts = WebInspector.debuggerModel.scripts;
 for (var id in scripts)
@@ -44665,17 +46673,22 @@ this._addScript(scripts[id]);
 for (var i = 0; i < messages.length; ++i)
 this.addConsoleMessage(messages[i]);
 
-this._refreshBreakpoints();
-
 if (WebInspector.debuggerModel.callFrames)
 this._debuggerPaused();
+},
+
+_formatter: function()
+{
+if (!this._scriptFormatter)
+this._scriptFormatter = new WebInspector.ScriptFormatter();
+return this._scriptFormatter;
 },
 
 addConsoleMessage: function(message)
 {
 this._messages.push(message);
 
-var sourceFile = this._sourceFileForScriptURL(message.url);
+var sourceFile = this._sourceFileForScript(message.url);
 if (!sourceFile)
 return;
 
@@ -44683,7 +46696,7 @@ function didRequestSourceMapping(mapping)
 {
 var presentationMessage = {};
 presentationMessage.sourceFileId = sourceFile.id;
-presentationMessage.lineNumber = mapping.scriptLocationToSourceLocation(message.line - 1, 0).lineNumber;
+presentationMessage.lineNumber = mapping.scriptLocationToSourceLine({lineNumber:message.line - 1, columnNumber:0});
 presentationMessage.originalMessage = message;
 sourceFile.messages.push(presentationMessage);
 this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.ConsoleMessageAdded, presentationMessage);
@@ -44702,8 +46715,8 @@ continueToLine: function(sourceFileId, lineNumber)
 {
 function didRequestSourceMapping(mapping)
 {
-var location = mapping.sourceLocationToScriptLocation(lineNumber, 0);
-WebInspector.debuggerModel.continueToLocation(location.scriptId, location.lineNumber, location.columnNumber);
+var location = mapping.sourceLineToScriptLocation(lineNumber);
+WebInspector.debuggerModel.continueToLocation(location);
 }
 this._sourceFiles[sourceFileId].requestSourceMapping(didRequestSourceMapping.bind(this));
 },
@@ -44719,32 +46732,98 @@ breakpoints.push(sourceFile.breakpoints[lineNumber]);
 return breakpoints;
 },
 
-setBreakpoint: function(sourceFileId, lineNumber, condition, enabled)
+setBreakpoint: function(sourceFileId, lineNumber, condition, enabled, dontSaveBreakpoints)
 {
-function didSetBreakpoint(breakpoint)
-{
-if (breakpoint) {
+var sourceFile = this._sourceFiles[sourceFileId];
+if (!sourceFile)
+return;
+
+var breakpoint = new WebInspector.PresentationBreakpoint(sourceFile, lineNumber, condition, enabled);
+if (!enabled) {
 this._breakpointAdded(breakpoint);
+if (!dontSaveBreakpoints)
+this._saveBreakpoints();
+return;
+}
+
+function callback()
+{
+this._breakpointAdded(breakpoint);
+if (!dontSaveBreakpoints)
 this._saveBreakpoints();
 }
+this._setBreakpointInDebugger(breakpoint, callback.bind(this));
+},
+
+_setBreakpointInDebugger: function(breakpoint, callback)
+{
+function didSetBreakpoint(breakpointId, locations)
+{
+if (!breakpointId)
+return;
+
+this._bindDebuggerId(breakpoint, breakpointId);
+breakpoint.location = locations[0];
+callback();
 }
 
 function didRequestSourceMapping(mapping)
 {
-var location = mapping.sourceLocationToScriptLocation(lineNumber, 0);
-var script = WebInspector.debuggerModel.scriptForSourceID(location.scriptId);
+var location = mapping.sourceLineToScriptLocation(breakpoint.lineNumber);
+var script = WebInspector.debuggerModel.scriptForSourceID(location.sourceID);
 if (script.sourceURL)
-WebInspector.debuggerModel.setBreakpoint(script.sourceURL, location.lineNumber, location.columnNumber, condition, enabled, didSetBreakpoint.bind(this));
-else
-WebInspector.debuggerModel.setBreakpointBySourceId(script.sourceID, location.lineNumber, location.columnNumber, condition, enabled, didSetBreakpoint.bind(this));
+WebInspector.debuggerModel.setBreakpoint(script.sourceURL, location.lineNumber, location.columnNumber, breakpoint.condition, didSetBreakpoint.bind(this));
+else {
+location.sourceID = script.sourceID;
+WebInspector.debuggerModel.setBreakpointBySourceId(location, breakpoint.condition, didSetBreakpoint.bind(this));
 }
-this._sourceFiles[sourceFileId].requestSourceMapping(didRequestSourceMapping.bind(this));
+}
+breakpoint.sourceFile.requestSourceMapping(didRequestSourceMapping.bind(this));
+},
+
+_removeBreakpointFromDebugger: function(breakpoint, callback)
+{
+if ("debuggerId" in breakpoint) {
+WebInspector.debuggerModel.removeBreakpoint(breakpoint.debuggerId);
+this._unbindDebuggerId(breakpoint);
+}
+
+if (callback)
+callback();
+},
+
+_bindDebuggerId: function(breakpoint, debuggerId)
+{
+breakpoint.debuggerId = debuggerId;
+this._breakpointsByDebuggerId[debuggerId] = breakpoint;
+},
+
+_unbindDebuggerId: function(breakpoint)
+{
+delete this._breakpointsByDebuggerId[breakpoint.debuggerId];
+delete breakpoint.debuggerId;
 },
 
 setBreakpointEnabled: function(sourceFileId, lineNumber, enabled)
 {
-var breakpoint = this.removeBreakpoint(sourceFileId, lineNumber);
-this.setBreakpoint(sourceFileId, lineNumber, breakpoint.condition, enabled);
+var breakpoint = this.findBreakpoint(sourceFileId, lineNumber);
+if (!breakpoint)
+return;
+
+this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.BreakpointRemoved, breakpoint);
+
+breakpoint.enabled = enabled;
+
+function afterUpdate()
+{
+this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.BreakpointAdded, breakpoint);
+this._saveBreakpoints();
+}
+
+if (!enabled)
+this._removeBreakpointFromDebugger(breakpoint, afterUpdate.call(this));
+else
+this._setBreakpointInDebugger(breakpoint, afterUpdate.bind(this));
 },
 
 updateBreakpoint: function(sourceFileId, lineNumber, condition, enabled)
@@ -44756,10 +46835,15 @@ this.setBreakpoint(sourceFileId, lineNumber, condition, enabled);
 removeBreakpoint: function(sourceFileId, lineNumber)
 {
 var breakpoint = this.findBreakpoint(sourceFileId, lineNumber);
-WebInspector.debuggerModel.removeBreakpoint(breakpoint._id);
-this._breakpointRemoved(breakpoint._id);
+if (!breakpoint)
+return;
+
+function callback()
+{
+this._breakpointRemoved(breakpoint);
 this._saveBreakpoints();
-return breakpoint;
+}
+this._removeBreakpointFromDebugger(breakpoint, callback.bind(this));
 },
 
 findBreakpoint: function(sourceFileId, lineNumber)
@@ -44771,84 +46855,96 @@ return sourceFile.breakpoints[lineNumber];
 
 _breakpointAdded: function(breakpoint)
 {
-var script;
-if (breakpoint.url)
-script = WebInspector.debuggerModel.scriptsForURL(breakpoint.url)[0];
-else
-script = WebInspector.debuggerModel.scriptForSourceID(breakpoint.sourceID);
-if (!script)
+var sourceFile = breakpoint.sourceFile;
+if (!sourceFile)
 return;
 
 function didRequestSourceMapping(mapping)
 {
-var scriptLocation = breakpoint.locations.length ? breakpoint.locations[0] : breakpoint;
-var sourceLocation = mapping.scriptLocationToSourceLocation(scriptLocation.lineNumber, scriptLocation.columnNumber);
-var lineNumber = sourceLocation.lineNumber;
 
-if (this.findBreakpoint(sourceFile.id, lineNumber)) {
+if (breakpoint.location)
+breakpoint.lineNumber = mapping.scriptLocationToSourceLine(breakpoint.location);
 
-WebInspector.debuggerModel.removeBreakpoint(breakpoint.id);
+var existingBreakpoint = this.findBreakpoint(sourceFile.id, breakpoint.lineNumber);
+if (existingBreakpoint) {
+
+this._removeBreakpointFromDebugger(breakpoint);
 return;
 }
-
-var presentationBreakpoint = new WebInspector.PresentationBreakpoint(breakpoint, sourceFile, lineNumber);
-presentationBreakpoint._id = breakpoint.id;
-this._presentationBreakpoints[breakpoint.id] = presentationBreakpoint;
-sourceFile.breakpoints[lineNumber] = presentationBreakpoint;
-this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.BreakpointAdded, presentationBreakpoint);
+sourceFile.breakpoints[breakpoint.lineNumber] = breakpoint;
+this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.BreakpointAdded, breakpoint);
 }
-var sourceFile = this._sourceFileForScript(script);
 sourceFile.requestSourceMapping(didRequestSourceMapping.bind(this));
 },
 
-_breakpointRemoved: function(breakpointId)
+_breakpointRemoved: function(breakpoint)
 {
-var breakpoint = this._presentationBreakpoints[breakpointId];
-delete this._presentationBreakpoints[breakpointId];
-var sourceFile = this.sourceFile(breakpoint.sourceFileId);
+var sourceFile = breakpoint.sourceFile;
+if (sourceFile.breakpoints[breakpoint.lineNumber] === breakpoint) {
+
 delete sourceFile.breakpoints[breakpoint.lineNumber];
 this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.BreakpointRemoved, breakpoint);
+}
 },
 
 _breakpointResolved: function(event)
 {
-var breakpoint = event.data;
-if (!(breakpoint.id in this._presentationBreakpoints))
+var debuggerId = event.data.breakpointId;
+if (!(debuggerId in this._breakpointsByDebuggerId))
 return;
-this._breakpointRemoved(breakpoint.id);
+var breakpoint = this._breakpointsByDebuggerId[debuggerId];
+
+this._breakpointRemoved(breakpoint);
+breakpoint.location = event.data.location;
 this._breakpointAdded(breakpoint);
 },
 
-_restoreBreakpoints: function()
+_restoreBreakpointsFromSettings: function()
 {
-function didSetBreakpoint(breakpoint)
-{
-if (breakpoint)
-this._breakpointAdded(breakpoint);
-}
 var breakpoints = WebInspector.settings.breakpoints;
 for (var i = 0; i < breakpoints.length; ++i) {
-var breakpoint = breakpoints[i];
-WebInspector.debuggerModel.setBreakpoint(breakpoint.url, breakpoint.lineNumber, breakpoint.columnNumber, breakpoint.condition, breakpoint.enabled, didSetBreakpoint.bind(this));
+var breakpointData = breakpoints[i];
+var sourceFileId = breakpointData.sourceFileId;
+if (!sourceFileId)
+continue;
+var sourceFile = this._sourceFiles[sourceFileId];
+if (sourceFile) {
+this.setBreakpoint(sourceFileId, breakpointData.lineNumber, breakpointData.condition, breakpointData.enabled);
+continue;
+}
+
+
+var pendingBreakpoints = this._breakpointsWithoutSourceFile[sourceFileId];
+if (!pendingBreakpoints) {
+pendingBreakpoints = [];
+this._breakpointsWithoutSourceFile[sourceFileId] = pendingBreakpoints;
+}
+pendingBreakpoints.push(breakpointData);
 }
 },
 
 _saveBreakpoints: function()
 {
 var serializedBreakpoints = [];
-var breakpoints = WebInspector.debuggerModel.breakpoints;
-for (var id in breakpoints) {
-var breakpoint = breakpoints[id];
-if (!breakpoint.url)
+
+
+for (var sourceFileId in this._sourceFiles) {
+var sourceFile = this._sourceFiles[sourceFileId];
+if (!sourceFile.url)
 continue;
-var serializedBreakpoint = {};
-serializedBreakpoint.url = breakpoint.url;
-serializedBreakpoint.lineNumber = breakpoint.lineNumber;
-serializedBreakpoint.columnNumber = breakpoint.columnNumber;
-serializedBreakpoint.condition = breakpoint.condition;
-serializedBreakpoint.enabled = breakpoint.enabled;
-serializedBreakpoints.push(serializedBreakpoint);
+
+for (var lineNumber in sourceFile.breakpoints)
+serializedBreakpoints.push(sourceFile.breakpoints[lineNumber].serialize());
 }
+
+
+for (var sourceFileId in this._breakpointsWithoutSourceFile)
+serializedBreakpoints = serializedBreakpoints.concat(this._breakpointsWithoutSourceFile[sourceFileId]);
+
+
+for (var i = 0; i < serializedBreakpoints.length; ++i)
+delete serializedBreakpoints[i].debuggerId;
+
 WebInspector.settings.breakpoints = serializedBreakpoints;
 },
 
@@ -44859,9 +46955,9 @@ this._presentationCallFrames = [];
 for (var i = 0; i < callFrames.length; ++i) {
 var callFrame = callFrames[i];
 var sourceFile;
-var script = WebInspector.debuggerModel.scriptForSourceID(callFrame.sourceID);
+var script = WebInspector.debuggerModel.scriptForSourceID(callFrame.location.sourceID);
 if (script)
-sourceFile = this._sourceFileForScript(script);
+sourceFile = this._sourceFileForScript(script.sourceURL, script.sourceID);
 this._presentationCallFrames.push(new WebInspector.PresenationCallFrame(callFrame, i, sourceFile));
 }
 var details = WebInspector.debuggerModel.debuggerPausedDetails;
@@ -44889,30 +46985,48 @@ get selectedCallFrame()
 return this._presentationCallFrames[this._selectedCallFrameIndex];
 },
 
-_sourceFileForScript: function(script)
+_sourceFileForScript: function(sourceURL, sourceID)
 {
-return this._sourceFiles[script.sourceURL || script.sourceID];
-},
-
-_sourceFileForScriptURL: function(scriptURL)
-{
-return this._sourceFiles[scriptURL];
+return this._sourceFiles[this._createSourceFileId(sourceURL, sourceID)];
 },
 
 _scriptForSourceFileId: function(sourceFileId)
 {
 function filter(script)
 {
-return (script.sourceURL || script.sourceID) === sourceFileId;
+return this._createSourceFileId(script.sourceURL, script.sourceID) === sourceFileId;
 }
-return WebInspector.debuggerModel.queryScripts(filter)[0];
+return WebInspector.debuggerModel.queryScripts(filter.bind(this))[0];
+},
+
+_createSourceFileId: function(sourceURL, sourceID)
+{
+var prefix = this._formatSourceFiles ? "deobfuscated:" : "";
+return prefix + (sourceURL || sourceID);
 },
 
 _reset: function()
 {
+for (var id in this._sourceFiles) {
+var sourceFile = this._sourceFiles[id];
+for (var line in sourceFile.breakpoints) {
+var breakpoints = this._breakpointsWithoutSourceFile[sourceFile.id];
+if (!breakpoints) {
+breakpoints = [];
+this._breakpointsWithoutSourceFile[sourceFile.id] = breakpoints;
+}
+breakpoints.push(sourceFile.breakpoints[line].serialize());
+}
+}
+
 this._sourceFiles = {};
 this._messages = [];
-this._presentationBreakpoints = {};
+this._breakpointsByDebuggerId = {};
+},
+
+_debuggerReset: function()
+{
+this._reset();
 this._presentationCallFrames = [];
 this._selectedCallFrameIndex = 0;
 }
@@ -44920,42 +47034,24 @@ this._selectedCallFrameIndex = 0;
 
 WebInspector.DebuggerPresentationModel.prototype.__proto__ = WebInspector.Object.prototype;
 
-WebInspector.PresentationBreakpoint = function(breakpoint, sourceFile, lineNumber)
+WebInspector.PresentationBreakpoint = function(sourceFile, lineNumber, condition, enabled)
 {
-this._breakpoint = breakpoint;
-this._sourceFile = sourceFile;
-this._lineNumber = lineNumber;
+this.sourceFile = sourceFile;
+this.sourceFileId = sourceFile.id;
+this.lineNumber = lineNumber;
+this.condition = condition;
+this.enabled = enabled;
 }
 
 WebInspector.PresentationBreakpoint.prototype = {
-get sourceFileId()
-{
-return this._sourceFile.id;
-},
-
-get lineNumber()
-{
-return this._lineNumber;
-},
-
-get condition()
-{
-return this._breakpoint.condition;
-},
-
-get enabled()
-{
-return this._breakpoint.enabled;
-},
-
 get url()
 {
-return this._sourceFile.url;
+return this.sourceFile.url;
 },
 
 get resolved()
 {
-return !!this._breakpoint.locations.length
+return !!this.location;
 },
 
 loadSnippet: function(callback)
@@ -44968,7 +47064,23 @@ if (this.lineNumber < lineEndings.length)
 snippet = content.substring(lineEndings[this.lineNumber - 1], lineEndings[this.lineNumber]);
 callback(snippet);
 }
-this._sourceFile.requestContent(didRequestContent.bind(this));
+if (!this.sourceFile) {
+callback(WebInspector.UIString("N/A"));
+return;
+}
+this.sourceFile.requestContent(didRequestContent.bind(this));
+},
+
+serialize: function()
+{
+var serializedBreakpoint = {};
+serializedBreakpoint.sourceFileId = this.sourceFile.id;
+serializedBreakpoint.lineNumber = this.lineNumber;
+serializedBreakpoint.condition = this.condition;
+serializedBreakpoint.enabled = this.enabled;
+if ("debuggerId" in this)
+serializedBreakpoint.debuggerId = this.debuggerId;
+return serializedBreakpoint;
 }
 }
 
@@ -44977,7 +47089,7 @@ WebInspector.PresenationCallFrame = function(callFrame, index, sourceFile)
 this._callFrame = callFrame;
 this._index = index;
 this._sourceFile = sourceFile;
-this._script = WebInspector.debuggerModel.scriptForSourceID(callFrame.sourceID);
+this._script = WebInspector.debuggerModel.scriptForSourceID(callFrame.location.sourceID);
 }
 
 WebInspector.PresenationCallFrame.prototype = {
@@ -45020,28 +47132,73 @@ this._sourceFile.forceLoadContent(this._script);
 
 evaluate: function(code, objectGroup, includeCommandLineAPI, callback)
 {
-function didEvaluateOnCallFrame(error, result)
+function didEvaluateOnCallFrame(error, result, wasThrown)
 {
-callback(WebInspector.RemoteObject.fromPayload(result));
+callback(WebInspector.RemoteObject.fromPayload(result), wasThrown);
 }
 DebuggerAgent.evaluateOnCallFrame(this._callFrame.id, code, objectGroup, includeCommandLineAPI, didEvaluateOnCallFrame.bind(this));
 },
 
-sourceLocation: function(callback)
+sourceLine: function(callback)
 {
 if (!this._sourceFile) {
-callback(undefined, this._callFrame.line, this._callFrame.column);
+callback(undefined, this._callFrame.location.lineNumber);
 return;
 }
 
 function didRequestSourceMapping(mapping)
 {
-var sourceLocation = mapping.scriptLocationToSourceLocation(this._callFrame.line, this._callFrame.column);
-callback(this._sourceFile.id, sourceLocation.lineNumber, sourceLocation.columnNumber);
+callback(this._sourceFile.id, mapping.scriptLocationToSourceLine(this._callFrame.location));
 }
 this._sourceFile.requestSourceMapping(didRequestSourceMapping.bind(this));
 }
 }
+
+WebInspector.DebuggerPresentationModelResourceBinding = function(model)
+{
+this._presentationModel = model;
+WebInspector.Resource.registerDomainModelBinding(WebInspector.Resource.Type.Script, this);
+}
+
+WebInspector.DebuggerPresentationModelResourceBinding.prototype = {
+canSetContent: function(resource)
+{
+var sourceFile = this._presentationModel._sourceFileForScript(resource.url)
+if (!sourceFile)
+return false;
+return this._presentationModel.canEditScriptSource(sourceFile.id);
+},
+
+setContent: function(resource, content, majorChange, userCallback)
+{
+if (!majorChange)
+return;
+
+var sourceFile = this._presentationModel._sourceFileForScript(resource.url);
+if (!sourceFile) {
+userCallback("Resource is not editable");
+return;
+}
+
+resource.requestContent(this._setContentWithInitialContent.bind(this, sourceFile, content, userCallback));
+},
+
+_setContentWithInitialContent: function(sourceFile, content, userCallback, oldContent)
+{
+function callback(error)
+{
+if (userCallback)
+userCallback(error);
+if (!error) {
+this._presentationModel._updateBreakpointsAfterLiveEdit(sourceFile.id, oldContent, content);
+sourceFile.reload();
+}
+}
+this._presentationModel.editScriptSource(sourceFile.id, content, callback.bind(this));
+}
+}
+
+WebInspector.DebuggerPresentationModelResourceBinding.prototype.__proto__ = WebInspector.ResourceDomainModelBinding.prototype;
 
 
 
@@ -45057,7 +47214,7 @@ this._requestContentCallbacks = [];
 
 this.id = id;
 this.url = script.sourceURL;
-this.isExtensionScript = script.worldType === WebInspector.Script.WorldType.EXTENSIONS_WORLD;
+this.isContentScript = script.isContentScript;
 this.messages = [];
 this.breakpoints = {};
 
@@ -45082,9 +47239,20 @@ this._requestContentCallbacks.push(callback);
 this._requestContent();
 },
 
+get displayName()
+{
+return this.url ? WebInspector.displayNameForURL(this.url) : WebInspector.UIString("(program)");
+},
+
 get content()
 {
 return this._content;
+},
+
+set content(content)
+{
+
+this._content = content;
 },
 
 requestSourceMapping: function(callback)
@@ -45145,13 +47313,13 @@ _loadResourceContent: function(resource)
 {
 function didRequestContent(text)
 {
-if (resource.type === WebInspector.Resource.Type.Script)
-this._didRequestContent("text/javascript", text);
-else {
-
-
-this._didRequestContent("text/html", text.replace(/\r\n/g, "\n"));
+if (!text) {
+this._loadAndConcatenateScriptsContent();
+return;
 }
+
+var mimeType = resource.type === WebInspector.Resource.Type.Script ? "text/javascript" : "text/html";
+this._didRequestContent(mimeType, text);
 }
 resource.requestContent(didRequestContent.bind(this));
 },
@@ -45169,7 +47337,11 @@ var sources = [];
 function didRequestSource(source)
 {
 sources.push(source);
-if (sources.length === scripts.length)
+if (sources.length < scripts.length)
+return;
+if (scripts.length === 1 && !scripts[0].lineOffset && !scripts[0].columnOffset)
+this._didRequestContent("text/javascript", source);
+else
 this._concatenateScriptsContent(scripts, sources);
 }
 for (var i = 0; i < scripts.length; ++i)
@@ -45258,27 +47430,33 @@ _didRequestContent: function(mimeType, text)
 {
 function didFormatContent(formattedText, mapping)
 {
-this._mapping = new WebInspector.FormattedSourceMapping(this._scripts, text, formattedText, mapping);
+this._mapping = new WebInspector.FormattedSourceMapping(this._scripts, mapping.originalLineEndings, formattedText.lineEndings(), mapping);
 WebInspector.SourceFile.prototype._didRequestContent.call(this, mimeType, formattedText);
 }
-this._formatter.formatContent(text, this._scripts, didFormatContent.bind(this));
+this._formatter.formatContent(mimeType, text, didFormatContent.bind(this));
 }
 }
 
 WebInspector.FormattedSourceFile.prototype.__proto__ = WebInspector.SourceFile.prototype;
 
-WebInspector.SourceMapping = function(sortedScripts)
+WebInspector.SourceMapping = function(scripts)
 {
-this._sortedScripts = sortedScripts;
+this._sortedScripts = scripts.slice();
+this._sortedScripts.sort(function(x, y) { return x.lineOffset - y.lineOffset || x.columnOffset - y.columnOffset; });
 }
 
 WebInspector.SourceMapping.prototype = {
-scriptLocationToSourceLocation: function(lineNumber, columnNumber)
+scriptLocationToSourceLine: function(location)
 {
-return { lineNumber: lineNumber, columnNumber: columnNumber };
+return location.lineNumber;
 },
 
-sourceLocationToScriptLocation: function(lineNumber, columnNumber)
+sourceLineToScriptLocation: function(lineNumber)
+{
+return this._sourceLocationToScriptLocation(lineNumber, 0);
+},
+
+_sourceLocationToScriptLocation: function(lineNumber, columnNumber)
 {
 var closestScript = this._sortedScripts[0];
 for (var i = 1; i < this._sortedScripts.length; ++i) {
@@ -45287,43 +47465,39 @@ if (script.lineOffset > lineNumber || (script.lineOffset === lineNumber && scrip
 break;
 closestScript = script;
 }
-return { scriptId: closestScript.sourceID, lineNumber: lineNumber, columnNumber: columnNumber };
+return { sourceID: closestScript.sourceID, lineNumber: lineNumber, columnNumber: columnNumber };
 }
 }
 
-WebInspector.FormattedSourceMapping = function(sortedScripts, originalText, formattedText, mapping)
+WebInspector.FormattedSourceMapping = function(scripts, originalLineEndings, formattedLineEndings, mapping)
 {
-WebInspector.SourceMapping.call(this, sortedScripts);
-this._originalLineEndings = originalText.lineEndings();
-this._formattedLineEndings = formattedText.lineEndings();
+WebInspector.SourceMapping.call(this, scripts);
+this._originalLineEndings = originalLineEndings;
+this._formattedLineEndings = formattedLineEndings;
 this._mapping = mapping;
 }
 
 WebInspector.FormattedSourceMapping.prototype = {
-scriptLocationToSourceLocation: function(lineNumber, columnNumber)
+scriptLocationToSourceLine: function(location)
 {
-var originalPosition = WebInspector.ScriptFormatter.locationToPosition(this._originalLineEndings, lineNumber, columnNumber);
+var originalPosition = WebInspector.ScriptFormatter.locationToPosition(this._originalLineEndings, location);
 var formattedPosition = this._convertPosition(this._mapping.original, this._mapping.formatted, originalPosition);
-return WebInspector.ScriptFormatter.positionToLocation(this._formattedLineEndings, formattedPosition);
+return WebInspector.ScriptFormatter.positionToLocation(this._formattedLineEndings, formattedPosition).lineNumber;
 },
 
-sourceLocationToScriptLocation: function(lineNumber, columnNumber)
+sourceLineToScriptLocation: function(lineNumber)
 {
-var formattedPosition = WebInspector.ScriptFormatter.locationToPosition(this._formattedLineEndings, lineNumber, columnNumber);
+var formattedPosition = WebInspector.ScriptFormatter.lineToPosition(this._formattedLineEndings, lineNumber);
 var originalPosition = this._convertPosition(this._mapping.formatted, this._mapping.original, formattedPosition);
 var originalLocation = WebInspector.ScriptFormatter.positionToLocation(this._originalLineEndings, originalPosition);
-return WebInspector.SourceMapping.prototype.sourceLocationToScriptLocation.call(this, originalLocation.lineNumber, originalLocation.columnNumber);
+return WebInspector.SourceMapping.prototype._sourceLocationToScriptLocation.call(this, originalLocation.lineNumber, originalLocation.columnNumber);
 },
 
 _convertPosition: function(positions1, positions2, position)
 {
-var index = positions1.upperBound(position);
-var range1 = positions1[index] - positions1[index - 1];
-var range2 = positions2[index] - positions2[index - 1];
-var position2 = positions2[index - 1];
-if (range1)
-position2 += Math.round((position - positions1[index - 1]) * range2 / range1);
-return position2;
+var index = positions1.upperBound(position) - 1;
+var delta = position - positions1[index];
+return Math.min(positions2[index] + delta, positions2[index + 1]);
 }
 }
 
@@ -45363,8 +47537,6 @@ this._computedStyle = null;
 this.style = null;
 this._matchedCSSRules = [];
 
-this.breakpoints = {};
-
 if (this._nodeType === Node.ELEMENT_NODE) {
 
 if (!this.ownerDocument.documentElement && this._nodeName === "HTML")
@@ -45373,6 +47545,8 @@ if (!this.ownerDocument.body && this._nodeName === "BODY")
 this.ownerDocument.body = this;
 if (payload.documentURL)
 this.documentURL = payload.documentURL;
+if (payload.shadowRoot)
+this._setShadowRootPayload(payload.shadowRoot);
 } else if (this._nodeType === Node.DOCUMENT_TYPE_NODE) {
 this.publicId = payload.publicId;
 this.systemId = payload.systemId;
@@ -45399,6 +47573,11 @@ return this._childNodeCount > 0;
 nodeType: function()
 {
 return this._nodeType;
+},
+
+inShadowTree: function()
+{
+return this._inShadowTree;
 },
 
 nodeName: function()
@@ -45590,6 +47769,17 @@ this.children.push(node);
 this._renumber();
 },
 
+_setShadowRootPayload: function(payload)
+{
+if (!payload) {
+this.shadowRoot = null;
+return;
+}
+this.shadowRoot = new WebInspector.DOMNode(this.ownerDocument, payload);
+this.shadowRoot.parentNode = this;
+this.shadowRoot._inShadowTree = true;
+},
+
 _renumber: function()
 {
 this._childNodeCount = this.children.length;
@@ -45606,6 +47796,7 @@ child.index = i;
 child.nextSibling = i + 1 < this._childNodeCount ? this.children[i + 1] : null;
 child.prevSibling = i - 1 >= 0 ? this.children[i - 1] : null;
 child.parentNode = this;
+child._inShadowTree = this._inShadowTree;
 }
 },
 
@@ -45618,6 +47809,16 @@ var attr = {
 };
 this._attributesMap[name] = attr;
 this._attributes.push(attr);
+},
+
+ownerDocumentElement: function()
+{
+
+
+var node = this;
+while (node.parentNode && !node.parentNode.documentURL)
+node = node.parentNode;
+return node;
 }
 }
 
@@ -45642,7 +47843,8 @@ CharacterDataModified: "CharacterDataModified",
 NodeInserted: "NodeInserted",
 NodeRemoved: "NodeRemoved",
 DocumentUpdated: "DocumentUpdated",
-ChildNodeCountUpdated: "ChildNodeCountUpdated"
+ChildNodeCountUpdated: "ChildNodeCountUpdated",
+ShadowRootUpdated: "ShadowRootUpdated"
 }
 
 WebInspector.DOMAgent.prototype = {
@@ -45654,14 +47856,26 @@ callback(this._document);
 return;
 }
 
+if (this._pendingDocumentRequestCallbacks) {
+this._pendingDocumentRequestCallbacks.push(callback);
+return;
+}
+
+this._pendingDocumentRequestCallbacks = [callback];
+
 function onDocumentAvailable(error, root)
 {
 if (!error)
 this._setDocument(root);
 
+for (var i = 0; i < this._pendingDocumentRequestCallbacks.length; ++i) {
+var callback = this._pendingDocumentRequestCallbacks[i];
 if (callback)
 callback(this._document);
 }
+delete this._pendingDocumentRequestCallbacks;
+}
+
 DOMAgent.getDocument(onDocumentAvailable.bind(this));
 },
 
@@ -45681,6 +47895,8 @@ if (!callback)
 return;
 return function(error, result)
 {
+if (error)
+console.error("Error during DOMAgent operation: " + error);
 callback(error ? null : result);
 }
 },
@@ -45768,6 +47984,9 @@ _bindNodes: function(children)
 for (var i = 0; i < children.length; ++i) {
 var child = children[i];
 this._idToDOMNode[child.id] = child;
+if (child.shadowRoot)
+this._idToDOMNode[child.shadowRoot.id] = child.shadowRoot;
+
 if (child.children)
 this._bindNodes(child.children);
 }
@@ -45796,17 +48015,8 @@ var node = this._idToDOMNode[nodeId];
 parent.removeChild_(node);
 this.dispatchEventToListeners(WebInspector.DOMAgent.Events.NodeRemoved, {node:node, parent:parent});
 delete this._idToDOMNode[nodeId];
-this._removeBreakpoints(node);
-},
-
-_removeBreakpoints: function(node)
-{
-for (var type in node.breakpoints)
-node.breakpoints[type].remove();
-if (!node.children)
-return;
-for (var i = 0; i < node.children.length; ++i)
-this._removeBreakpoints(node.children[i]);
+if (Preferences.nativeInstrumentationEnabled)
+WebInspector.panels.elements.sidebarPanes.domBreakpoints.nodeRemoved(node);
 },
 
 performSearch: function(query, searchResultCollector, searchSynchronously)
@@ -45829,6 +48039,17 @@ DOMAgent.querySelector(nodeId, selectors, this._wrapClientCallback(callback));
 querySelectorAll: function(nodeId, selectors, callback)
 {
 DOMAgent.querySelectorAll(nodeId, selectors, this._wrapClientCallback(callback));
+},
+
+_shadowRootUpdated: function(hostId, payload)
+{
+var host = this._idToDOMNode[hostId];
+if (host.shadowRoot && !payload)
+delete this._idToDOMNode[host.shadowRoot.id];
+host._setShadowRootPayload(payload);
+if (host.shadowRoot)
+this._idToDOMNode[host.shadowRoot.id] = host.shadowRoot;
+this.dispatchEventToListeners(WebInspector.DOMAgent.Events.ShadowRootUpdated, host);
 }
 }
 
@@ -45884,6 +48105,11 @@ searchResults: function(nodeIds)
 {
 if (this._domAgent._searchResultCollector)
 this._domAgent._searchResultCollector(nodeIds);
+},
+
+shadowRootUpdated: function(hostId, shadowRoot)
+{
+this._domAgent._shadowRootUpdated(hostId, shadowRoot);
 }
 }
 
@@ -46931,10 +49157,10 @@ case WebInspector.TimelineAgent.RecordType.Paint:
 return record.data.width + "\u2009\u00d7\u2009" + record.data.height;
 case WebInspector.TimelineAgent.RecordType.TimerInstall:
 case WebInspector.TimelineAgent.RecordType.TimerRemove:
-return this.stackTrace ? WebInspector.linkifyResourceAsNode(this.stackTrace[0].scriptName, "scripts", this.stackTrace[0].lineNumber, "", "") : record.data.timerId;
+return this.stackTrace ? WebInspector.linkifyResourceAsNode(this.stackTrace[0].url, "scripts", this.stackTrace[0].lineNumber, "", "") : record.data.timerId;
 case WebInspector.TimelineAgent.RecordType.ParseHTML:
 case WebInspector.TimelineAgent.RecordType.RecalculateStyles:
-return this.stackTrace ? WebInspector.linkifyResourceAsNode(this.stackTrace[0].scriptName, "scripts", this.stackTrace[0].lineNumber, "", "") : null;
+return this.stackTrace ? WebInspector.linkifyResourceAsNode(this.stackTrace[0].url, "scripts", this.stackTrace[0].lineNumber, "", "") : null;
 case WebInspector.TimelineAgent.RecordType.EvaluateScript:
 return record.data.url ? WebInspector.linkifyResourceAsNode(record.data.url, "scripts", record.data.lineNumber, "", "") : null;
 case WebInspector.TimelineAgent.RecordType.XHRReadyStateChange:
@@ -47034,7 +49260,7 @@ row.className = "timeline-details";
 row.appendChild(this._createCell(stackFrame.functionName ? stackFrame.functionName : WebInspector.UIString("(anonymous function)"), "timeline-function-name"));
 row.appendChild(this._createCell(" @ "));
 var linkCell = document.createElement("td");
-linkCell.appendChild(WebInspector.linkifyResourceAsNode(stackFrame.scriptName, "scripts", stackFrame.lineNumber, "timeline-details"));
+linkCell.appendChild(WebInspector.linkifyResourceAsNode(stackFrame.url, "scripts", stackFrame.lineNumber, "timeline-details"));
 row.appendChild(linkCell);
 framesTable.appendChild(row);
 }
@@ -47669,7 +49895,7 @@ WebInspector.TestController.prototype = {
 notifyDone: function(callId, result)
 {
 var message = typeof result === "undefined" ? "\"<undefined>\"" : JSON.stringify(result);
-InspectorAgent.didEvaluateForTestInFrontend(callId, message);
+RuntimeAgent.evaluate("didEvaluateForTestInFrontend(" + callId + ", " + message + ")", "test");
 }
 }
 
@@ -47776,9 +50002,6 @@ dialogWindow.createChild("label").textContent = WebInspector.UIString("Go to lin
 this._input = dialogWindow.createChild("input");
 this._input.setAttribute("type", "text");
 this._input.setAttribute("size", 6);
-var linesCount = view.textModel.linesCount;
-if (linesCount)
-this._input.setAttribute("title", WebInspector.UIString("1 - %d", linesCount));
 var blurHandler = this._onBlur.bind(this);
 this._input.addEventListener("blur", blurHandler, false);
 
@@ -47802,9 +50025,20 @@ this._input.select();
 
 WebInspector.GoToLineDialog.show = function(sourceView)
 {
+if (!sourceView || typeof sourceView.highlightLine !== "function")
+return;
 if (this._instance)
 return;
 this._instance = new WebInspector.GoToLineDialog(sourceView);
+}
+
+WebInspector.GoToLineDialog.createShortcut = function()
+{
+var isMac = WebInspector.isMac();
+var shortcut;
+if (isMac)
+return WebInspector.KeyboardShortcut.makeDescriptor("l", WebInspector.KeyboardShortcut.Modifiers.Meta);
+return WebInspector.KeyboardShortcut.makeDescriptor("g", WebInspector.KeyboardShortcut.Modifiers.Ctrl);
 }
 
 WebInspector.GoToLineDialog.prototype = {
@@ -47836,6 +50070,7 @@ this._highlightSelectedLine();
 
 if (this._closeKeys.indexOf(event.keyCode) >= 0) {
 this._hide();
+event.preventDefault();
 event.stopPropagation();
 }
 },
@@ -47849,11 +50084,9 @@ this._hide();
 _highlightSelectedLine: function()
 {
 var value = this._input.value;
-var lineNumber = parseInt(value, 10);
-if (!isNaN(lineNumber) && lineNumber > 0) {
-lineNumber = Math.min(lineNumber, this._view.textModel.linesCount);
+var lineNumber = parseInt(value, 10) - 1;
+if (!isNaN(lineNumber) && lineNumber >= 0)
 this._view.highlightLine(lineNumber);
-}
 }
 };
 
@@ -47998,6 +50231,9 @@ return this._lines.length + 2;
 
 
 
+
+
+
 WebInspector.HAREntry = function(resource)
 {
 this._resource = resource;
@@ -48012,7 +50248,7 @@ startedDateTime: new Date(this._resource.startTime * 1000),
 time: WebInspector.HAREntry._toMilliseconds(this._resource.duration),
 request: this._buildRequest(),
 response: this._buildResponse(),
-
+cache: { }, 
 timings: this._buildTimings()
 };
 },
@@ -48024,33 +50260,29 @@ method: this._resource.requestMethod,
 url: this._resource.url,
 
 headers: this._buildHeaders(this._resource.requestHeaders),
+queryString: this._buildParameters(this._resource.queryParameters || []),
+cookies: this._buildCookies(this._resource.requestCookies || []),
 headersSize: -1, 
 bodySize: -1 
 };
-if (this._resource.queryParameters)
-res.queryString = this._buildParameters(this._resource.queryParameters);
 if (this._resource.requestFormData)
 res.postData = this._buildPostData();
-if (this._resource.requestCookies)
-res.cookies = this._buildCookies(this._resource.requestCookies);
 return res;
 },
 
 _buildResponse: function()
 {
-var res = {
+return {
 status: this._resource.statusCode,
 statusText: this._resource.statusText,
 
 headers: this._buildHeaders(this._resource.responseHeaders),
+cookies: this._buildCookies(this._resource.responseCookies || []),
 content: this._buildContent(),
 redirectURL: this._resource.responseHeaderValue("Location") || "",
 headersSize: -1, 
 bodySize: this._resource.resourceSize
 };
-if (this._resource.responseCookies)
-res.cookies = this._buildCookies(this._resource.responseCookies);
-return res;
 },
 
 _buildContent: function()
@@ -48410,6 +50642,15 @@ document.getElementById("close-button-right").addEventListener("click", this._on
 }
 
 WebInspector.Toolbar.prototype = {
+set attached(attached)
+{
+if (attached)
+this.element.addStyleClass("toolbar-small");
+else
+this.element.removeStyleClass("toolbar-small");
+this._updateDropdownButtonAndHideDropdown();
+},
+
 resize: function()
 {
 this._updateDropdownButtonAndHideDropdown();
@@ -48533,6 +50774,7 @@ this._toolbar = document.getElementById("toolbar");
 this._arrow = document.getElementById("toolbar-dropdown-arrow");
 this.element = document.createElement("div");
 this.element.id = "toolbar-dropdown";
+this.element.className = "toolbar-small";
 this._contentElement = this.element.createChild("div", "scrollable-content");
 this._contentElement.tabIndex = 0;
 this._contentElement.addEventListener("keydown", this._onKeyDown.bind(this), true);
@@ -48646,7 +50888,7 @@ else
 var isFindKey = event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
 
 if (isFindKey) {
-this._focusSearchField();
+this.focusSearchField();
 event.handled = true;
 }
 break;
@@ -48654,7 +50896,7 @@ break;
 
 case "F3":
 if (!isMac) {
-this._focusSearchField();
+this.focusSearchField();
 event.handled = true;
 }
 break;
@@ -48719,7 +50961,7 @@ this._matchesElement.textContent = matchesString;
 WebInspector.toolbar.resize();
 },
 
-_focusSearchField: function()
+focusSearchField: function()
 {
 this.element.focus();
 this.element.select();
@@ -48834,6 +51076,81 @@ currentPanel.performSearch(query);
 
 
 
+WebInspector.WorkerManager = function()
+{
+}
+
+WebInspector.WorkerManager.isWorkerFrontend = function()
+{
+return !!WebInspector.queryParamsObject["workerId"];
+}
+
+WebInspector.WorkerManager.loaded = function()
+{
+var workerId = WebInspector.queryParamsObject["workerId"];
+if (!workerId) {
+InspectorBackend.registerDomainDispatcher("Worker", new WebInspector.WorkerMessageForwarder());
+return;
+}
+
+
+function receiveMessage(event)
+{
+var message = event.data;
+InspectorBackend.dispatch(message);
+}
+window.addEventListener("message", receiveMessage, true);
+
+
+InspectorBackend.sendMessageObjectToBackend = function(message)
+{
+window.opener.postMessage({workerId: workerId, command: "sendMessageToBackend", message: message}, "*");
+}
+
+InspectorFrontendHost.loaded = function()
+{
+window.opener.postMessage({workerId: workerId, command: "loaded"}, "*");
+}
+}
+
+
+WebInspector.WorkerMessageForwarder = function()
+{
+window.addEventListener("message", this._receiveMessage.bind(this), true);
+this._workerIdToWindow = {};
+}
+
+WebInspector.WorkerMessageForwarder.prototype = {
+_receiveMessage: function(event)
+{
+var workerId = event.data.workerId;
+workerId = parseInt(workerId);
+var command = event.data.command;
+var message = event.data.message;
+
+if (command == "sendMessageToBackend")
+WorkerAgent.sendMessageToWorker(workerId, message);
+},
+
+workerCreated: function(workerId)
+{
+var url = location.href + "&workerId=" + workerId;
+url = url.replace("docked=true&", "");
+this._workerIdToWindow[workerId] = window.open(url);
+},
+
+dispatchMessageFromWorker: function(workerId, message)
+{
+var win = this._workerIdToWindow[workerId];
+if (win)
+win.postMessage(message, "*");
+}
+}
+
+
+
+
+
 
 
 var context = {};  
@@ -48851,7 +51168,12 @@ Preferences.nativeInstrumentationEnabled = true;
 Preferences.fileSystemEnabled = false;
 Preferences.showTimingTab = true;
 Preferences.showCookiesTab = true;
+Preferences.saveAsAvailable = true;
+Preferences.useLowerCaseMenuTitlesOnWindows = true;
 })();
+
+
+WebInspector.MIMETypes["image/webp"] = {2: true};
 
 var devtools = devtools || {};
 
@@ -48883,13 +51205,6 @@ WebInspector.ProfilesPanel.prototype.show = oldShow;
 WebInspector.UIString = function(string)
 {
 return String.vsprintf(string, Array.prototype.slice.call(arguments, 1));
-};
-
-
-
-WebInspector.openLinkExternallyLabel = function()
-{
-return WebInspector.UIString("Open Link in New Tab");
 };
 
 
@@ -48962,6 +51277,11 @@ function getTabId()
 return tabId;
 }
 webInspector.inspectedWindow.__proto__.__defineGetter__("tabId", getTabId);
+chrome = window.chrome || {};
+chrome.experimental = chrome.experimental || {};
+chrome.experimental.devtools = chrome.experimental.devtools || {};
+for (var property in webInspector)
+chrome.experimental.devtools[property] = webInspector[property];
 }
 
 WebInspector.buildPlatformExtensionAPI = function()
@@ -48972,6 +51292,13 @@ return "(" + WebInspector.platformExtensionAPI + ")(" + WebInspector._inspectedT
 WebInspector.setInspectedTabId = function(tabId)
 {
 WebInspector._inspectedTabId = tabId;
+}
+
+if (WebInspector.InspectorFrontendHostStub) {
+WebInspector.InspectorFrontendHostStub.prototype.inspectedURLChanged = function(url)
+{
+document.title = "Developer Tools - " + url;
+}
 }
 
 
@@ -49013,7 +51340,6 @@ message = opt_message + "(" + message + ")";
 this.fail(message);
 }
 };
-
 
 
 TestSuite.prototype.assertTrue = function(value, opt_message)
@@ -49131,90 +51457,6 @@ TestSuite.prototype.testCompletionOnPause = function()
 }
 
 
-
-
-
-TestSuite.prototype.testProfilerTab = function()
-{
-this.showPanel("profiles");
-
-var panel = WebInspector.panels.profiles;
-var test = this;
-
-function findDisplayedNode() {
-var node = panel.visibleView.profileDataGridTree.children[0];
-if (!node) {
-
-window.setTimeout(findDisplayedNode, 100);
-return;
-}
-
-
-
-
-while (node) {
-if (node.functionName.indexOf("fib") !== -1)
-test.releaseControl();
-node = node.traverseNextNode(true, null, true);
-}
-
-test.fail();
-}
-
-function findVisibleView() {
-if (!panel.visibleView) {
-setTimeout(findVisibleView, 0);
-return;
-}
-setTimeout(findDisplayedNode, 0);
-}
-
-findVisibleView();
-this.takeControl();
-};
-
-
-
-TestSuite.prototype.testHeapProfiler = function()
-{
-this.showPanel("profiles");
-
-var panel = WebInspector.panels.profiles;
-var test = this;
-
-function findDisplayedNode() {
-var node = panel.visibleView.dataGrid.children[0];
-if (!node) {
-
-window.setTimeout(findDisplayedNode, 100);
-return;
-}
-
-
-
-while (node) {
-if (node.constructorName.indexOf("A") !== -1) {
-test.releaseControl();
-return;
-}
-node = node.traverseNextNode(false, null, true);
-}
-
-test.fail();
-}
-
-function findVisibleView() {
-if (!panel.visibleView) {
-setTimeout(findVisibleView, 0);
-return;
-}
-setTimeout(findDisplayedNode, 0);
-}
-
-WebInspector.HeapSnapshotProfileType.prototype.buttonClicked();
-findVisibleView();
-this.takeControl();
-};
 
 
 
@@ -49407,6 +51649,102 @@ function() {
 test.releaseControl();
 });
 }
+
+this.takeControl();
+};
+
+
+
+TestSuite.prototype.testNetworkSize = function()
+{
+var test = this;
+
+function finishResource(resource, finishTime)
+{
+test.assertEquals(219, resource.transferSize, "Incorrect total encoded data length");
+test.assertEquals(25, resource.resourceSize, "Incorrect total data length");
+test.releaseControl();
+}
+
+this.addSniffer(WebInspector.NetworkDispatcher.prototype, "_finishResource", finishResource);
+
+
+test.evaluateInConsole_("window.location.reload(true);", function(resultText) {});
+
+this.takeControl();
+};
+
+
+
+TestSuite.prototype.testNetworkSyncSize = function()
+{
+var test = this;
+
+function finishResource(resource, finishTime)
+{
+test.assertEquals(219, resource.transferSize, "Incorrect total encoded data length");
+test.assertEquals(25, resource.resourceSize, "Incorrect total data length");
+test.releaseControl();
+}
+
+this.addSniffer(WebInspector.NetworkDispatcher.prototype, "_finishResource", finishResource);
+
+
+test.evaluateInConsole_("var xhr = new XMLHttpRequest(); xhr.open(\"GET\", \"chunked\", false); xhr.send(null);", function() {});
+
+this.takeControl();
+};
+
+
+
+TestSuite.prototype.testNetworkRawHeadersText = function()
+{
+var test = this;
+
+function finishResource(resource, finishTime)
+{
+if (!resource.responseHeadersText)
+test.fail("Failure: resource does not have response headers text");
+test.assertEquals(164, resource.responseHeadersText.length, "Incorrect response headers text length");
+test.releaseControl();
+}
+
+this.addSniffer(WebInspector.NetworkDispatcher.prototype, "_finishResource", finishResource);
+
+
+test.evaluateInConsole_("window.location.reload(true);", function(resultText) {});
+
+this.takeControl();
+};
+
+
+
+TestSuite.prototype.testNetworkTiming = function()
+{
+var test = this;
+
+function finishResource(resource, finishTime)
+{
+
+
+
+test.assertTrue(resource.timing.receiveHeadersEnd - resource.timing.connectStart >= 70, 
+"Time between receiveHeadersEnd and connectStart should be >=70ms, but was " +
+"receiveHeadersEnd=" + resource.timing.receiveHeadersEnd + ", connectStart=" + resource.timing.connectStart + ".");
+test.assertTrue(resource.responseReceivedTime - resource.startTime >= 0.07, 
+"Time between responseReceivedTime and startTime should be >=0.07s, but was " +
+"responseReceivedTime=" + resource.responseReceivedTime + ", startTime=" + resource.startTime + ".");
+test.assertTrue(resource.endTime - resource.startTime >= 0.14, 
+"Time between endTime and startTime should be >=0.14s, but was " +
+"endtime=" + resource.endTime + ", startTime=" + resource.startTime + ".");
+
+test.releaseControl();
+}
+
+this.addSniffer(WebInspector.NetworkDispatcher.prototype, "_finishResource", finishResource);
+
+
+test.evaluateInConsole_("window.location.reload(true);", function(resultText) {});
 
 this.takeControl();
 };

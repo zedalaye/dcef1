@@ -59,15 +59,6 @@ type
     procedure actGoToExecute(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure actHomeUpdate(Sender: TObject);
-    procedure crmAddressChange(Sender: TCustomChromium;
-      const browser: ICefBrowser; const frame: ICefFrame; const url: ustring;
-      out Result: TCefRetval);
-    procedure crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
-      const frame: ICefFrame; httpStatusCode: Integer; out Result: TCefRetval);
-    procedure crmLoadStart(Sender: TCustomChromium; const browser: ICefBrowser;
-      const frame: ICefFrame; out Result: TCefRetval);
-    procedure crmTitleChange(Sender: TCustomChromium;
-      const browser: ICefBrowser; const title: ustring; out Result: TCefRetval);
     procedure actGetSourceExecute(Sender: TObject);
     procedure actGetTextExecute(Sender: TObject);
     procedure actShowDevToolsExecute(Sender: TObject);
@@ -77,18 +68,30 @@ type
     procedure actZoomResetExecute(Sender: TObject);
     procedure actExecuteJSExecute(Sender: TObject);
     procedure Exit1Click(Sender: TObject);
-    procedure crmStatus(Sender: TCustomChromium; const browser: ICefBrowser;
-      const value: ustring; StatusType: TCefHandlerStatusType;
-      out Result: TCefRetval);
     procedure actPrintExecute(Sender: TObject);
     procedure actFileSchemeExecute(Sender: TObject);
     procedure actDomExecute(Sender: TObject);
-    procedure crmDownloadResponse(Sender: TCustomChromium;
-      const browser: ICefBrowser; const mimeType, fileName: ustring;
-      contentLength: Int64; var handler: ICefDownloadHandler;
-      out Result: TCefRetval);
     procedure actNextUpdate(Sender: TObject);
     procedure actPrevUpdate(Sender: TObject);
+    procedure crmAddressChange(Sender: TCustomChromium;
+      const browser: ICefBrowser; const frame: ICefFrame; const url: ustring;
+      out Result: Boolean);
+    procedure crmAuthCredentials(Sender: TCustomChromium;
+      const browser: ICefBrowser; isProxy: Boolean; const host, realm,
+      scheme: ustring; var username, password: ustring; out Result: Boolean);
+    procedure crmGetDownloadHandler(Sender: TCustomChromium;
+      const browser: ICefBrowser; const mimeType, fileName: ustring;
+      contentLength: Int64; var handler: ICefDownloadHandler;
+      out Result: Boolean);
+    procedure crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
+      const frame: ICefFrame; httpStatusCode: Integer; out Result: Boolean);
+    procedure crmLoadStart(Sender: TCustomChromium; const browser: ICefBrowser;
+      const frame: ICefFrame);
+    procedure crmStatusMessage(Sender: TCustomChromium;
+      const browser: ICefBrowser; const value: ustring;
+      StatusType: TCefHandlerStatusType; out Result: Boolean);
+    procedure crmTitleChange(Sender: TCustomChromium;
+      const browser: ICefBrowser; const title: ustring; out Result: Boolean);
   private
     { Déclarations privées }
     FLoading: Boolean;
@@ -111,7 +114,7 @@ var
 
 implementation
 uses
-  ceffilescheme;
+  ceffilescheme, Authentication;
 
 {$R *.dfm}
 
@@ -287,47 +290,78 @@ end;
 
 procedure TMainForm.crmAddressChange(Sender: TCustomChromium;
   const browser: ICefBrowser; const frame: ICefFrame; const url: ustring;
-  out Result: TCefRetval);
+  out Result: Boolean);
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
     edAddress.Text := url;
 end;
 
-procedure TMainForm.crmDownloadResponse(Sender: TCustomChromium;
+procedure TMainForm.crmAuthCredentials(Sender: TCustomChromium;
+  const browser: ICefBrowser; isProxy: Boolean; const host, realm,
+  scheme: ustring; var username, password: ustring; out Result: Boolean);
+var
+  u, p: ustring;
+  r: Boolean;
+begin
+  TThread.Synchronize(nil, procedure begin
+    with TPasswordDlg.Create(nil) do
+    try
+      if ShowModal = mrOk then
+      begin
+        u := edtusername.Text;
+        p := edtPassword.Text;
+        r := True;
+      end else
+        r := False;
+    finally
+      Free;
+    end
+  end);
+
+  Result := r;
+  if r = True then
+  begin
+    username := u;
+    password := p;
+  end;
+end;
+
+procedure TMainForm.crmGetDownloadHandler(Sender: TCustomChromium;
   const browser: ICefBrowser; const mimeType, fileName: ustring;
-  contentLength: Int64; var handler: ICefDownloadHandler;
-  out Result: TCefRetval);
+  contentLength: Int64; var handler: ICefDownloadHandler; out Result: Boolean);
 begin
   SaveDialog.FileName := fileName;
   if SaveDialog.Execute then
     handler := TCefStreamDownloadHandler.Create(
       TFileStream.Create(SaveDialog.FileName, fmCreate), true);
+  Result := True;
 end;
 
-procedure TMainForm.crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
-  const frame: ICefFrame; httpStatusCode: Integer; out Result: TCefRetval);
+procedure TMainForm.crmLoadEnd(Sender: TCustomChromium;
+  const browser: ICefBrowser; const frame: ICefFrame; httpStatusCode: Integer;
+  out Result: Boolean);
 begin
-  if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
+  if (browser <> nil) and (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
     FLoading := False;
 end;
 
 procedure TMainForm.crmLoadStart(Sender: TCustomChromium;
-  const browser: ICefBrowser; const frame: ICefFrame; out Result: TCefRetval);
+  const browser: ICefBrowser; const frame: ICefFrame);
 begin
-  if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
+  if (browser <> nil) and (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
     FLoading := True;
 end;
 
-procedure TMainForm.crmStatus(Sender: TCustomChromium;
+procedure TMainForm.crmStatusMessage(Sender: TCustomChromium;
   const browser: ICefBrowser; const value: ustring;
-  StatusType: TCefHandlerStatusType; out Result: TCefRetval);
+  StatusType: TCefHandlerStatusType; out Result: Boolean);
 begin
   if StatusType in [STATUSTYPE_MOUSEOVER_URL, STATUSTYPE_KEYBOARD_FOCUS_URL] then
     StatusBar.SimpleText := value
 end;
 
 procedure TMainForm.crmTitleChange(Sender: TCustomChromium;
-  const browser: ICefBrowser; const title: ustring; out Result: TCefRetval);
+  const browser: ICefBrowser; const title: ustring; out Result: Boolean);
 begin
   if browser.GetWindowHandle = crm.BrowserHandle then
     Caption := title;
@@ -383,7 +417,9 @@ begin
   MainForm.StatusBar.SimpleText := 'Downloading ... ' + IntToStr(FStream.Position div 1000) + ' Kb';
 end;
 
+
 initialization
-  CefRegisterScheme('file', '', True, False, TFileScheme);
+  CefRegisterCustomScheme('file', True, False, False);
+  CefRegisterSchemeHandlerFactory('file', '', True, TFileScheme);
 
 end.

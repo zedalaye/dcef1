@@ -57,6 +57,9 @@ type
   uint64 = int64;
 {$ifend}
 
+  TCefWindowHandle = HWND;
+  TCefCursorHandle = HCURSOR;
+
   // CEF provides functions for converting between UTF-8, -16 and -32 strings.
   // CEF string types are safe for reading from multiple threads but not for
   // modification. It is the user's responsibility to provide synchronization if
@@ -177,10 +180,6 @@ type
     Scale: double;
   end;
 
-  // Window handle.
-  CefWindowHandle = HWND;
-
-
   // Log severity levels.
   TCefLogSeverity = (
     LOGSEVERITY_VERBOSE = -1,
@@ -222,8 +221,8 @@ type
     // locale of "en-US" will be used.
     locale: TCefString;
 
-    // List of file system paths that will be searched by the browser to locate
-    // plugins. This is in addition to the default search paths.
+    // List of fully qualified paths to plugins (including plugin name) that will
+    // be loaded in addition to any plugins found in the default search paths.
     extra_plugin_paths: TCefStringList;
 
     // The directory and file name to use for the debug log. If empty, the
@@ -394,6 +393,7 @@ type
   end;
 
   // Time information. Values should always be in UTC.
+  PCefTime = ^TCefTime;
   TCefTime = record
     year: Integer;          // Four digit year "2007"
     month: Integer;         // 1-based month (values 1 = January, etc.)
@@ -455,17 +455,6 @@ type
     KT_KEYUP    = 0,
     KT_KEYDOWN,
     KT_CHAR
-  );
-
-  // Define handler return value types. Returning RV_HANDLED indicates
-  // that the implementation completely handled the method and that no further
-  // processing is required.  Returning RV_CONTINUE indicates that the
-  // implementation did not handle the method and that the default handler
-  // should be called.
-  PCefRetval = ^TCefRetval;
-  TCefRetval = (
-    RV_HANDLED   = 0,
-    RV_CONTINUE  = 1
   );
 
   // Various browser navigation types supported by chrome.
@@ -875,7 +864,7 @@ type
   PCefV8ValueArray = array[0..(High(Integer) div SizeOf(Integer)) - 1] of PCefV8Value;
   PPCefV8Value = ^PCefV8ValueArray;
   PCefSchemeHandlerFactory = ^TCefSchemeHandlerFactory;
-  PCefHandler = ^TCefHandler;
+//  PCefHandler = ^TCefHandler;
   PCefFrame = ^TCefFrame;
   PCefRequest = ^TCefRequest;
   PCefStreamReader = ^TCefStreamReader;
@@ -904,6 +893,20 @@ type
   PCefWebUrlRequestClient = ^TCefWebUrlRequestClient;
   PCefCookieVisitor = ^TCefCookieVisitor;
   PCefCookie = ^TCefCookie;
+  PCefClient = ^TCefClient;
+  PCefLifeSpanHandler = ^TCefLifeSpanHandler;
+  PCefLoadHandler = ^TCefLoadHandler;
+  PCefRequestHandler = ^TCefRequestHandler;
+  PCefContentFilter = ^TCefContentFilter;
+  PCefDisplayHandler = ^TCefDisplayHandler;
+  PCefFocusHandler = ^TCefFocusHandler;
+  PCefKeyboardHandler = ^TCefKeyboardHandler;
+  PCefMenuHandler = ^TCefMenuHandler;
+  PCefPrintHandler = ^TCefPrintHandler;
+  PCefFindHandler = ^TCefFindHandler;
+  PCefJsDialogHandler = ^TCefJsDialogHandler;
+  PCefJsBindingHandler = ^TCefJsBindingHandler;
+  PCefRenderHandler = ^TCefRenderHandler;
 
   TCefBase = record
     // Size of the data structure.
@@ -962,13 +965,18 @@ type
     set_focus: procedure(self: PCefBrowser; enable: Integer); stdcall;
 
     // Retrieve the window handle for this browser.
-    get_window_handle: function(self: PCefBrowser): CefWindowHandle; stdcall;
+    get_window_handle: function(self: PCefBrowser): TCefWindowHandle; stdcall;
+
+    // Retrieve the window handle of the browser that opened this browser. Will
+    // return NULL for non-popup windows. This function can be used in combination
+    // with custom handling of modal windows.
+    get_opener_window_handle: function(self: PCefBrowser): TCefWindowHandle; stdcall;
 
     // Returns true (1) if the window is a popup window.
     is_popup: function(self: PCefBrowser): Integer; stdcall;
 
-    // Returns the handler for this browser.
-    get_handler: function(self: PCefBrowser): PCefHandler; stdcall;
+    // Returns the client for this browser.
+    get_client: function(self: PCefBrowser): PCefClient; stdcall;
 
     // Returns the main (top-level) frame for the browser window.
     get_main_frame: function(self: PCefBrowser): PCefFrame; stdcall;
@@ -1014,11 +1022,11 @@ type
 
     // Get the size of the specified element. This function should only be called
     // on the UI thread.
-    get_size: function(self: PCefBrowser; type_: TCefPaintElementType; width, height: PInteger): Integer; stdcall;
+    get_size: function(self: PCefBrowser; kind: TCefPaintElementType; width, height: PInteger): Integer; stdcall;
 
     // Set the size of the specified element. This function is only used when
     // window rendering is disabled.
-    set_size: procedure(self: PCefBrowser; type_: TCefPaintElementType; width, height: Integer); stdcall;
+    set_size: procedure(self: PCefBrowser; kind: TCefPaintElementType; width, height: Integer); stdcall;
 
     // Returns true (1) if a popup is currently visible. This function should only
     // be called on the UI thread.
@@ -1029,7 +1037,7 @@ type
 
     // Invalidate the |dirtyRect| region of the view. This function is only used
     // when window rendering is disabled and will result in a call to
-    // handle_paint().
+    // HandlePaint().
     invalidate: procedure(self: PCefBrowser; const dirtyRect: PCefRect); stdcall;
 
     // Get the raw image data contained in the specified element without
@@ -1037,16 +1045,16 @@ type
     // match the current element size. On Windows |buffer| must be width*height*4
     // bytes in size and represents a BGRA image with an upper-left origin. This
     // function should only be called on the UI thread.
-    get_image: function(self: PCefBrowser; type_: TCefPaintElementType;
+    get_image: function(self: PCefBrowser; kind: TCefPaintElementType;
       width, height: Integer; buffer: Pointer): Integer; stdcall;
 
     // Send a key event to the browser.
-    send_key_event: procedure(self: PCefBrowser; type_: TCefKeyType; key, modifiers, sysChar, imeChar: Integer); stdcall;
+    send_key_event: procedure(self: PCefBrowser; kind: TCefKeyType; key, modifiers, sysChar, imeChar: Integer); stdcall;
 
     // Send a mouse click event to the browser. The |x| and |y| coordinates are
     // relative to the upper-left corner of the view.
     send_mouse_click_event: procedure(self: PCefBrowser;
-      x, y: Integer; type_: TCefMouseButtonType; mouseUp, clickCount: Integer); stdcall;
+      x, y: Integer; kind: TCefMouseButtonType; mouseUp, clickCount: Integer); stdcall;
 
     // Send a mouse move event to the browser. The |x| and |y| coordinates are
     // relative to the upper-left corner of the view.
@@ -1149,117 +1157,129 @@ type
     visit_dom: procedure(self: PCefFrame; visitor: PCefDomVisitor); stdcall;
   end;
 
-  // Structure that should be implemented to handle events generated by the
-  // browser window. The functions of this structure will be called on the thread
-  // indicated in the function comments.
-  TCefHandler = record
+
+  // Implement this structure to handle events related to browser life span. The
+  // functions of this structure will be called on the UI thread.
+  TCefLifeSpanHandler = record
     // Base structure.
     base: TCefBase;
 
-    // Called on the UI thread before a new window is created. The |parentBrowser|
-    // parameter will point to the parent browser window, if any. The |popup|
-    // parameter will be true (1) if the new window is a popup window, in which
-    // case |popupFeatures| will contain information about the style of popup
-    // window requested. If you create the window yourself you should populate the
-    // window handle member of |createInfo| and return RV_HANDLED.  Otherwise,
-    // return RV_CONTINUE and the framework will create the window.  By default, a
-    // newly created window will recieve the same handler as the parent window.
-    // To change the handler for the new window modify the object that |handler|
-    // points to.
-    handle_before_created: function(
-      self: PCefHandler; parentBrowser: PCefBrowser;
-      var windowInfo: TCefWindowInfo; popup: Integer;
-      const popupFeatures: PCefPopupFeatures;
-      var handler: PCefHandler; const url: PCefString;
-      settings: PCefBrowserSettings): TCefRetval; stdcall;
+    // Called before a new popup window is created. The |parentBrowser| parameter
+    // will point to the parent browser window. The |popupFeatures| parameter will
+    // contain information about the style of popup window requested. Return false
+    // (0) to have the framework create the new popup window based on the
+    // parameters in |windowInfo|. Return true (1) to cancel creation of the popup
+    // window. By default, a newly created popup window will have the same client
+    // and settings as the parent window. To change the client for the new window
+    // modify the object that |client| points to. To change the settings for the
+    // new window modify the |settings| structure.
+    on_before_popup: function(self: PCefLifeSpanHandler; parentBrowser: PCefBrowser;
+       const popupFeatures: PCefPopupFeatures; windowInfo: PCefWindowInfo;
+       const url: PCefString; var client: PCefClient;
+       settings: PCefBrowserSettings): Integer; stdcall;
 
-    // Called on the UI thread after a new window is created. The return value is
-    // currently ignored.
-    handle_after_created: function(self: PCefHandler;
-      browser: PCefBrowser): TCefRetval; stdcall;
+    // Called after a new window is created.
+    on_after_created: procedure(self: PCefLifeSpanHandler; browser: PCefBrowser); stdcall;
 
-    // Called on the UI thread when a frame's address has changed. The return
-    // value is currently ignored.
-    handle_address_change: function(
-        self: PCefHandler; browser: PCefBrowser;
-        frame: PCefFrame; const url: PCefString): TCefRetval; stdcall;
+    // Called just before a window is closed. If this is a modal window and you
+    // handled the run_modal() event you can use this callback to restore the
+    // opener window to a usable state.
+    on_before_close: procedure(self: PCefLifeSpanHandler; browser: PCefBrowser); stdcall;
 
-    // Called on the UI thread when the page title changes. The return value is
-    // currently ignored.
-    handle_title_change: function(
-        self: PCefHandler; browser: PCefBrowser;
-        const title: PCefString): TCefRetval; stdcall;
+    // Called to enter the modal loop. Provide your own modal loop here. Return
+    // true (1) if you ran your own modal loop and false (0) to use the default.
+    // You can also use this event to know when a modal window is about to start.
+    run_modal: function(self: PCefLifeSpanHandler; browser: PCefBrowser): Integer; stdcall;
 
-    // Called on the UI thread when the navigation state has changed. The return
-    // value is currently ignored.
-    handle_nav_state_change: function(self: PCefHandler; browser: PCefBrowser;
-      canGoBack, canGoForward: Integer): TCefRetval; stdcall;
+    // Called when a modal browser window has been destroyed. You must implement
+    // this if you are handling run_modal(). You can also use this event to know
+    // when a modal window is about to be closed.
+    quit_modal: procedure(self: PCefLifeSpanHandler; browser: PCefBrowser); stdcall;
+  end;
 
+  // Implement this structure to handle events related to browser load status. The
+  // functions of this structure will be called on the UI thread.
+  TCefLoadHandler = record
+    // Base structure.
+    base: TCefBase;
+
+    // Called when the browser begins loading a frame. The |frame| value will
+    // never be NULL -- call the is_main() function to check if this frame is the
+    // main frame. Multiple frames may be loading at the same time. Sub-frames may
+    // start or continue loading after the main frame load has ended. This
+    // function may not be called for a particular frame if the load request for
+    // that frame fails.
+    on_load_start: procedure(self: PCefLoadHandler;
+      browser: PCefBrowser; frame: PCefFrame); stdcall;
+
+    // Called when the browser is done loading a frame. The |frame| value will
+    // never be NULL -- call the is_main() function to check if this frame is the
+    // main frame. Multiple frames may be loading at the same time. Sub-frames may
+    // start or continue loading after the main frame load has ended. This
+    // function will always be called for all frames irrespective of whether the
+    // request completes successfully.
+    on_load_end: procedure(self: PCefLoadHandler; browser: PCefBrowser;
+      frame: PCefFrame; httpStatusCode: Integer); stdcall;
+
+    // Called when the browser fails to load a resource. |errorCode| is the error
+    // code number and |failedUrl| is the URL that failed to load. To provide
+    // custom error text assign the text to |errorText| and return true (1).
+    // Otherwise, return false (0) for the default error text. See
+    // net\base\net_error_list.h for complete descriptions of the error codes.
+    on_load_error: function(self: PCefLoadHandler;
+        browser: PCefBrowser; frame: PCefFrame;
+        errorCode: TCefHandlerErrorcode; const failedUrl: PCefString;
+        var errorText: TCefString): Integer; stdcall;
+  end;
+
+  // Implement this structure to handle events related to browser requests. The
+  // functions of this structure will be called on the thread indicated.
+  TCefRequestHandler = record
+    // Base structure.
+    base: TCefBase;
 
     // Called on the UI thread before browser navigation. The client has an
-    // opportunity to modify the |request| object if desired.  Return RV_HANDLED
-    // to cancel navigation.
-    handle_before_browse: function(
-        self: PCefHandler; browser: PCefBrowser;
-        frame: PCefFrame; request: PCefRequest;
-        navType: TCefHandlerNavtype; isRedirect: Integer): TCefRetval; stdcall;
-
-    // Called on the UI thread when the browser begins loading a frame. The
-    // |frame| value will never be NULL -- call the is_main() function to check if
-    // this frame is the main frame. Multiple frames may be loading at the same
-    // time. Sub-frames may start or continue loading after the main frame load
-    // has ended. This function may not be called for a particular frame if the
-    // load request for that frame fails. The return value is currently ignored.
-    handle_load_start: function(
-        self: PCefHandler; browser: PCefBrowser;
-        frame: PCefFrame): TCefRetval; stdcall;
-
-    // Called on the UI thread when the browser is done loading a frame. The
-    // |frame| value will never be NULL -- call the is_main() function to check if
-    // this frame is the main frame. Multiple frames may be loading at the same
-    // time. Sub-frames may start or continue loading after the main frame load
-    // has ended. This function will always be called for all frames irrespective
-    // of whether the request completes successfully. The return value is
-    // currently ignored.
-    handle_load_end: function(self: PCefHandler; browser: PCefBrowser;
-      frame: PCefFrame; httpStatusCode: Integer): TCefRetval; stdcall;
-
-    // Called on the UI thread when the browser fails to load a resource.
-    // |errorCode| is the error code number and |failedUrl| is the URL that failed
-    // to load. To provide custom error text assign the text to |errorText| and
-    // return RV_HANDLED.  Otherwise, return RV_CONTINUE for the default error
-    // text.
-    handle_load_error: function(
-        self: PCefHandler; browser: PCefBrowser;
-        frame: PCefFrame; errorCode: TCefHandlerErrorcode;
-        const failedUrl: PCefString; var errorText: TCefString): TCefRetval; stdcall;
+    // opportunity to modify the |request| object if desired. Return true (1) to
+    // cancel the navigation or false (0) to allow the navigation to proceed.
+    on_before_browse: function(self: PCefRequestHandler;
+        browser: PCefBrowser; frame: PCefFrame;
+        request: PCefRequest; navType: TCefHandlerNavtype;
+        isRedirect: Integer): Integer; stdcall;
 
     // Called on the IO thread before a resource is loaded.  To allow the resource
-    // to load normally return RV_CONTINUE. To redirect the resource to a new url
-    // populate the |redirectUrl| value and return RV_CONTINUE.  To specify data
-    // for the resource return a CefStream object in |resourceStream|, use the
+    // to load normally return false (0). To redirect the resource to a new url
+    // populate the |redirectUrl| value and return false (0).  To specify data for
+    // the resource return a CefStream object in |resourceStream|, use the
     // |response| object to set mime type, HTTP status code and optional header
-    // values, and return RV_CONTINUE. To cancel loading of the resource return
-    // RV_HANDLED. Any modifications to |request| will be observed.  If the URL in
+    // values, and return false (0). To cancel loading of the resource return true
+    // (1). Any modifications to |request| will be observed.  If the URL in
     // |request| is changed and |redirectUrl| is also set, the URL in |request|
     // will be used.
+    on_before_resource_load: function(
+        self: PCefRequestHandler; browser: PCefBrowser;
+        request: PCefRequest; redirectUrl: PCefString;
+        var resourceStream: PCefStreamReader;
+        response: PCefResponse; loadFlags: Integer): Integer; stdcall;
 
-    handle_before_resource_load: function(
-        self: PCefHandler; browser: PCefBrowser; request: PCefRequest;
-        var redirectUrl: TCefString; var resourceStream: PCefStreamReader;
-        const response: PCefResponse; loadFlags: Integer): TCefRetval; stdcall;
+    // Called on the UI thread after a response to the resource request is
+    // received. Set |filter| if response content needs to be monitored and/or
+    // modified as it arrives.
+    on_resource_reponse: procedure(self: PCefRequestHandler;
+        browser: PCefBrowser; const url: PCefString;
+        response: PCefResponse; var filter: PCefContentFilter); stdcall;
 
     // Called on the IO thread to handle requests for URLs with an unknown
-    // protocol component. Return RV_HANDLED to indicate that the request should
-    // succeed because it was externally handled. Set |allow_os_execution| to true
-    // (1) and return RV_CONTINUE to attempt execution via the registered OS
-    // protocol handler, if any. If RV_CONTINUE is returned and either
+    // protocol component. Return true (1) to indicate that the request should
+    // succeed because it was handled externally. Set |allowOSExecution| to true
+    // (1) and return false (0) to attempt execution via the registered OS
+    // protocol handler, if any. If false (0) is returned and either
     // |allow_os_execution| is false (0) or OS protocol handler execution fails
     // then the request will fail with an error condition. SECURITY WARNING: YOU
     // SHOULD USE THIS METHOD TO ENFORCE RESTRICTIONS BASED ON SCHEME, HOST OR
     // OTHER URL ANALYSIS BEFORE ALLOWING OS EXECUTION.
-    handle_protocol_execution: function(self: PCefHandler; browser: PCefBrowser;
-      const url: PCefString; var allow_os_execution: Integer): TCefRetval; stdcall;
+    on_protocol_execution: function(self: PCefRequestHandler;
+        browser: PCefBrowser; const url: PCefString;
+        var allowOSExecution: Integer): Integer; stdcall;
 
     // Called on the UI thread when a server indicates via the 'Content-
     // Disposition' header that a response represents a file to download.
@@ -1267,199 +1287,307 @@ type
     // target file name and |contentLength| is either the value of the 'Content-
     // Size' header or -1 if no size was provided. Set |handler| to the
     // cef_download_handler_t instance that will recieve the file contents. Return
-    // RV_CONTINUE to download the file or RV_HANDLED to cancel the file download.
-    handle_download_response: function (
-        self: PCefHandler; browser: PCefBrowser;
-        const mimeType, fileName: PCefString; contentLength: int64;
-        var handler: PCefDownloadHandler): TCefRetval; stdcall;
+    // true (1) to download the file or false (0) to cancel the file download.
+    get_download_handler: function(self: PCefRequestHandler;
+        browser: PCefBrowser; const mimeType: PCefString;
+        const fileName: PCefString; contentLength: int64;
+        var handler: PCefDownloadHandler): Integer; stdcall;
 
     // Called on the IO thread when the browser needs credentials from the user.
     // |isProxy| indicates whether the host is a proxy server. |host| contains the
-    // hostname and port number. Set |username| and |password| and return
-    // RV_HANDLED to handle the request. Return RV_CONTINUE to cancel the request.
-    handle_authentication_request: function(
-        self: PCefHandler; browser: PCefBrowser; isProxy: Integer;
-        const host: PCefString; const realm: PCefString; const scheme: PCefString;
-        username: PCefString; password: PCefString): TCefRetval; stdcall;
+    // hostname and port number. Set |username| and |password| and return true (1)
+    // to handle the request. Return false (0) to cancel the request.
+    get_auth_credentials: function(self: PCefRequestHandler;
+        browser: PCefBrowser; isProxy: Integer; const host: PCefString;
+        const realm: PCefString; const scheme: PCefString;
+        username, password: PCefString): Integer; stdcall;
+  end;
 
-    // Called on the UI thread before a context menu is displayed. To cancel
-    // display of the default context menu return RV_HANDLED.
-    handle_before_menu: function(
-        self: PCefHandler; browser: PCefBrowser;
-        const menuInfo: PCefHandlerMenuInfo): TCefRetval; stdcall;
+  // Implement this structure to handle events related to browser display state.
+  // The functions of this structure will be called on the UI thread.
+  TCefDisplayHandler = record
+    // Base structure.
+    base: TCefBase;
 
-    // Called on the UI thread to optionally override the default text for a
-    // context menu item. |label| contains the default text and may be modified to
-    // substitute alternate text. The return value is currently ignored.
-    handle_get_menu_label: function(
-        self: PCefHandler; browser: PCefBrowser;
-        menuId: TCefHandlerMenuId; var label_: TCefString): TCefRetval; stdcall;
+    // Called when the navigation state has changed.
+    on_nav_state_change: procedure(self: PCefDisplayHandler;
+      browser: PCefBrowser; canGoBack, canGoForward: Integer); stdcall;
 
-    // Called on the UI thread when an option is selected from the default context
-    // menu. Return RV_HANDLED to cancel default handling of the action.
-    handle_menu_action: function(
-        self: PCefHandler; browser: PCefBrowser;
-        menuId: TCefHandlerMenuId): TCefRetval; stdcall;
+    // Called when a frame's address has changed.
+    on_address_change: procedure(self: PCefDisplayHandler;
+        browser: PCefBrowser; frame: PCefFrame;
+        const url: PCefString); stdcall;
 
-    // Called on the UI thread to allow customization of standard print options
-    // before the print dialog is displayed. |printOptions| allows specification
-    // of paper size, orientation and margins. Note that the specified margins may
-    // be adjusted if they are outside the range supported by the printer. All
-    // units are in inches. Return RV_CONTINUE to display the default print
-    // options or RV_HANDLED to display the modified |printOptions|.
-    handle_print_options: function(self: PCefHandler; browser: PCefBrowser;
-        printOptions: PCefPrintOptions): TCefRetval; stdcall;
+    // Called when the page title changes.
+    on_title_change: procedure(self: PCefDisplayHandler;
+        browser: PCefBrowser; const title: PCefString); stdcall;
 
+    // Called when the browser is about to display a tooltip. |text| contains the
+    // text that will be displayed in the tooltip. To handle the display of the
+    // tooltip yourself return true (1). Otherwise, you can optionally modify
+    // |text| and then return false (0) to allow the browser to display the
+    // tooltip.
+    on_tooltip: function(self: PCefDisplayHandler;
+        browser: PCefBrowser; text: PCefString): Integer; stdcall;
 
-    // Called on the UI thread to format print headers and footers. |printInfo|
-    // contains platform-specific information about the printer context. |url| is
-    // the URL if the currently printing page, |title| is the title of the
-    // currently printing page, |currentPage| is the current page number and
-    // |maxPages| is the total number of pages. Six default header locations are
-    // provided by the implementation: top left, top center, top right, bottom
-    // left, bottom center and bottom right. To use one of these default locations
-    // just assign a string to the appropriate variable. To draw the header and
-    // footer yourself return RV_HANDLED. Otherwise, populate the approprate
-    // variables and return RV_CONTINUE.
-    handle_print_header_footer: function(
-        self: PCefHandler; browser: PCefBrowser;
-        frame: PCefFrame; printInfo: PCefPrintInfo;
-        url, title: PCefString; currentPage, maxPages: Integer;
+    // Called when the browser receives a status message. |text| contains the text
+    // that will be displayed in the status message and |type| indicates the
+    // status message type.
+    on_status_message: procedure(self: PCefDisplayHandler;
+        browser: PCefBrowser; const value: PCefString;
+        kind: TCefHandlerStatusType); stdcall;
+
+    // Called to display a console message. Return true (1) to stop the message
+    // from being output to the console.
+    on_console_message: function(self: PCefDisplayHandler;
+        browser: PCefBrowser; const message: PCefString;
+        const source: PCefString; line: Integer): Integer; stdcall;
+  end;
+
+  // Implement this structure to handle events related to focus. The functions of
+  // this structure will be called on the UI thread.
+  TCefFocusHandler = record
+    // Base structure.
+    base: TCefBase;
+
+    // Called when the browser component is about to loose focus. For instance, if
+    // focus was on the last HTML element and the user pressed the TAB key. |next|
+    // will be true (1) if the browser is giving focus to the next component and
+    // false (0) if the browser is giving focus to the previous component.
+    on_take_focus: procedure(self: PCefFocusHandler;
+        browser: PCefBrowser; next: Integer); stdcall;
+
+    // Called when the browser component is requesting focus. |isWidget| will be
+    // true (1) if the focus is requested for a child widget of the browser
+    // window. Return false (0) to allow the focus to be set or true (1) to cancel
+    // setting the focus.
+    on_set_focus: function(self: PCefFocusHandler;
+        browser: PCefBrowser; isWidget: Integer): Integer; stdcall;
+  end;
+
+  // Implement this structure to handle events related to keyboard input. The
+  // functions of this structure will be called on the UI thread.
+  TCefKeyboardHandler = record
+    // Base structure.
+    base: TCefBase;
+
+    // Called when the browser component receives a keyboard event. |type| is the
+    // type of keyboard event, |code| is the windows scan-code for the event,
+    // |modifiers| is a set of bit-flags describing any pressed modifier keys and
+    // |isSystemKey| is true (1) if Windows considers this a 'system key' message
+    // (see http://msdn.microsoft.com/en-us/library/ms646286(VS.85).aspx). Return
+    // true (1) if the keyboard event was handled or false (0) to allow the
+    // browser component to handle the event.
+    on_key_event: function(self: PCefKeyboardHandler;
+        browser: PCefBrowser; kind: TCefHandlerKeyEventType;
+        code, modifiers, isSystemKey: Integer): Integer; stdcall;
+  end;
+
+  // Implement this structure to handle events related to browser context menus.
+  // The functions of this structure will be called on the UI thread.
+  TCefMenuHandler = record
+    // Base structure.
+    base: TCefBase;
+
+    // Called before a context menu is displayed. Return false (0) to display the
+    // default context menu or true (1) to cancel the display.
+    on_before_menu: function(self: PCefMenuHandler; browser: PCefBrowser;
+        const menuInfo: PCefHandlerMenuInfo): Integer; stdcall;
+
+    // Called to optionally override the default text for a context menu item.
+    // |label| contains the default text and may be modified to substitute
+    // alternate text.
+    get_menu_label: procedure(self: PCefMenuHandler;
+        browser: PCefBrowser; menuId: TCefHandlerMenuId;
+        var label_: TCefString); stdcall;
+
+    // Called when an option is selected from the default context menu. Return
+    // false (0) to execute the default action or true (1) to cancel the action.
+    on_menu_action: function(self: PCefMenuHandler;
+        browser: PCefBrowser; menuId: TCefHandlerMenuId): Integer; stdcall;
+  end;
+
+  // Implement this structure to handle events related to printing. The functions
+  // of this structure will be called on the UI thread.
+  TCefPrintHandler = record
+    // Base structure.
+    base: TCefBase;
+
+    // Called to allow customization of standard print options before the print
+    // dialog is displayed. |printOptions| allows specification of paper size,
+    // orientation and margins. Note that the specified margins may be adjusted if
+    // they are outside the range supported by the printer. All units are in
+    // inches. Return false (0) to display the default print options or true (1)
+    // to display the modified |printOptions|.
+    get_print_options: function(self: PCefPrintHandler;
+        browser: PCefBrowser; printOptions: PCefPrintOptions): Integer; stdcall;
+
+    // Called to format print headers and footers. |printInfo| contains platform-
+    // specific information about the printer context. |url| is the URL if the
+    // currently printing page, |title| is the title of the currently printing
+    // page, |currentPage| is the current page number and |maxPages| is the total
+    // number of pages. Six default header locations are provided by the
+    // implementation: top left, top center, top right, bottom left, bottom center
+    // and bottom right. To use one of these default locations just assign a
+    // string to the appropriate variable. To draw the header and footer yourself
+    // return true (1). Otherwise, populate the approprate variables and return
+    // false (0).
+    get_print_header_footer: function(self: PCefPrintHandler;
+        browser: PCefBrowser; frame: PCefFrame;
+        const printInfo: PCefPrintInfo; const url: PCefString;
+        const title: PCefString; currentPage, maxPages: Integer;
         var topLeft, topCenter, topRight, bottomLeft, bottomCenter,
-        bottomRight: TCefString): TCefRetval; stdcall;
+        bottomRight: TCefString): Integer; stdcall;
+  end;
 
-    // Called on the UI thread to run a JS alert message. Return RV_CONTINUE to
-    // display the default alert or RV_HANDLED if you displayed a custom alert.
-    handle_jsalert: function(self: PCefHandler;
+  // Implement this structure to handle events related to find results. The
+  // functions of this structure will be called on the UI thread.
+  TCefFindHandler = record
+    // Base structure.
+    base: TCefBase;
+
+    ///
+    // Called to report find results returned by cef_browser_t::find().
+    // |identifer| is the identifier passed to cef_browser_t::find(), |count| is
+    // the number of matches currently identified, |selectionRect| is the location
+    // of where the match was found (in window coordinates), |activeMatchOrdinal|
+    // is the current position in the search results, and |finalUpdate| is true
+    // (1) if this is the last find notification.
+    ///
+    on_find_result: procedure(self: PCefFindHandler;
+        browser: PCefBrowser; identifier, count: Integer;
+        const selectionRect: PCefRect; activeMatchOrdinal,
+        finalUpdate: Integer); stdcall;
+  end;
+
+
+  // Implement this structure to handle events related to JavaScript dialogs. The
+  // functions of this structure will be called on the UI thread.
+  TCefJsDialogHandler = record
+    // Base structure.
+    base: TCefBase;
+
+    // Called  to run a JavaScript alert message. Return false (0) to display the
+    // default alert or true (1) if you displayed a custom alert.
+    on_jsalert: function(self: PCefJsDialogHandler;
         browser: PCefBrowser; frame: PCefFrame;
-        const message: PCefString): TCefRetval; stdcall;
+        const message: PCefString): Integer; stdcall;
 
-    // Called on the UI thread to run a JS confirm request. Return RV_CONTINUE to
-    // display the default alert or RV_HANDLED if you displayed a custom alert. If
-    // you handled the alert set |retval| to true (1) if the user accepted the
-    // confirmation.
-    handle_jsconfirm: function(
-        self: PCefHandler; browser: PCefBrowser;
-        frame: PCefFrame; const message: PCefString;
-        var retval: Integer): TCefRetval; stdcall;
-
-    // Called on the UI thread to run a JS prompt request. Return RV_CONTINUE to
-    // display the default prompt or RV_HANDLED if you displayed a custom prompt.
-    // If you handled the prompt set |retval| to true (1) if the user accepted the
-    // prompt and request and |result| to the resulting value.
-    handle_jsprompt: function(self: PCefHandler;
+    // Called to run a JavaScript confirm request. Return false (0) to display the
+    // default alert or true (1) if you displayed a custom alert. If you handled
+    // the alert set |retval| to true (1) if the user accepted the confirmation.
+    on_jsconfirm: function(self: PCefJsDialogHandler;
         browser: PCefBrowser; frame: PCefFrame;
-        const message, defaultValue: PCefString; var retval: Integer;
-        var result: TCefString): TCefRetval; stdcall;
+        const message: PCefString; var retval: Integer): Integer; stdcall;
 
-    // Called on the UI thread for adding values to a frame's JavaScript 'window'
-    // object. The return value is currently ignored.
-    handle_jsbinding: function(self: PCefHandler; browser: PCefBrowser;
-      frame: PCefFrame; obj: PCefv8Value): TCefRetval; stdcall;
+    // Called to run a JavaScript prompt request. Return false (0) to display the
+    // default prompt or true (1) if you displayed a custom prompt. If you handled
+    // the prompt set |retval| to true (1) if the user accepted the prompt and
+    // request and |result| to the resulting value.
+    on_jsprompt: function(self: PCefJsDialogHandler;
+        browser: PCefBrowser; frame: PCefFrame;
+        const message, defaultValue: PCefString;
+        var retval: Integer; var result: TCefString): Integer; stdcall;
+  end;
 
-    // Called on the UI thread just before a window is closed. The return value is
-    // currently ignored.
-    handle_before_window_close: function(
-        self: PCefHandler; browser: PCefBrowser): TCefRetval; stdcall;
+  // Implement this structure to handle JavaScript binding. The functions of this
+  // structure will be called on the UI thread.
+  TCefJsBindingHandler = record
+    // Base structure.
+    base: TCefBase;
 
-    // Called on the UI thread when the browser component is about to loose focus.
-    // For instance, if focus was on the last HTML element and the user pressed
-    // the TAB key. The return value is currently ignored.
-    handle_take_focus: function(
-        self: PCefHandler; browser: PCefBrowser;
-        reverse: Integer): TCefRetval; stdcall;
+    // Called for adding values to a frame's JavaScript 'window' object.
+    on_jsbinding: procedure(self: PCefJsBindingHandler;
+        browser: PCefBrowser; frame: PCefFrame;
+        obj: PCefv8Value); stdcall;
+  end;
 
-    // Called on the UI thread when the browser component is requesting focus.
-    // |isWidget| will be true (1) if the focus is requested for a child widget of
-    // the browser window. Return RV_CONTINUE to allow the focus to be set or
-    // RV_HANDLED to cancel setting the focus.
-    handle_set_focus: function(
-        self: PCefHandler; browser: PCefBrowser;
-        isWidget: Integer): TCefRetval; stdcall;
+  // Implement this structure to handle events when window rendering is disabled.
+  // The functions of this structure will be called on the UI thread.
+  TCefRenderHandler = record
+    // Base structure.
+    base: TCefBase;
 
-    // Called on the UI thread when the browser component receives a keyboard
-    // event. |type| is the type of keyboard event, |code| is the windows scan-
-    // code for the event, |modifiers| is a set of bit-flags describing any
-    // pressed modifier keys and |isSystemKey| is true (1) if Windows considers
-    // this a 'system key' message (see http://msdn.microsoft.com/en-
-    // us/library/ms646286(VS.85).aspx). Return RV_HANDLED if the keyboard event
-    // was handled or RV_CONTINUE to allow the browser component to handle the
-    // event.
-    handle_key_event: function(
-        self: PCefHandler; browser: PCefBrowser;
-        event: TCefHandlerKeyEventType; code, modifiers,
-        isSystemKey: Integer): TCefRetval; stdcall;
+    // Called to retrieve the view rectangle which is relative to screen
+    // coordinates. Return true (1) if the rectangle was provided.
+    get_view_rect: function(self: PCefRenderHandler;
+        browser: PCefBrowser; rect: PCefRect): Integer; stdcall;
 
-    // Called on the UI thread when the browser is about to display a tooltip.
-    // |text| contains the text that will be displayed in the tooltip. To handle
-    // the display of the tooltip yourself return RV_HANDLED. Otherwise, you can
-    // optionally modify |text| and then return RV_CONTINUE to allow the browser
-    // to display the tooltip.
-    handle_tooltip: function(self: PCefHandler;
-        browser: PCefBrowser; text: PCefString): TCefRetval; stdcall;
+    // Called to retrieve the simulated screen rectangle. Return true (1) if the
+    // rectangle was provided.
+    get_screen_rect: function(self: PCefRenderHandler;
+        browser: PCefBrowser; rect: PCefRect): Integer; stdcall;
 
-    // Called on the UI thread when the browser has a status message. |text|
-    // contains the text that will be displayed in the status message and |type|
-    // indicates the status message type. The return value is currently ignored.
-    handle_status: function(self: PCefHandler; browser: PCefBrowser;
-      value: PCefString; type_: TCefHandlerStatusType): TCefRetval; stdcall;
+    // Called to retrieve the translation from view coordinates to actual screen
+    // coordinates. Return true (1) if the screen coordinates were provided.
+    get_screen_point: function(self: PCefRenderHandler;
+        browser: PCefBrowser; viewX, viewY: Integer;
+        screenX, screenY: PInteger): Integer; stdcall;
 
-    // Called on the UI thread to display a console message. Return RV_HANDLED to
-    // stop the message from being output to the console.
-    handle_console_message: function(
-        self: PCefHandler; browser: PCefBrowser;
-        const message, source: PCefString; line: Integer): TCefRetval; stdcall;
+    // Called when the browser wants to show or hide the popup widget. The popup
+    // should be shown if |show| is true (1) and hidden if |show| is false (0).
+    on_popup_show: procedure(self: PCefRenderHandler;
+        browser: PCefBrowser; show: Integer); stdcall;
 
-    // Called on the UI thread to report find results returned by
-    // cef_browser_t::find(). |identifer| is the identifier passed to
-    // cef_browser_t::find(), |count| is the number of matches currently
-    // identified, |selectionRect| is the location of where the match was found
-    // (in window coordinates), |activeMatchOrdinal| is the current position in
-    // the search results, and |finalUpdate| is true (1) if this is the last find
-    // notification. The return value is currently ignored.
-    handle_find_result: function(self: PCefHandler; browser: PCefBrowser;
-        identifier, count: Integer; const selectionRect: PCefRect;
-        activeMatchOrdinal, finalUpdate: Integer): TCefRetval; stdcall;
+    // Called when the browser wants to move or resize the popup widget. |rect|
+    // contains the new location and size.
+    on_popup_size: procedure(self: PCefRenderHandler;
+        browser: PCefBrowser; const rect: PCefRect); stdcall;
 
-	  // Called on the UI thread to retrieve either the simulated screen rectangle
-	  // if |screen| is true (1) or the view rectangle if |screen| is false (0). The
-	  // view rectangle is relative to the screen coordinates. This function is only
-	  // called if window rendering has been disabled. Return RV_CONTINUE if the
-	  // rectangle was provided.
-    handle_get_rect: function(self: PCefHandler; browser: PCefBrowser;
-      screen: Integer; rect: PCefRect): TCefRetval; stdcall;
+    // Called when an element should be painted. |type| indicates whether the
+    // element is the view or the popup widget. |buffer| contains the pixel data
+    // for the whole image. |dirtyRect| indicates the portion of the image that
+    // has been repainted. On Windows |buffer| will be width*height*4 bytes in
+    // size and represents a BGRA image with an upper-left origin.
+    on_paint: procedure(self: PCefRenderHandler;
+        browser: PCefBrowser; kind: TCefPaintElementType;
+        const dirtyRect: PCefRect; const buffer: Pointer); stdcall;
 
-	  // Called on the UI thread retrieve the translation from view coordinates to
-	  // actual screen coordinates. This function is only called if window rendering
-	  // has been disabled. Return RV_CONTINUE if the screen coordinates were
-	  // provided.
-	  handle_get_screen_point: function(self: PCefHandler; browser: PCefBrowser;
-      viewX, viewY: Integer; screenX, screenY: PInteger): TCefRetval; stdcall;
+    // Called when the browser window's cursor has changed.
+    on_cursor_change: procedure(self: PCefRenderHandler;
+        browser: PCefBrowser; cursor: TCefCursorHandle); stdcall;
+  end;
 
-	  // Called on the UI thread when the browser wants to show, hide, resize or
-	  // move the popup. If |show| is true (1) and |rect| is zero size then the
-	  // popup should be shown. If |show| is true (1) and |rect| is non-zero size
-	  // then |rect| represents the popup location in view coordinates. If |show| is
-	  // false (0) then the popup should be hidden. This function is only called if
-	  // window rendering has been disabled. The return value is currently ignored.
-    handle_popup_change: function(self: PCefHandler; browser: PCefBrowser;
-      show: Integer; const rect: PCefRect): TCefRetval; stdcall;
+  // Implement this structure to provide handler implementations.
+  TCefClient = record
+    // Base structure.
+    base: TCefBase;
 
-	  // Called when an element should be painted. |type| indicates whether the
-	  // element is the view or the popup. |buffer| contains the pixel data for the
-	  // whole image. |dirtyRect| indicates the portion of the image that has been
-	  // repainted. On Windows |buffer| will be width*height*4 bytes in size and
-	  // represents a BGRA image with an upper-left origin. This function is only
-	  // called if window rendering has been disabled. The return value is currently
-	  // ignored.
+    // Return the handler for browser life span events.
+    get_life_span_handler: function(self: PCefClient): PCefLifeSpanHandler; stdcall;
 
-	  handle_paint: function(self: PCefHandler; browser: PCefBrowser; typ: TCefPaintElementType;
-      const dirtyRect: PCefRect; const buffer: Pointer): TCefRetval; stdcall;
+    // Return the handler for browser load status events.
+    get_load_handler: function(self: PCefClient): PCefLoadHandler; stdcall;
 
-	  // Called when the browser window's cursor has changed. This function is only
-	  // called if window rendering has been disabled. The return value is currently
-	  // ignored.
-    handle_cursor_change: function(self: PCefHandler; browser: PCefBrowser; cursor: HCURSOR): TCefRetval; stdcall;
+    // Return the handler for browser request events.
+    get_request_handler: function(self: PCefClient): PCefRequestHandler; stdcall;
+
+    // Return the handler for browser display state events.
+    get_display_handler: function(self: PCefClient): PCefDisplayHandler; stdcall;
+
+    // Return the handler for focus events.
+    get_focus_handler: function(self: PCefClient): PCefFocusHandler; stdcall;
+
+    // Return the handler for keyboard events.
+    get_keyboard_handler: function(self: PCefClient): PCefKeyboardHandler; stdcall;
+
+    // Return the handler for context menu events.
+    get_menu_handler: function(self: PCefClient): PCefMenuHandler; stdcall;
+
+    // Return the handler for printing events.
+    get_print_handler: function(self: PCefClient): PCefPrintHandler; stdcall;
+
+    // Return the handler for find result events.
+    get_find_handler: function(self: PCefClient): PCefFindHandler; stdcall;
+
+    // Return the handler for JavaScript dialog events.
+    get_jsdialog_handler: function(self: PCefClient): PCefJsDialogHandler; stdcall;
+
+    // Return the handler for JavaScript binding events.
+    get_jsbinding_handler: function(self: PCefClient): PCefJsBindingHandler; stdcall;
+
+    // Return the handler for off-screen rendering events.
+    get_render_handler: function(self: PCefClient): PCefRenderHandler; stdcall;
   end;
 
   // Structure used to represent a web request. The functions of this structure
@@ -1468,37 +1596,44 @@ type
     // Base structure.
     base: TCefBase;
 
-    // Fully qualified URL to load.
+    // Get the fully qualified URL.
     // The resulting string must be freed by calling cef_string_userfree_free().
     get_url: function(self: PCefRequest): PCefStringUserFree; stdcall;
+    // Set the fully qualified URL.
     set_url: procedure(self: PCefRequest; const url: PCefString); stdcall;
 
-    // Optional request function type, defaulting to POST if post data is provided
-    // and GET otherwise.
+    // Get the request function type. The value will default to POST if post data
+    // is provided and GET otherwise.
     // The resulting string must be freed by calling cef_string_userfree_free().
     get_method: function(self: PCefRequest): PCefStringUserFree; stdcall;
+    // Set the request function type.
     set_method: procedure(self: PCefRequest; const method: PCefString); stdcall;
 
-    // Optional post data.
+    // Get the post data.
     get_post_data: function(self: PCefRequest): PCefPostData; stdcall;
+    // Set the post data.
     set_post_data: procedure(self: PCefRequest; postData: PCefPostData); stdcall;
 
-    // Optional header values.
+    // Get the header values.
     get_header_map: procedure(self: PCefRequest; headerMap: TCefStringMap); stdcall;
+    // Set the header values.
     set_header_map: procedure(self: PCefRequest; headerMap: TCefStringMap); stdcall;
 
     // Set all values at one time.
     set_: procedure(self: PCefRequest; const url, method: PCefString;
       postData: PCefPostData; headerMap: TCefStringMap); stdcall;
 
-    // Optional flags. Used in combination with cef_web_urlrequest_t.
+    // Get the flags used in combination with cef_web_urlrequest_t.
     get_flags: function(self: PCefRequest): TCefWebUrlRequestFlags; stdcall;
+    // Set the flags used in combination with cef_web_urlrequest_t.
     set_flags: procedure(self: PCefRequest; flags: TCefWebUrlRequestFlags); stdcall;
 
-    // Optional URL to the first party for cookies. Used in combination with
+    // Get the URL to the first party for cookies used in combination with
     // cef_web_urlrequest_t.
     // The resulting string must be freed by calling cef_string_userfree_free().
     get_first_party_for_cookies: function(self: PCefRequest): PCefStringUserFree; stdcall;
+    // Set the URL to the first party for cookies used in combination with
+    // cef_web_urlrequest_t.
     set_first_party_for_cookies: procedure(self: PCefRequest; const url: PCefString); stdcall;
   end;
 
@@ -1569,26 +1704,30 @@ type
     // Base structure.
     base: TCefBase;
 
-    // Returns/sets the response status code.
+    // Get the response status code.
     get_status: function(self: PCefResponse): Integer; stdcall;
+    // Set the response status code.
     set_status: procedure(self: PCefResponse; status: Integer); stdcall;
 
-    // Returns/sets the response status text.
+    // Get the response status text.
     // The resulting string must be freed by calling cef_string_userfree_free().
     get_status_text: function(self: PCefResponse): PCefStringUserFree; stdcall;
+    // Set the response status text.
     set_status_text: procedure(self: PCefResponse; const statusText: PCefString); stdcall;
 
-    // Returns/sets the response mime type.
+    // Get the response mime type.
     // The resulting string must be freed by calling cef_string_userfree_free().
     get_mime_type: function(self: PCefResponse): PCefStringUserFree; stdcall;
+    // Set the response mime type.
     set_mime_type: procedure(self: PCefResponse; const mimeType: PCefString); stdcall;
 
-    // Returns the value for the specified response header field.
+    // Get the value for the specified response header field.
     // The resulting string must be freed by calling cef_string_userfree_free().
     get_header: function(self: PCefResponse; const name: PCefString): PCefStringUserFree; stdcall;
 
-    // Retrieves/sets a map of all response header fields.
+    // Get all response header fields.
     get_header_map: procedure(self: PCefResponse; headerMap: TCefStringMap); stdcall;
+    // Set all response header fields.
     set_header_map: procedure(self: PCefResponse; headerMap: TCefStringMap); stdcall;
   end;
 
@@ -1758,26 +1897,45 @@ type
     // Base structure.
     base: TCefBase;
 
-    // Check the value type.
+    // True if the value type is undefined.
     is_undefined: function(self: PCefv8Value): Integer; stdcall;
+    // True if the value type is null.
     is_null: function(self: PCefv8Value): Integer; stdcall;
+    // True if the value type is bool.
     is_bool: function(self: PCefv8Value): Integer; stdcall;
+    // True if the value type is int.
     is_int: function(self: PCefv8Value): Integer; stdcall;
+    // True if the value type is double.
     is_double: function(self: PCefv8Value): Integer; stdcall;
+    // True if the value type is Date.
+    is_date: function(self: PCefv8Value): Integer; stdcall;
+    // True if the value type is string.
     is_string: function(self: PCefv8Value): Integer; stdcall;
+    // True if the value type is object.
     is_object: function(self: PCefv8Value): Integer; stdcall;
+    // True if the value type is array.
     is_array: function(self: PCefv8Value): Integer; stdcall;
+    // True if the value type is function.
     is_function: function(self: PCefv8Value): Integer; stdcall;
 
     // Returns true (1) if this object is pointing to the same handle as |that|
     // object.
     is_same: function(self, that: PCefv8Value): Integer; stdcall;
 
-    // Return a primitive value type.  The underlying data will be converted to
-    // the requested type if necessary.
+    // Return a bool value.  The underlying data will be converted to if
+    // necessary.
     get_bool_value: function(self: PCefv8Value): Integer; stdcall;
+    // Return an int value.  The underlying data will be converted to if
+    // necessary.
     get_int_value: function(self: PCefv8Value): Integer; stdcall;
+    // Return a double value.  The underlying data will be converted to if
+    // necessary.
     get_double_value: function(self: PCefv8Value): double; stdcall;
+    // Return a Date value.  The underlying data will be converted to if
+    // necessary.
+    get_date_value: function(self: PCefv8Value): TCefTime; stdcall;
+    // Return a string value.  The underlying data will be converted to if
+    // necessary.
     // The resulting string must be freed by calling cef_string_userfree_free().
     get_string_value: function(self: PCefv8Value): PCefStringUserFree; stdcall;
 
@@ -1789,19 +1947,23 @@ type
 
     // Returns true (1) if the object has a value with the specified identifier.
     has_value_bykey: function(self: PCefv8Value; const key: PCefString): Integer; stdcall;
+    // Returns true (1) if the object has a value with the specified identifier.
     has_value_byindex: function(self: PCefv8Value; index: Integer): Integer; stdcall;
 
     // Delete the value with the specified identifier.
     delete_value_bykey: function(self: PCefv8Value; const key: PCefString): Integer; stdcall;
+    // Delete the value with the specified identifier.
     delete_value_byindex: function(self: PCefv8Value; index: Integer): Integer; stdcall;
 
     // Returns the value with the specified identifier.
     get_value_bykey: function(self: PCefv8Value; const key: PCefString): PCefv8Value; stdcall;
+    // Returns the value with the specified identifier.
     get_value_byindex: function(self: PCefv8Value; index: Integer): PCefv8Value; stdcall;
 
     // Associate a value with the specified identifier.
     set_value_bykey: function(self: PCefv8Value;
        const key: PCefString; value: PCefv8Value): Integer; stdcall;
+    // Associate a value with the specified identifier.
     set_value_byindex: function(self: PCefv8Value; index: Integer;
        value: PCefv8Value): Integer; stdcall;
 
@@ -1857,7 +2019,9 @@ type
     base: TCefBase;
 
     // Return a new scheme handler instance to handle the request.
-    create: function(self: PCefSchemeHandlerFactory): PCefSchemeHandler; stdcall;
+    // todo
+    create: function(self: PCefSchemeHandlerFactory; const scheme_name: PCefString;
+      request: PCefRequest): PCefSchemeHandler; stdcall;
   end;
 
   // Structure used to represent a custom scheme handler structure. The functions
@@ -1908,7 +2072,7 @@ type
   end;
 
   // Structure used to make a Web URL request. Web URL requests are not associated
-  // with a browser instance so no cef_handler_t callbacks will be executed. The
+  // with a browser instance so no cef_client_t callbacks will be executed. The
   // functions of this structure may be called on any thread.
   TCefWebUrlRequest = record
     // Base structure.
@@ -2382,7 +2546,26 @@ type
       count, total: Integer; deleteCookie: PInteger): Integer; stdcall;
   end;
 
-  ICefBrowser = interface;
+  // Structure to implement for filtering response content. The functions of this
+  // structure will always be called on the UI thread.
+  TCefContentFilter = record
+    // Base structure.
+    base: TCefBase;
+
+    // Set |substitute_data| to the replacement for the data in |data| if data
+    // should be modified.
+    process_data: procedure(self: PCefContentFilter;
+        const data: Pointer; data_size: Integer;
+        var substitute_data: PCefStreamReader); stdcall;
+
+    // Called when there is no more data to be processed. It is expected that
+    // whatever data was retained in the last process_data() call, it should be
+    // returned now by setting |remainder| if appropriate.
+    drain: procedure(self: PCefContentFilter;
+      var remainder: PCefStreamReader); stdcall;
+  end;
+
+  ICefBrowser = interface;
   ICefFrame = interface;
   ICefRequest = interface;
   ICefv8Value = interface;
@@ -2406,9 +2589,10 @@ type
     procedure ReloadIgnoreCache;
     procedure StopLoad;
     procedure SetFocus(enable: Boolean);
-    function GetWindowHandle: CefWindowHandle;
+    function GetWindowHandle: TCefWindowHandle;
+    function GetOpenerWindowHandle: TCefWindowHandle;
     function IsPopup: Boolean;
-    function GetHandler: ICefBase;
+    function GetClient: ICefBase;
     function GetMainFrame: ICefFrame;
     function  GetFocusedFrame: ICefFrame;
     function GetFrame(const name: ustring): ICefFrame;
@@ -2576,7 +2760,7 @@ type
 
   ICefSchemeHandlerFactory = interface(ICefBase)
     ['{4D9B7960-B73B-4EBD-9ABE-6C1C43C245EB}']
-    function New: ICefSchemeHandler;
+    function New(const scheme: ustring; const request: ICefRequest): ICefSchemeHandler;
   end;
 
   ICefDownloadHandler = interface(ICefBase)
@@ -2627,6 +2811,7 @@ type
     function IsBool: Boolean;
     function IsInt: Boolean;
     function IsDouble: Boolean;
+    function IsDate: Boolean;
     function IsString: Boolean;
     function IsObject: Boolean;
     function IsArray: Boolean;
@@ -2635,6 +2820,7 @@ type
     function GetBoolValue: Boolean;
     function GetIntValue: Integer;
     function GetDoubleValue: Double;
+    function GetDateValue: TDateTime;
     function GetStringValue: ustring;
     function HasValueByKey(const key: ustring): Boolean;
     function HasValueByIndex(index: Integer): Boolean;
@@ -2873,9 +3059,10 @@ type
     procedure ReloadIgnoreCache;
     procedure StopLoad;
     procedure SetFocus(enable: Boolean);
-    function GetWindowHandle: CefWindowHandle;
+    function GetWindowHandle: TCefWindowHandle;
+    function GetOpenerWindowHandle: TCefWindowHandle;
     function IsPopup: Boolean;
-    function GetHandler: ICefBase;
+    function GetClient: ICefBase;
     function GetMainFrame: ICefFrame;
     function  GetFocusedFrame: ICefFrame;
     function GetFrame(const name: ustring): ICefFrame;
@@ -3010,6 +3197,7 @@ type
     function IsBool: Boolean;
     function IsInt: Boolean;
     function IsDouble: Boolean;
+    function IsDate: Boolean;
     function IsString: Boolean;
     function IsObject: Boolean;
     function IsArray: Boolean;
@@ -3017,6 +3205,7 @@ type
     function IsSame(const that: ICefv8Value): Boolean;
     function GetBoolValue: Boolean;
     function GetIntValue: Integer;
+    function GetDateValue: TDateTime;
     function GetDoubleValue: Double;
     function GetStringValue: ustring;
     function HasValueByKey(const key: ustring): Boolean;
@@ -3047,6 +3236,7 @@ type
     class function CreateBool(value: Boolean): ICefv8Value;
     class function CreateInt(value: Integer): ICefv8Value;
     class function CreateDouble(value: Double): ICefv8Value;
+    class function CreateDate(value: TDateTime): ICefv8Value;
     class function CreateString(const str: ustring): ICefv8Value;
     class function CreateObject(const UserData: ICefv8Value): ICefv8Value;
     class function CreateObjectWithAccessor(const UserData: ICefv8Value; const Accessor: ICefV8Accessor): ICefv8Value;
@@ -3082,82 +3272,177 @@ type
     class function UnWrap(data: Pointer): ICefv8Handler;
   end;
 
-  TCefHandlerOwn = class(TCefBaseOwn)
+  TCefClientOwn = class(TCefBaseOwn)
   protected
-    function doOnBeforeCreated(const parentBrowser: ICefBrowser;
-      var windowInfo: TCefWindowInfo; popup: Boolean;
-      var popupFeatures: TCefPopupFeatures; var handler: ICefBase;
-      var url: ustring; var settings: TCefBrowserSettings): TCefRetval; virtual;
-    function doOnAfterCreated(const browser: ICefBrowser): TCefRetval; virtual;
-    function doOnAddressChange(const browser: ICefBrowser;
-      const frame: ICefFrame; const url: ustring): TCefRetval; virtual;
-    function doOnTitleChange(const browser: ICefBrowser;
-      const title: ustring): TCefRetval; virtual;
-    function doOnNavStateChange(const browser: ICefBrowser; canGoBack,
-      canGoForward: Boolean): TCefRetval; virtual;
-    function doOnBeforeBrowse(const browser: ICefBrowser; const frame: ICefFrame;
+    function GetLifeSpanHandler: ICefBase; virtual;
+    function GetLoadHandler: ICefBase; virtual;
+    function GetRequestHandler: ICefBase; virtual;
+    function GetDisplayHandler: ICefBase; virtual;
+    function GetFocusHandler: ICefBase; virtual;
+    function GetKeyboardHandler: ICefBase; virtual;
+    function GetMenuHandler: ICefBase; virtual;
+    function GetPrintHandler: ICefBase; virtual;
+    function GetFindHandler: ICefBase; virtual;
+    function GetJsdialogHandler: ICefBase; virtual;
+    function GetJsbindingHandler: ICefBase; virtual;
+    function GetRenderHandler: ICefBase; virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TCefLifeSpanHandlerOwn = class(TCefBaseOwn)
+  protected
+    function OnBeforePopup(const parentBrowser: ICefBrowser;
+       var popupFeatures: TCefPopupFeatures; var windowInfo: TCefWindowInfo;
+       var url: ustring; var client: ICefBase;
+       var settings: TCefBrowserSettings): Boolean; virtual;
+    procedure OnAfterCreated(const browser: ICefBrowser); virtual;
+    procedure OnBeforeClose(const browser: ICefBrowser); virtual;
+    function RunModal(const browser: ICefBrowser): Boolean; virtual;
+    procedure QuitModal(const browser: ICefBrowser); virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TCefLoadHandlerOwn = class(TCefBaseOwn)
+  protected
+    procedure OnLoadStart(const browser: ICefBrowser; const frame: ICefFrame); virtual;
+    procedure OnLoadEnd(const browser: ICefBrowser; const frame: ICefFrame; httpStatusCode: Integer); virtual;
+    function OnLoadError(const browser: ICefBrowser; const frame: ICefFrame;
+      errorCode: TCefHandlerErrorcode; const failedUrl: ustring; var errorText: ustring): Boolean; virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TCefContentFilterOwn = class(TCefBaseOwn)
+  protected
+    procedure ProcessData(const Data: Pointer; Size: Integer;
+        var SubstituteData: ICefStreamReader); virtual;
+    procedure Drain(var remainder: ICefStreamReader); virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TCefRequestHandlerOwn = class(TCefBaseOwn)
+  protected
+    function OnBeforeBrowse(const browser: ICefBrowser; const frame: ICefFrame;
       const request: ICefRequest; navType: TCefHandlerNavtype;
-      isRedirect: boolean): TCefRetval; virtual;
-    function doOnLoadStart(const browser: ICefBrowser; const frame: ICefFrame): TCefRetval; virtual;
-    function doOnLoadEnd(const browser: ICefBrowser; const frame: ICefFrame;
-      httpStatusCode: Integer): TCefRetval; virtual;
-    function doOnLoadError(const browser: ICefBrowser;
-      const frame: ICefFrame; errorCode: TCefHandlerErrorcode;
-      const failedUrl: ustring; var errorText: ustring): TCefRetval; virtual;
-    function doOnBeforeResourceLoad(const browser: ICefBrowser;
-      const request: ICefRequest; var redirectUrl: ustring;
-      var resourceStream: ICefStreamReader; const response: ICefResponse;
-      loadFlags: Integer): TCefRetval; virtual;
-    function doOnProtocolExecution(const browser: ICefBrowser;
-      const url: ustring; var AllowOsExecution: Boolean): TCefRetval; virtual;
-    function doOnBeforeMenu(const browser: ICefBrowser;
-      const menuInfo: PCefHandlerMenuInfo): TCefRetval; virtual;
-    function doOnGetMenuLabel(const browser: ICefBrowser;
-      menuId: TCefHandlerMenuId; var caption: ustring): TCefRetval; virtual;
-    function doOnMenuAction(const browser: ICefBrowser;
-      menuId: TCefHandlerMenuId): TCefRetval; virtual;
-    function doOnPrintOptions(const browser: ICefBrowser;
-        printOptions: PCefPrintOptions): TCefRetval; virtual;
-    function doOnPrintHeaderFooter(const browser: ICefBrowser;
-      const frame: ICefFrame; printInfo: PCefPrintInfo;
-      const url, title: ustring; currentPage, maxPages: Integer;
-      var topLeft, topCenter, topRight, bottomLeft, bottomCenter,
-      bottomRight: ustring): TCefRetval; virtual;
-    function doOnJsAlert(const browser: ICefBrowser; const frame: ICefFrame;
-      const message: ustring): TCefRetval; virtual;
-    function doOnJsConfirm(const browser: ICefBrowser; const frame: ICefFrame;
-      const message: ustring; var retval: Boolean): TCefRetval; virtual;
-    function doOnJsPrompt(const browser: ICefBrowser; const frame: ICefFrame;
+      isRedirect: Boolean): Boolean; virtual;
+    function OnBeforeResourceLoad(const browser: ICefBrowser; const request: ICefRequest;
+      var redirectUrl: ustring;  var resourceStream: ICefStreamReader;
+      const response: ICefResponse; loadFlags: Integer): Boolean; virtual;
+    procedure OnResourceResponse(const browser: ICefBrowser; const url: ustring;
+        const response: ICefResponse; var filter: ICefBase); virtual;
+    function OnProtocolExecution(const browser: ICefBrowser; const url: ustring;
+        var allowOSExecution: Boolean): Boolean; virtual;
+    function GetDownloadHandler(const browser: ICefBrowser;
+      const mimeType, fileName: ustring; contentLength: int64;
+        var handler: ICefDownloadHandler): Boolean; virtual;
+    function GetAuthCredentials(const browser: ICefBrowser;
+      isProxy: Boolean; const host, realm, scheme: ustring;
+      var username, password: ustring): Boolean; virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TCefDisplayHandlerOwn = class(TCefBaseOwn)
+  protected
+    procedure OnNavStateChange(const browser: ICefBrowser;
+      canGoBack, canGoForward: Boolean); virtual;
+    procedure OnAddressChange(const browser: ICefBrowser;
+      const frame: ICefFrame; const url: ustring); virtual;
+    procedure OnTitleChange(const browser: ICefBrowser;
+      const title: ustring); virtual;
+    function OnTooltip(const browser: ICefBrowser;
+      var text: ustring): Boolean; virtual;
+    procedure OnStatusMessage(const browser: ICefBrowser; const value: ustring;
+        kind: TCefHandlerStatusType); virtual;
+    function OnConsoleMessage(const browser: ICefBrowser; const message,
+      source: ustring; line: Integer): Boolean; virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TCefFocusHandlerOwn = class(TCefBaseOwn)
+  protected
+    procedure OnTakeFocus(const browser: ICefBrowser; next: Boolean); virtual;
+    function OnSetFocus(const browser: ICefBrowser; isWidget: Boolean): Boolean; virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TCefKeyboardHandlerOwn = class(TCefBaseOwn)
+  protected
+    function OnKeyEvent(const browser: ICefBrowser; event: TCefHandlerKeyEventType;
+      code, modifiers: Integer; isSystemKey: Boolean): Boolean; virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TCefMenuHandlerOwn = class(TCefBaseOwn)
+  protected
+    function OnBeforeMenu(const browser: ICefBrowser;
+      const menuInfo: PCefHandlerMenuInfo): Boolean; virtual;
+    procedure GetMenuLabel(const browser: ICefBrowser;
+      menuId: TCefHandlerMenuId; var caption: ustring); virtual;
+    function OnMenuAction(const browser: ICefBrowser;
+      menuId: TCefHandlerMenuId): Boolean; virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TCefPrintHandlerOwn = class(TCefBaseOwn)
+  protected
+    function GetPrintOptions(const browser: ICefBrowser;
+      printOptions: PCefPrintOptions): Boolean; virtual;
+    function GetPrintHeaderFooter(const browser: ICefBrowser; const frame: ICefFrame;
+      const printInfo: PCefPrintInfo; const url, title: ustring; currentPage, maxPages: Integer;
+      var topLeft, topCenter, topRight, bottomLeft, bottomCenter, bottomRight: ustring): Boolean; virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TCefFindHandlerOwn = class(TCefBaseOwn)
+  protected
+    procedure OnFindResult(const browser: ICefBrowser; count: Integer;
+      const selectionRect: PCefRect; identifier, activeMatchOrdinal,
+      finalUpdate: Boolean); virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TCefJsDialogHandlerOwn = class(TCefBaseOwn)
+  protected
+    function OnJsAlert(const browser: ICefBrowser; const frame: ICefFrame;
+      const message: ustring): Boolean; virtual;
+    function OnJsConfirm(const browser: ICefBrowser; const frame: ICefFrame;
+      const message: ustring; var retval: Boolean): Boolean; virtual;
+    function OnJsPrompt(const browser: ICefBrowser; const frame: ICefFrame;
       const message, defaultValue: ustring; var retval: Boolean;
-      var return: ustring): TCefRetval; virtual;
-    function doOnJsBinding(const browser: ICefBrowser;
-      const frame: ICefFrame; const obj: ICefv8Value): TCefRetval; virtual;
-    function doOnBeforeWindowClose(const browser: ICefBrowser): TCefRetval; virtual;
-    function doOnTakeFocus(const browser: ICefBrowser; reverse: Integer): TCefRetval; virtual;
-    function doOnSetFocus(const browser: ICefBrowser; isWidget: Boolean): TCefRetval; virtual;
-    function doOnKeyEvent(const browser: ICefBrowser; event: TCefHandlerKeyEventType;
-      code, modifiers: Integer; isSystemKey: Boolean): TCefRetval; virtual;
-    function doOnTooltip(const browser: ICefBrowser; var text: ustring): TCefRetval; virtual;
-    function doOnStatus(const browser: ICefBrowser; const value: ustring;
-      StatusType: TCefHandlerStatusType): TCefRetval; virtual;
-    function doOnConsoleMessage(const browser: ICefBrowser; const message,
-      source: ustring; line: Integer): TCefRetval; virtual;
-    function doOnFindResult(const browser: ICefBrowser; count: Integer;
-      selectionRect: PCefRect; identifier, activeMatchOrdinal,
-      finalUpdate: Boolean): TCefRetval; virtual;
-    function doOnDownloadResponse(const browser: ICefBrowser; const mimeType, fileName: ustring;
-      contentLength: int64; var handler: ICefDownloadHandler): TCefRetval; virtual;
-    function doOnAuthenticationRequest(const browser: ICefBrowser; isProxy: Boolean;
-      const host, realm, scheme: ustring; var username, password: ustring): TCefRetval; virtual;
-    function doOnGetRect(const browser: ICefBrowser; screen: Integer;
-      rect: PCefRect): TCefRetval; virtual;
-	  function doOnGetScreenPoint(const browser: ICefBrowser; viewX, viewY: Integer;
-      screenX, screenY: PInteger): TCefRetval; virtual;
-    function doOnPopupChange(const browser: ICefBrowser; show: Boolean;
-      const rect: PCefRect): TCefRetval; virtual;
-	  function doOnPaint(const browser: ICefBrowser; typ: TCefPaintElementType;
-      const dirtyRect: PCefRect; const buffer: Pointer): TCefRetval; virtual;
-    function doOnCursorChange(const browser: ICefBrowser; cursor: HCURSOR): TCefRetval; virtual;
+      var return: ustring): Boolean; virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TCefJsBindingHandlerOwn = class(TCefBaseOwn)
+  protected
+    procedure OnJsBinding(const browser: ICefBrowser;
+      const frame: ICefFrame; const obj: ICefv8Value); virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TCefRenderHandlerOwn = class(TCefBaseOwn)
+  protected
+    function GetViewRect(const browser: ICefBrowser; rect: PCefRect): Boolean; virtual;
+    function GetScreenRect(const browser: ICefBrowser; rect: PCefRect): Boolean; virtual;
+    function GetScreenPoint(const browser: ICefBrowser; viewX, viewY: Integer;
+      screenX, screenY: PInteger): Boolean; virtual;
+    procedure OnPopupShow(const browser: ICefBrowser; show: Boolean); virtual;
+    procedure OnPopupSize(const browser: ICefBrowser; const rect: PCefRect); virtual;
+    procedure OnPaint(const browser: ICefBrowser; kind: TCefPaintElementType;
+        const dirtyRect: PCefRect; const buffer: Pointer); virtual;
+    procedure OnCursorChange(const browser: ICefBrowser; cursor: TCefCursorHandle); virtual;
   public
     constructor Create; virtual;
   end;
@@ -3199,6 +3484,8 @@ type
   TCefSchemeHandlerOwn = class(TCefBaseOwn, ICefSchemeHandler)
   private
     FCancelled: Boolean;
+    FScheme: ustring;
+    FRequest: ICefRequest;
   protected
     function ProcessRequest(const Request: ICefRequest; var redirectUrl: ustring;
       const response: ICefresponse; var ResponseLength: Integer): Boolean; virtual;
@@ -3206,8 +3493,10 @@ type
     function ReadResponse(DataOut: Pointer; BytesToRead: Integer;
       var BytesRead: Integer): Boolean; virtual;
   public
-    constructor Create(SyncMainThread: Boolean); virtual;
+    constructor Create(SyncMainThread: Boolean; const scheme: ustring; const request: ICefRequest); virtual;
     property Cancelled: Boolean read FCancelled;
+    property Scheme: ustring read FScheme;
+    property Request: ICefRequest read FRequest;
   end;
   TCefSchemeHandlerClass = class of TCefSchemeHandlerOwn;
 
@@ -3216,7 +3505,7 @@ type
     FClass: TCefSchemeHandlerClass;
     FSyncMainThread: Boolean;
   protected
-    function New: ICefSchemeHandler; virtual;
+    function New(const scheme: ustring; const request: ICefRequest): ICefSchemeHandler; virtual;
   public
     constructor Create(const AClass: TCefSchemeHandlerClass; SyncMainThread: Boolean); virtual;
   end;
@@ -3566,16 +3855,28 @@ function CefStringClearAndGet(var str: TCefString): ustring;
 procedure CefStringFree(const str: PCefString);
 function CefStringFreeAndGet(const str: PCefStringUserFree): ustring;
 procedure CefStringSet(const str: PCefString; const value: ustring);
-function CefBrowserCreate(windowInfo: PCefWindowInfo; popup: Boolean;
-  handler: PCefHandler; const url: ustring): Boolean;
-function CefBrowserCreateSync(windowInfo: PCefWindowInfo; popup: Boolean;
-  handler: PCefHandler; const url: ustring): ICefBrowser;
+function CefBrowserCreate(windowInfo: PCefWindowInfo; client: PCefClient;
+  const url: ustring; const settings: PCefBrowserSettings): Boolean;
+function CefBrowserCreateSync(windowInfo: PCefWindowInfo; client: PCefClient;
+  const url: ustring; const settings: PCefBrowserSettings): ICefBrowser;
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 procedure CefDoMessageLoopWork;
 procedure CefRunMessageLoop;
 {$ENDIF}
-function CefRegisterScheme(const SchemeName, HostName: ustring;
-  isStandard, SyncMainThread: Boolean; const handler: TCefSchemeHandlerClass): Boolean;
+
+function CefRegisterSchemeHandlerFactory(const SchemeName, HostName: ustring;
+  SyncMainThread: Boolean; const handler: TCefSchemeHandlerClass): Boolean;
+function CefClearSchemeHandlerFactories: Boolean;
+function CefRegisterCustomScheme(const SchemeName: ustring; IsStandard,
+  IsLocal, IsDisplayIsolated: Boolean): Boolean;
+
+function CefAddCrossOriginWhitelistEntry(const SourceOrigin, TargetProtocol,
+  TargetDomain: ustring; AllowTargetSubdomains: Boolean): Boolean;
+function CefRemoveCrossOriginWhitelistEntry(
+  const SourceOrigin, TargetProtocol, TargetDomain: ustring;
+  AllowTargetSubdomains: Boolean): Boolean;
+function CefClearCrossOriginWhitelist: Boolean;
+
 function CefRegisterExtension(const name, code: ustring;
   const Handler: ICefv8Handler): Boolean;
 function CefCurrentlyOn(ThreadId: TCefThreadId): Boolean;
@@ -3767,14 +4068,16 @@ end;
 var
   // Create a new browser window using the window parameters specified by
   // |windowInfo|. All values will be copied internally and the actual window will
-  // be created on the UI thread.  The |popup| parameter should be true (1) if the
-  // new window is a popup window. This function call will not block.
-  cef_browser_create: function(windowInfo: PCefWindowInfo; popup: Integer; handler: PCefHandler; const url: PCefString): Integer; cdecl;
+  // be created on the UI thread. This function call will not block.
+  cef_browser_create: function(windowInfo: PCefWindowInfo;
+      client: PCefClient; const url: PCefString;
+      const settings: PCefBrowserSettings): Integer; cdecl;
 
   // Create a new browser window using the window parameters specified by
-  // |windowInfo|. The |popup| parameter should be true (1) if the new window is a
-  // popup window. This function should only be called on the UI thread.
-  cef_browser_create_sync: function(windowInfo: PCefWindowInfo; popup: Integer; handler: PCefHandler; const url: PCefString): PCefBrowser; cdecl;
+  // |windowInfo|. This function should only be called on the UI thread.
+  cef_browser_create_sync: function(windowInfo: PCefWindowInfo;
+    client: PCefClient; const url: PCefString;
+    const settings: PCefBrowserSettings): PCefBrowser; cdecl;
 
   // Perform a single iteration of CEF message loop processing. This function is
   // used to integrate the CEF message loop into an existing application message
@@ -3795,7 +4098,7 @@ var
   // This function should be called on the main application thread to initialize
   // CEF when the application is started.  A return value of true (1) indicates
   // that it succeeded and false (0) indicates that it failed.
-  cef_initialize: function(const settings: PCefSettings;  const browser_defaults: PCefBrowserSettings): Integer; cdecl;
+  cef_initialize: function(const settings: PCefSettings): Integer; cdecl;
 
   // This function should be called on the main application thread to shut down
   // CEF before the application exits.
@@ -3892,22 +4195,23 @@ var
   //   // Call another function.
   //   example.test.increment();
   //
-  cef_register_extension: function(const extension_name, javascript_code: PCefString; handler: PCefv8Handler): Integer; cdecl;
+  cef_register_extension: function(const extension_name,
+    javascript_code: PCefString; handler: PCefv8Handler): Integer; cdecl;
 
-  // CEF supports two types of schemes, standard and non-standard.
+  // Register a custom scheme. This function should not be called for the built-in
+  // HTTP, HTTPS, FILE, FTP, ABOUT and DATA schemes.
   //
+  // If |is_standard| is true (1) the scheme will be treated as a standard scheme.
   // Standard schemes are subject to URL canonicalization and parsing rules as
   // defined in the Common Internet Scheme Syntax RFC 1738 Section 3.1 available
   // at http://www.ietf.org/rfc/rfc1738.txt
   //
   // In particular, the syntax for standard scheme URLs must be of the form:
-  //
-  //  <scheme>://<username>:<password>@<host>:<port>/<url-path>
-  //
-  // Standard scheme URLs must have a host component that is a fully qualified
-  // domain name as defined in Section 3.5 of RFC 1034 [13] and Section 2.1 of RFC
-  // 1123. These URLs will be canonicalized to "scheme://host/path" in the
-  // simplest case and "scheme://username:password@host:port/path" in the most
+  //  [scheme]://[username]:[password]@[host]:[port]/[url-path]
+  // </pre> Standard scheme URLs must have a host component that is a fully
+  // qualified domain name as defined in Section 3.5 of RFC 1034 [13] and Section
+  // 2.1 of RFC 1123. These URLs will be canonicalized to "scheme://host/path" in
+  // the simplest case and "scheme://username:password@host:port/path" in the most
   // explicit case. For example, "scheme:host/path" and "scheme:///host/path" will
   // both be canonicalized to "scheme://host/path".
   //
@@ -3915,15 +4219,78 @@ var
   // canonicalized. The remainder of the URL will be passed to the handler as-is.
   // For example, "scheme:///some%20text" will remain the same. Non-standard
   // scheme URLs cannot be used as a target for form submission.
+
+  // If |is_local| is true (1) the scheme will be treated as local (i.e., with the
+  // same security rules as those applied to "file" URLs). This means that normal
+  // pages cannot link to or access URLs of this scheme.
   //
-  // Register a custom scheme handler factory for the specified |scheme_name| and
-  // optional |host_name|. Specifying an NULL |host_name| value for standard
-  // schemes will match all host names. The |host_name| value will be ignored for
-  // non-standard schemes. Set |is_standard| to true (1) to register as a standard
-  // scheme or false (0) to register a non-standard scheme. This function may be
-  // called on any thread.
-  cef_register_scheme: function(const scheme_name, host_name: PCefString;
-    is_standard: Integer; factory: PCefSchemeHandlerFactory): Integer; cdecl;
+  // If |is_display_isolated| is true (1) the scheme will be treated as display-
+  // isolated. This means that pages cannot display these URLs unless they are
+  // from the same scheme. For example, pages in another origin cannot create
+  // iframes or hyperlinks to URLs with this scheme.
+  //
+  // This function may be called on any thread. It should only be called once per
+  // unique |scheme_name| value. If |scheme_name| is already registered or if an
+  // error occurs this function will return false (0).
+
+  cef_register_custom_scheme: function(const scheme_name: PCefString;
+      is_standard, is_local, is_display_isolated: Integer): Integer; cdecl;
+
+  // Register a scheme handler factory for the specified |scheme_name| and
+  // optional |domain_name|. An NULL |domain_name| value for a standard scheme
+  // will cause the factory to match all domain names. The |domain_name| value
+  // will be ignored for non-standard schemes. If |scheme_name| is a built-in
+  // scheme and no handler is returned by |factory| then the built-in scheme
+  // handler factory will be called. If |scheme_name| is a custom scheme the
+  // cef_register_custom_scheme() function should be called for that scheme. This
+  // function may be called multiple times to change or remove the factory that
+  // matches the specified |scheme_name| and optional |domain_name|. Returns false
+  // (0) if an error occurs. This function may be called on any thread.
+  cef_register_scheme_handler_factory: function(
+      const scheme_name, domain_name: PCefString;
+      factory: PCefSchemeHandlerFactory): Integer; cdecl;
+
+  // Clear all registered scheme handler factories. Returns false (0) on error.
+  // This function may be called on any thread.
+  cef_clear_scheme_handler_factories: function: Integer; cdecl;
+
+  // Add an entry to the cross-origin access whitelist.
+  //
+  // The same-origin policy restricts how scripts hosted from different origins
+  // (scheme + domain) can communicate. By default, scripts can only access
+  // resources with the same origin. Scripts hosted on the HTTP and HTTPS schemes
+  // (but no other schemes) can use the "Access-Control-Allow-Origin" header to
+  // allow cross-origin requests. For example, https://source.example.com can make
+  // XMLHttpRequest requests on http://target.example.com if the
+  // http://target.example.com request returns an "Access-Control-Allow-Origin:
+  // https://source.example.com" response header.
+  //
+  // Scripts in separate frames or iframes and hosted from the same protocol and
+  // domain suffix can execute cross-origin JavaScript if both pages set the
+  // document.domain value to the same domain suffix. For example,
+  // scheme://foo.example.com and scheme://bar.example.com can communicate using
+  // JavaScript if both domains set document.domain="example.com".
+  //
+  // This function is used to allow access to origins that would otherwise violate
+  // the same-origin policy. Scripts hosted underneath the fully qualified
+  // |source_origin| URL (like http://www.example.com) will be allowed access to
+  // all resources hosted on the specified |target_protocol| and |target_domain|.
+  // If |allow_target_subdomains| is true (1) access will also be allowed to all
+  // subdomains of the target domain. This function may be called on any thread.
+  // Returns false (0) if |source_origin| is invalid or the whitelist cannot be
+  // accessed.
+  cef_add_cross_origin_whitelist_entry: function(const source_origin, target_protocol,
+    target_domain: PCefString; allow_target_subdomains: Integer): Integer; cdecl;
+
+  // Remove an entry from the cross-origin access whitelist. Returns false (0) if
+  // |source_origin| is invalid or the whitelist cannot be accessed.
+  cef_remove_cross_origin_whitelist_entry: function(
+      const source_origin, target_protocol, target_domain: PCefString;
+      allow_target_subdomains: Integer): Integer; cdecl;
+
+  // Remove all entries from the cross-origin access whitelist. Returns false (0)
+  // if the whitelist cannot be accessed.
+  cef_clear_cross_origin_whitelist: function: Integer; cdecl;
 
   // CEF maintains multiple internal threads that are used for handling different
   // types of tasks. The UI thread creates the browser window and is used for all
@@ -3990,13 +4357,16 @@ var
   // Create a new cef_post_data_Element object.
   cef_post_data_element_create: function(): PCefPostDataElement; cdecl;
 
-  // Create a new TCefStreamReader object.
+  // Create a new cef_stream_reader_t object from a file.
   cef_stream_reader_create_for_file: function(const fileName: PCefString): PCefStreamReader; cdecl;
+  // Create a new cef_stream_reader_t object from data.
   cef_stream_reader_create_for_data: function(data: Pointer; size: Cardinal): PCefStreamReader; cdecl;
+  // Create a new cef_stream_reader_t object from a custom handler.
   cef_stream_reader_create_for_handler: function(handler: PCefReadHandler): PCefStreamReader; cdecl;
 
-  // Create a new TCefStreamWriter object.
+  // Create a new cef_stream_writer_t object for a file.
   cef_stream_writer_create_for_file: function(const fileName: PCefString): PCefStreamWriter; cdecl;
+  // Create a new cef_stream_writer_t object for a custom handler.
   cef_stream_writer_create_for_handler: function(handler: PCefWriteHandler): PCefStreamWriter; cdecl;
 
   // Returns the current (top) context object in the V8 context stack.
@@ -4005,19 +4375,29 @@ var
   // Returns the entered (bottom) context object in the V8 context stack.
   cef_v8context_get_entered_context: function(): PCefv8Context; cdecl;
 
-  // Create a new TCefv8Value object of the specified type.
+  // Create a new cef_v8value_t object of type undefined.
   cef_v8value_create_undefined: function(): PCefv8Value; cdecl;
+  // Create a new cef_v8value_t object of type null.
   cef_v8value_create_null: function(): PCefv8Value; cdecl;
+  // Create a new cef_v8value_t object of type bool.
   cef_v8value_create_bool: function(value: Integer): PCefv8Value; cdecl;
+  // Create a new cef_v8value_t object of type int.
   cef_v8value_create_int: function(value: Integer): PCefv8Value; cdecl;
+  // Create a new cef_v8value_t object of type double.
   cef_v8value_create_double: function(value: Double): PCefv8Value; cdecl;
+  // Create a new cef_v8value_t object of type Date.
+  cef_v8value_create_date: function(const value: PCefTime): PCefv8Value; cdecl;
+  // Create a new cef_v8value_t object of type string.
   cef_v8value_create_string: function(const value: PCefString): PCefv8Value; cdecl;
+  // Create a new cef_v8value_t object of type object.
   cef_v8value_create_object: function(user_data: PCefBase): PCefv8Value; cdecl;
+  // Create a new cef_v8value_t object of type object with accessors.
   cef_v8value_create_object_with_accessor: function(user_data: PCefBase;
     accessor: PCefV8Accessor): PCefv8Value; cdecl;
+  // Create a new cef_v8value_t object of type array.
   cef_v8value_create_array: function(): PCefv8Value; cdecl;
+  // Create a new cef_v8value_t object of type function.
   cef_v8value_create_function: function(const name: PCefString; handler: PCefv8Handler): PCefv8Value; cdecl;
-
 
   // Create a new CefWebUrlRequest object.
   cef_web_urlrequest_create: function(request: PCefRequest; client: PCefWebUrlRequestClient): PCefWebUrlRequest; cdecl;
@@ -4166,272 +4546,431 @@ begin
   Result := TCefBaseOwn(CefGetObject(self)).FRefCount;
 end;
 
-{ cef_handler }
+{ cef_client }
 
-function cef_handler_handle_before_created(
-      self: PCefHandler; parentBrowser: PCefBrowser;
-      var windowInfo: TCefWindowInfo; popup: Integer;
-      const popupFeatures: PCefPopupFeatures;
-      var handler: PCefHandler; const url: PCefString;
-      settings: PCefBrowserSettings): TCefRetval; stdcall;
+function cef_client_get_life_span_handler(self: PCefClient): PCefLifeSpanHandler; stdcall;
+begin
+  with TCefClientOwn(CefGetObject(self)) do
+    Result := CefGetData(GetLifeSpanHandler);
+end;
+
+function cef_client_get_load_handler(self: PCefClient): PCefLoadHandler; stdcall;
+begin
+  with TCefClientOwn(CefGetObject(self)) do
+    Result := CefGetData(GetLoadHandler);
+end;
+
+function cef_client_get_request_handler(self: PCefClient): PCefRequestHandler; stdcall;
+begin
+  with TCefClientOwn(CefGetObject(self)) do
+    Result := CefGetData(GetRequestHandler);
+end;
+
+function cef_client_get_display_handler(self: PCefClient): PCefDisplayHandler; stdcall;
+begin
+  with TCefClientOwn(CefGetObject(self)) do
+    Result := CefGetData(GetDisplayHandler);
+end;
+
+function cef_client_get_focus_handler(self: PCefClient): PCefFocusHandler; stdcall;
+begin
+  with TCefClientOwn(CefGetObject(self)) do
+    Result := CefGetData(GetFocusHandler);
+end;
+
+function cef_client_get_keyboard_handler(self: PCefClient): PCefKeyboardHandler; stdcall;
+begin
+  with TCefClientOwn(CefGetObject(self)) do
+    Result := CefGetData(GetKeyboardHandler);
+end;
+
+function cef_client_get_menu_handler(self: PCefClient): PCefMenuHandler; stdcall;
+begin
+  with TCefClientOwn(CefGetObject(self)) do
+    Result := CefGetData(GetMenuHandler);
+end;
+
+function cef_client_get_print_handler(self: PCefClient): PCefPrintHandler; stdcall;
+begin
+  with TCefClientOwn(CefGetObject(self)) do
+    Result := CefGetData(GetPrintHandler);
+end;
+
+function cef_client_get_find_handler(self: PCefClient): PCefFindHandler; stdcall;
+begin
+  with TCefClientOwn(CefGetObject(self)) do
+    Result := CefGetData(GetFindHandler);
+end;
+
+function cef_client_get_jsdialog_handler(self: PCefClient): PCefJsDialogHandler; stdcall;
+begin
+  with TCefClientOwn(CefGetObject(self)) do
+    Result := CefGetData(GetJsdialogHandler);
+end;
+
+function cef_client_get_jsbinding_handler(self: PCefClient): PCefJsBindingHandler; stdcall;
+begin
+  with TCefClientOwn(CefGetObject(self)) do
+    Result := CefGetData(GetJsbindingHandler);
+end;
+
+function cef_client_get_render_handler(self: PCefClient): PCefRenderHandler; stdcall;
+begin
+  with TCefClientOwn(CefGetObject(self)) do
+    Result := CefGetData(GetRenderHandler);
+end;
+
+{ cef_life_span_handler }
+
+function cef_life_span_handler_on_before_popup(self: PCefLifeSpanHandler; parentBrowser: PCefBrowser;
+   const popupFeatures: PCefPopupFeatures; windowInfo: PCefWindowInfo; const url: PCefString;
+   var client: PCefClient; settings: PCefBrowserSettings): Integer; stdcall;
 var
-  _handler: ICefBase;
   _url: ustring;
+  _client: ICefBase;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-  begin
-    _handler := TCefBaseRef.UnWrap(handler);
-    handler.base.release(@handler.base);
-    _url := CefString(url);
-
-    Result := doOnBeforeCreated(
+  _url := CefString(url);
+  _client := TCefBaseRef.UnWrap(client);
+  with TCefLifeSpanHandlerOwn(CefGetObject(self)) do
+    Result := Ord(OnBeforePopup(
       TCefBrowserRef.UnWrap(parentBrowser),
-      windowInfo,
-      popup <> 0,
       popupFeatures^,
-      _handler,
+      windowInfo^,
       _url,
-      settings^);
-
-    CefStringSet(url, _url);
-    handler :=  CefGetData(_handler);
-    _handler := nil;
-  end;
+      _client,
+      settings^
+    ));
+  CefStringSet(url, _url);
+  client := CefGetData(_client);
+  _client := nil;
 end;
 
-function cef_handler_handle_after_created(self: PCefHandler;
-  browser: PCefBrowser): TCefRetval; stdcall;
+procedure cef_life_span_handler_on_after_created(self: PCefLifeSpanHandler; browser: PCefBrowser); stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnAfterCreated(TCefBrowserRef.UnWrap(browser));
+  with TCefLifeSpanHandlerOwn(CefGetObject(self)) do
+    OnAfterCreated(TCefBrowserRef.UnWrap(browser));
 end;
 
-function cef_handler_handle_address_change(
-    self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame; const url: PCefString): TCefRetval; stdcall;
+procedure cef_life_span_handler_on_before_close(self: PCefLifeSpanHandler; browser: PCefBrowser); stdcall;
 begin
-   with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnAddressChange(
-      TCefBrowserRef.UnWrap(browser),
-      TCefFrameRef.UnWrap(frame),
-      cefstring(url))
+  with TCefLifeSpanHandlerOwn(CefGetObject(self)) do
+    OnBeforeClose(TCefBrowserRef.UnWrap(browser));
 end;
 
-function cef_handler_handle_title_change(
-    self: PCefHandler; browser: PCefBrowser;
-    const title: PCefString): TCefRetval; stdcall;
+function cef_life_span_handler_run_modal(self: PCefLifeSpanHandler; browser: PCefBrowser): Integer; stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnTitleChange(TCefBrowserRef.UnWrap(browser), CefString(title));
+  with TCefLifeSpanHandlerOwn(CefGetObject(self)) do
+    Result := Ord(RunModal(TCefBrowserRef.UnWrap(browser)));
 end;
 
-function cef_handler_handle_nav_state_change(self: PCefHandler; browser: PCefBrowser;
-      canGoBack, canGoForward: Integer): TCefRetval; stdcall;
+procedure cef_life_span_handler_quit_modal(self: PCefLifeSpanHandler; browser: PCefBrowser); stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnNavStateChange(TCefBrowserRef.UnWrap(browser), canGoBack <> 0,
-    canGoForward <> 0);
+  with TCefLifeSpanHandlerOwn(CefGetObject(self)) do
+    QuitModal(TCefBrowserRef.UnWrap(browser));
 end;
 
-function cef_handler_handle_before_browse(
-    self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame; request: PCefRequest;
-    navType: TCefHandlerNavtype; isRedirect: Integer): TCefRetval; stdcall;
+{ cef_load_handler }
+
+procedure cef_load_handler_on_load_start(self: PCefLoadHandler;
+  browser: PCefBrowser; frame: PCefFrame); stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnBeforeBrowse(
-      TCefBrowserRef.UnWrap(browser),
-      TCefFrameRef.UnWrap(frame),
-      TCefRequestRef.UnWrap(request),
-      navType,
-      isRedirect <> 0)
+  with TCefLoadHandlerOwn(CefGetObject(self)) do
+    OnLoadStart(TCefBrowserRef.UnWrap(browser), TCefFrameRef.UnWrap(frame));
 end;
 
-function cef_handler_handle_load_start(
-    self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame): TCefRetval; stdcall;
+procedure cef_load_handler_on_load_end(self: PCefLoadHandler;
+  browser: PCefBrowser; frame: PCefFrame; httpStatusCode: Integer); stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnLoadStart(
-      TCefBrowserRef.UnWrap(browser),
-      TCefFrameRef.UnWrap(frame));
+  with TCefLoadHandlerOwn(CefGetObject(self)) do
+    OnLoadEnd(TCefBrowserRef.UnWrap(browser), TCefFrameRef.UnWrap(frame), httpStatusCode);
 end;
 
-function cef_handler_handle_load_end(self: PCefHandler;
-    browser: PCefBrowser; frame: PCefFrame; httpStatusCode: Integer): TCefRetval; stdcall;
-begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnLoadEnd(
-      TCefBrowserRef.UnWrap(browser),
-      TCefFrameRef.UnWrap(frame),
-      httpStatusCode);
-end;
-
-function cef_handler_handle_load_error(
-    self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame; errorCode: TCefHandlerErrorcode;
-    const failedUrl: PCefString; var errorText: TCefString): TCefRetval; stdcall;
+function cef_load_handler_on_load_error(self: PCefLoadHandler; browser: PCefBrowser;
+  frame: PCefFrame; errorCode: TCefHandlerErrorcode; const failedUrl: PCefString;
+  var errorText: TCefString): Integer; stdcall;
 var
   err: ustring;
 begin
   err := CefString(@errorText);
-  with TCefHandlerOwn(CefGetObject(self)) do
-  begin
-    Result := doOnLoadError(
-      TCefBrowserRef.UnWrap(browser),
-      TCefFrameRef.UnWrap(frame),
-      errorCode,
-      CefString(failedUrl),
-      err);
-    if Result = RV_HANDLED then
-      CefStringSet(@errorText, err);
-  end;
+  with TCefLoadHandlerOwn(CefGetObject(self)) do
+    Result := Ord(OnLoadError(TCefBrowserRef.UnWrap(browser), TCefFrameRef.UnWrap(frame),
+      errorCode, CefString(failedUrl), err));
+  if Result <> 0 then
+    CefStringSet(@errorText, err);
 end;
 
-function cef_handler_handle_before_resource_load(
-    self: PCefHandler; browser: PCefBrowser;
-    request: PCefRequest; var redirectUrl: TCefString;
-    var resourceStream: PCefStreamReader; const response: PCefResponse;
-    loadFlags: Integer): TCefRetval; stdcall;
+{ cef_content_filter }
+
+procedure cef_content_filter_process_data(self: PCefContentFilter;
+  const data: Pointer; data_size: Integer; var substitute_data: PCefStreamReader); stdcall;
+var
+  stream: ICefStreamReader;
+begin
+  stream := TCefStreamReaderRef.UnWrap(substitute_data);
+  with TCefContentFilterOwn(CefGetObject(self)) do
+    ProcessData(data, data_size, stream);
+  substitute_data := CefGetData(stream);
+end;
+
+procedure cef_content_filter_drain(self: PCefContentFilter; var remainder: PCefStreamReader); stdcall;
+var
+  stream: ICefStreamReader;
+begin
+  with TCefContentFilterOwn(CefGetObject(self)) do
+    Drain(stream);
+  remainder := CefGetData(stream);
+end;
+
+{ cef_request_handler }
+
+function cef_request_handler_on_before_browse(self: PCefRequestHandler;
+  browser: PCefBrowser; frame: PCefFrame; request: PCefRequest;
+  navType: TCefHandlerNavtype; isRedirect: Integer): Integer; stdcall;
+begin
+  with TCefRequestHandlerOwn(CefGetObject(self)) do
+    Result := Ord(OnBeforeBrowse(
+      TCefBrowserRef.UnWrap(browser),
+      TCefFrameRef.UnWrap(frame),
+      TCefRequestRef.UnWrap(request),
+      navType,
+      isRedirect <> 0));
+end;
+
+function cef_request_handler_on_before_resource_load(
+  self: PCefRequestHandler; browser: PCefBrowser; request: PCefRequest;
+  redirectUrl: PCefString; var resourceStream: PCefStreamReader;
+  response: PCefResponse; loadFlags: Integer): Integer; stdcall;
 var
   _redirectUrl: ustring;
   _resourceStream: ICefStreamReader;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
+  with TCefRequestHandlerOwn(CefGetObject(self)) do
   begin
-    _redirectUrl := CefString(@redirectUrl);
+    _redirectUrl := CefString(redirectUrl);
     _resourceStream := TCefStreamReaderRef.UnWrap(resourceStream);
 
-    Result := doOnBeforeResourceLoad(
+    Result := Ord(OnBeforeResourceLoad(
       TCefBrowserRef.UnWrap(browser),
       TCefRequestRef.UnWrap(request),
       _redirectUrl,
       _resourceStream,
       TCefResponseRef.UnWrap(response),
-      loadFlags);
+      loadFlags));
 
-    if Result = RV_CONTINUE then
+    if Result = 0 then
     begin
       if _redirectUrl <> '' then
-        redirectUrl := CefStringAlloc(_redirectUrl);
+         CefStringSet(redirectUrl, _redirectUrl);
       resourceStream := CefGetData(_resourceStream);
     end;
   end;
 end;
 
-function cef_handler_handle_protocol_execution(self: PCefHandler; browser: PCefBrowser;
-  const url: PCefString; var allow_os_execution: Integer): TCefRetval; stdcall;
+procedure cef_request_handler_on_resource_reponse(self: PCefRequestHandler;
+  browser: PCefBrowser; const url: PCefString; response: PCefResponse;
+  var filter: PCefContentFilter); stdcall;
+var
+  fltr: ICefBase;
+begin
+   fltr := TCefBaseRef.UnWrap(filter);
+   with TCefRequestHandlerOwn(CefGetObject(self)) do
+     OnResourceResponse(
+       TCefBrowserRef.UnWrap(browser),
+       CefString(url),
+       TCefResponseRef.UnWrap(response),
+       fltr);
+   filter := CefGetData(fltr);
+end;
+
+function cef_request_handler_on_protocol_execution(self: PCefRequestHandler;
+  browser: PCefBrowser; const url: PCefString; var allowOSExecution: Integer): Integer; stdcall;
 var
   allow: Boolean;
 begin
-  allow := allow_os_execution <> 0;
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnProtocolExecution(
+  allow := allowOSExecution <> 0;
+  with TCefRequestHandlerOwn(CefGetObject(self)) do
+    Result := Ord(OnProtocolExecution(
       TCefBrowserRef.UnWrap(browser),
-      CefString(url), allow);
+      CefString(url), allow));
   if allow then
-    allow_os_execution := 1 else
-    allow_os_execution := 0;
+    allowOSExecution := 1 else
+    allowOSExecution := 0;
 end;
 
-function cef_handler_handle_download_response(self: PCefHandler;
-  browser: PCefBrowser; const mimeType, fileName: PCefString; contentLength: int64;
-  var handler: PCefDownloadHandler): TCefRetval; stdcall;
+function cef_request_handler_get_download_handler(self: PCefRequestHandler;
+  browser: PCefBrowser; const mimeType: PCefString; const fileName: PCefString;
+  contentLength: int64; var handler: PCefDownloadHandler): Integer; stdcall;
 var
   _handler: ICefDownloadHandler;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnDownloadResponse(
+  with TCefRequestHandlerOwn(CefGetObject(self)) do
+    Result := Ord(GetDownloadHandler(
       TCefBrowserRef.UnWrap(browser),
-      CefString(mimeType), CefString(fileName), contentLength, _handler);
+      CefString(mimeType), CefString(fileName), contentLength, _handler));
   handler := CefGetData(_handler);
 end;
 
-function cef_handle_authentication_request(
-  self: PCefHandler; browser: PCefBrowser; isProxy: Integer;
-  const host: PCefString; const realm: PCefString; const scheme: PCefString;
-  username: PCefString; password: PCefString): TCefRetval; stdcall;
+function cef_request_handler_get_auth_credentials(self: PCefRequestHandler;
+  browser: PCefBrowser; isProxy: Integer; const host: PCefString;
+  const realm: PCefString; const scheme: PCefString;
+  username, password: PCefString): Integer; stdcall;
 var
   _username, _password: ustring;
 begin
   _username := CefString(username);
   _password := CefString(password);
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnAuthenticationRequest(
+  with TCefRequestHandlerOwn(CefGetObject(self)) do
+    Result := Ord(GetAuthCredentials(
       TCefBrowserRef.UnWrap(browser), isProxy <> 0,
       CefString(host), CefString(realm), CefString(scheme),
-      _username, _password);
-  if Result = RV_HANDLED then
+      _username, _password));
+  if Result <> 0 then
   begin
     CefStringSet(username, _username);
     CefStringSet(password, _password);
   end;
 end;
 
-function cef_handler_handle_before_menu(
-  self: PCefHandler; browser: PCefBrowser;
-  const menuInfo: PCefHandlerMenuInfo): TCefRetval; stdcall;
+{ cef_display_handler }
+
+procedure cef_display_handler_on_nav_state_change(self: PCefDisplayHandler;
+  browser: PCefBrowser; canGoBack, canGoForward: Integer); stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnBeforeMenu(
-      TCefBrowserRef.UnWrap(browser),
-      menuInfo);
+  with TCefDisplayHandlerOwn(CefGetObject(self)) do
+    OnNavStateChange(TCefBrowserRef.UnWrap(browser), canGoBack <> 0, canGoForward <> 0);
 end;
 
-function cef_handler_handle_get_menu_label(
-    self: PCefHandler; browser: PCefBrowser;
-    menuId: TCefHandlerMenuId; var label_: TCefString): TCefRetval; stdcall;
+procedure cef_display_handler_on_address_change(self: PCefDisplayHandler;
+  browser: PCefBrowser; frame: PCefFrame; const url: PCefString); stdcall;
+begin
+  with TCefDisplayHandlerOwn(CefGetObject(self)) do
+   OnAddressChange(
+     TCefBrowserRef.UnWrap(browser),
+     TCefFrameRef.UnWrap(frame),
+     cefstring(url))
+end;
+
+procedure cef_display_handler_on_title_change(self: PCefDisplayHandler;
+  browser: PCefBrowser; const title: PCefString); stdcall;
+begin
+  with TCefDisplayHandlerOwn(CefGetObject(self)) do
+    OnTitleChange(TCefBrowserRef.UnWrap(browser), CefString(title));
+end;
+
+function cef_display_handler_on_tooltip(self: PCefDisplayHandler;
+  browser: PCefBrowser; text: PCefString): Integer; stdcall;
+var
+  t: ustring;
+begin
+  t := CefStringClearAndGet(text^);
+  with TCefDisplayHandlerOwn(CefGetObject(self)) do
+    Result := Ord(OnTooltip(
+      TCefBrowserRef.UnWrap(browser), t));
+  text^ := CefStringAlloc(t);
+end;
+
+procedure cef_display_handler_on_status_message(self: PCefDisplayHandler;
+  browser: PCefBrowser; const value: PCefString; kind: TCefHandlerStatusType); stdcall;
+begin
+  with TCefDisplayHandlerOwn(CefGetObject(self)) do
+    OnStatusMessage(TCefBrowserRef.UnWrap(browser), CefString(value), kind);
+end;
+
+function cef_display_handler_on_console_message(self: PCefDisplayHandler;
+    browser: PCefBrowser; const message: PCefString;
+    const source: PCefString; line: Integer): Integer; stdcall;
+begin
+  with TCefDisplayHandlerOwn(CefGetObject(self)) do
+    Result := Ord(OnConsoleMessage(TCefBrowserRef.UnWrap(browser),
+    CefString(message), CefString(source), line));
+end;
+
+{ cef_focus_handler }
+
+procedure cef_focus_handler_on_take_focus(self: PCefFocusHandler;
+  browser: PCefBrowser; next: Integer); stdcall;
+begin
+  with TCefFocusHandlerOwn(CefGetObject(self)) do
+    OnTakeFocus(TCefBrowserRef.UnWrap(browser), next <> 0);
+end;
+
+function cef_focus_handler_on_set_focus(self: PCefFocusHandler;
+  browser: PCefBrowser; isWidget: Integer): Integer; stdcall;
+begin
+  with TCefFocusHandlerOwn(CefGetObject(self)) do
+    Result := Ord(OnSetFocus(TCefBrowserRef.UnWrap(browser), isWidget <> 0))
+end;
+
+{ cef_keyboard_handler }
+
+function cef_keyboard_handler_on_key_event(self: PCefKeyboardHandler;
+  browser: PCefBrowser; kind: TCefHandlerKeyEventType;
+  code, modifiers, isSystemKey: Integer): Integer; stdcall;
+begin
+  with TCefKeyboardHandlerOwn(CefGetObject(self)) do
+    Result := Ord(OnKeyEvent(TCefBrowserRef.UnWrap(browser), kind, code,
+      modifiers, isSystemKey <> 0));
+end;
+
+{ cef_menu_handler }
+
+function cef_menu_handler_on_before_menu(self: PCefMenuHandler;
+  browser: PCefBrowser; const menuInfo: PCefHandlerMenuInfo): Integer; stdcall;
+begin
+  with TCefMenuHandlerOwn(CefGetObject(self)) do
+    Result := Ord(OnBeforeMenu(TCefBrowserRef.UnWrap(browser), menuInfo));
+end;
+
+procedure cef_menu_handler_get_menu_label(self: PCefMenuHandler;
+  browser: PCefBrowser; menuId: TCefHandlerMenuId; var label_: TCefString); stdcall;
 var
   str: ustring;
 begin
   str := CefString(@label_);
-  with TCefHandlerOwn(CefGetObject(self)) do
+  with TCefMenuHandlerOwn(CefGetObject(self)) do
   begin
-    Result := doOnGetMenuLabel(
+    GetMenuLabel(
       TCefBrowserRef.UnWrap(browser),
       menuId,
       str);
-    if Result = RV_HANDLED then
-      CefStringSet(@label_, str);
+    CefStringSet(@label_, str);
   end;
 end;
 
-function cef_handler_handle_menu_action(
-    self: PCefHandler; browser: PCefBrowser;
-    menuId: TCefHandlerMenuId): TCefRetval; stdcall;
+function cef_menu_handler_on_menu_action(self: PCefMenuHandler;
+  browser: PCefBrowser; menuId: TCefHandlerMenuId): Integer; stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnMenuAction(
-      TCefBrowserRef.UnWrap(browser),
-      menuId);
+  with TCefMenuHandlerOwn(CefGetObject(self)) do
+    Result := Ord(OnMenuAction(TCefBrowserRef.UnWrap(browser), menuId));
 end;
 
-function cef_handler_handle_print_options(self: PCefHandler;
-  browser: PCefBrowser; printOptions: PCefPrintOptions): TCefRetval; stdcall;
+{ cef_print_handler }
+
+function cef_print_handler_get_print_options(self: PCefPrintHandler;
+    browser: PCefBrowser; printOptions: PCefPrintOptions): Integer; stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnPrintOptions(
-      TCefBrowserRef.UnWrap(browser), printOptions);
+  with TCefPrintHandlerOwn(CefGetObject(self)) do
+    Result := Ord(GetPrintOptions(
+      TCefBrowserRef.UnWrap(browser), printOptions));
 end;
 
-function cef_handler_handle_print_header_footer(
-    self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame; printInfo: PCefPrintInfo;
-    url, title: PCefString; currentPage, maxPages: Integer;
-    var topLeft, topCenter, topRight, bottomLeft, bottomCenter,
-    bottomRight: TCefString): TCefRetval; stdcall;
+function cef_print_handler_get_print_header_footer(self: PCefPrintHandler;
+  browser: PCefBrowser; frame: PCefFrame; const printInfo: PCefPrintInfo;
+  const url: PCefString; const title: PCefString; currentPage,
+  maxPages: Integer; var topLeft, topCenter, topRight, bottomLeft,
+  bottomCenter, bottomRight: TCefString): Integer; stdcall;
 var
   _topLeft, _topCenter, _topRight, _bottomLeft, _bottomCenter, _bottomRight: ustring;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
+  with TCefPrintHandlerOwn(CefGetObject(self)) do
   begin
-    Result := doOnPrintHeaderFooter(
+    Result := Ord(GetPrintHeaderFooter(
       TCefBrowserRef.UnWrap(browser),
       TCefFrameRef.UnWrap(frame),
       printInfo, CefString(url), CefString(title), currentPage, maxPages,
       _topLeft, _topCenter, _topRight, _bottomLeft, _bottomCenter, _bottomRight
-    );
-    if Result = RV_HANDLED then
+    ));
+    if Result = 0 then
     begin
       topLeft := CefStringAlloc(_topLeft);
       topCenter := CefStringAlloc(_topCenter);
@@ -4443,50 +4982,57 @@ begin
   end;
 end;
 
-function cef_handler_handle_jsalert(self: PCefHandler;
-    browser: PCefBrowser; frame: PCefFrame;
-    const message: PCefString): TCefRetval; stdcall;
+{ cef_find_handler }
+
+procedure cef_find_handler_on_find_result(self: PCefFindHandler; browser: PCefBrowser;
+  identifier, count: Integer; const selectionRect: PCefRect; activeMatchOrdinal,
+  finalUpdate: Integer); stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnJsAlert(
-      TCefBrowserRef.UnWrap(browser),
-      TCefFrameRef.UnWrap(frame),
-      CefString(message));
+  with TCefFindHandlerOwn(CefGetObject(self)) do
+    OnFindResult(TCefBrowserRef.UnWrap(browser),
+      count, selectionRect, identifier <> 0, activeMatchOrdinal <> 0, finalUpdate <> 0);
 end;
 
-function cef_handler_handle_jsconfirm(
-    self: PCefHandler; browser: PCefBrowser;
-    frame: PCefFrame; const message: PCefString;
-    var retval: Integer): TCefRetval; stdcall;
+
+{ cef_jsdialog_handler }
+
+function cef_jsdialog_handler_on_jsalert(self: PCefJsDialogHandler;
+  browser: PCefBrowser; frame: PCefFrame; const message: PCefString): Integer; stdcall;
+begin
+  with TCefJsDialogHandlerOwn(CefGetObject(self)) do
+    Result := Ord(OnJsAlert(TCefBrowserRef.UnWrap(browser),
+      TCefFrameRef.UnWrap(frame), CefString(message)));
+end;
+
+function cef_jsdialog_handler_on_jsconfirm(self: PCefJsDialogHandler;
+  browser: PCefBrowser; frame: PCefFrame; const message: PCefString;
+  var retval: Integer): Integer; stdcall;
 var
   ret: Boolean;
 begin
   ret := retval <> 0;
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnJsConfirm(
-      TCefBrowserRef.UnWrap(browser),
-      TCefFrameRef.UnWrap(frame),
-      CefString(message), ret);
-  if Result = RV_HANDLED then
+  with TCefJsDialogHandlerOwn(CefGetObject(self)) do
+    Result := Ord(OnJsConfirm(TCefBrowserRef.UnWrap(browser),
+      TCefFrameRef.UnWrap(frame), CefString(message), ret));
+  if Result <> 0 then
     retval := Ord(ret);
 end;
 
-function cef_handler_handle_jsprompt(self: PCefHandler;
-    browser: PCefBrowser; frame: PCefFrame;
-    const message, defaultValue: PCefString; var retval: Integer;
-    var return: TCefString): TCefRetval; stdcall;
+function cef_jsdialog_handler_on_jsprompt(self: PCefJsDialogHandler;
+  browser: PCefBrowser; frame: PCefFrame; const message, defaultValue: PCefString;
+  var retval: Integer; var return: TCefString): Integer; stdcall;
 var
   ret: Boolean;
   str: ustring;
 begin
   ret := retval <> 0;
-  with TCefHandlerOwn(CefGetObject(self)) do
+  with TCefJsDialogHandlerOwn(CefGetObject(self)) do
   begin
-    Result := doOnJsPrompt(
+    Result := Ord(OnJsPrompt(
       TCefBrowserRef.UnWrap(browser),
       TCefFrameRef.UnWrap(frame),
-      CefString(message), CefString(defaultValue), ret, str);
-    if Result = RV_HANDLED then
+      CefString(message), CefString(defaultValue), ret, str));
+    if Result <> 0 then
     begin
       retval := Ord(ret);
       return := CefStringAlloc(str)
@@ -4494,117 +5040,68 @@ begin
   end;
 end;
 
-function cef_handler_handle_jsbinding(self: PCefHandler; browser: PCefBrowser;
-      frame: PCefFrame; obj: PCefv8Value): TCefRetval; stdcall;
+{ cef_jsbinding_handler }
+
+procedure cef_jsbinding_handler_on_jsbinding(self: PCefJsBindingHandler;
+  browser: PCefBrowser; frame: PCefFrame; obj: PCefv8Value); stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnJsBinding(
+  with TCefJsBindingHandlerOwn(CefGetObject(self)) do
+    OnJsBinding(
       TCefBrowserRef.UnWrap(browser),
       TCefFrameRef.UnWrap(frame),
       TCefv8ValueRef.UnWrap(obj));
 end;
 
-function cef_handler_handle_before_window_close(
-    self: PCefHandler; browser: PCefBrowser): TCefRetval; stdcall;
+{ cef_render_handler }
+
+function cef_render_handler_get_view_rect(self: PCefRenderHandler;
+  browser: PCefBrowser; rect: PCefRect): Integer; stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnBeforeWindowClose(
-      TCefBrowserRef.UnWrap(browser))
+  with TCefRenderHandlerOwn(CefGetObject(self)) do
+    Result := Ord(GetViewRect(TCefBrowserRef.UnWrap(browser), rect));
 end;
 
-function cef_handler_handle_take_focus(
-    self: PCefHandler; browser: PCefBrowser;
-    reverse: Integer): TCefRetval; stdcall;
+function cef_render_handler_get_screen_rect(self: PCefRenderHandler;
+  browser: PCefBrowser; rect: PCefRect): Integer; stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnTakeFocus(
-      TCefBrowserRef.UnWrap(browser), reverse);
+  with TCefRenderHandlerOwn(CefGetObject(self)) do
+    Result := Ord(GetScreenRect(TCefBrowserRef.UnWrap(browser), rect));
 end;
 
-function cef_handler_handle_set_focus(
-    self: PCefHandler; browser: PCefBrowser;
-    isWidget: Integer): TCefRetval; stdcall;
+function cef_render_handler_get_screen_point(self: PCefRenderHandler;
+  browser: PCefBrowser; viewX, viewY: Integer; screenX, screenY: PInteger): Integer; stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnSetFocus(
-      TCefBrowserRef.UnWrap(browser), isWidget <> 0);
+  with TCefRenderHandlerOwn(CefGetObject(self)) do
+    Result := Ord(GetScreenPoint(TCefBrowserRef.UnWrap(browser), viewX, viewY, screenX, screenY));
 end;
 
-function cef_handler_handle_key_event(
-    self: PCefHandler; browser: PCefBrowser;
-    event: TCefHandlerKeyEventType; code, modifiers,
-    isSystemKey: Integer): TCefRetval; stdcall;
+procedure cef_render_handler_on_popup_show(self: PCefRenderHandler;
+  browser: PCefBrowser; show: Integer); stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnKeyEvent(
-      TCefBrowserRef.UnWrap(browser),
-      event, code, modifiers, isSystemKey <> 0);
+  with TCefRenderHandlerOwn(CefGetObject(self)) do
+    OnPopupShow(TCefBrowserRef.UnWrap(browser), show <> 0);
 end;
 
-function cef_handler_handle_tooltip(self: PCefHandler;
-  browser: PCefBrowser; text: PCefString): TCefRetval; stdcall;
-var
-  t: ustring;
+procedure cef_render_handler_on_popup_size(self: PCefRenderHandler;
+  browser: PCefBrowser; const rect: PCefRect); stdcall;
 begin
-  t := CefStringClearAndGet(text^);
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnTooltip(
-      TCefBrowserRef.UnWrap(browser), t);
-  text^ := CefStringAlloc(t);
+  with TCefRenderHandlerOwn(CefGetObject(self)) do
+    OnPopupSize(TCefBrowserRef.UnWrap(browser), rect);
 end;
 
-function cef_handler_handle_status(self: PCefHandler; browser: PCefBrowser;
-  value: PCefString; type_: TCefHandlerStatusType): TCefRetval; stdcall;
+procedure cef_render_handler_on_paint(self: PCefRenderHandler;
+  browser: PCefBrowser; kind: TCefPaintElementType;
+  const dirtyRect: PCefRect; const buffer: Pointer); stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnStatus(TCefBrowserRef.UnWrap(browser), CefString(value), type_);
+  with TCefRenderHandlerOwn(CefGetObject(self)) do
+    OnPaint(TCefBrowserRef.UnWrap(browser), kind, dirtyRect, buffer);
 end;
 
-function cef_handler_handle_console_message(self: PCefHandler; browser: PCefBrowser;
-  const message, source: PCefString; line: Integer): TCefRetval; stdcall;
+procedure cef_render_handler_on_cursor_change(self: PCefRenderHandler;
+  browser: PCefBrowser; cursor: TCefCursorHandle); stdcall;
 begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnConsoleMessage(TCefBrowserRef.UnWrap(browser), CefString(message), CefString(source), line);
-end;
-
-function cef_handler_handle_find_result(self: PCefHandler; browser: PCefBrowser;
-  identifier, count: Integer; const selectionRect: PCefRect;
-  activeMatchOrdinal, finalUpdate: Integer): TCefRetval; stdcall;
-begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnFindResult(
-      TCefBrowserRef.UnWrap(browser),
-        count, selectionRect, identifier <> 0, activeMatchOrdinal <> 0, finalUpdate <> 0);
-end;
-
-function cef_handler_handle_get_rect(self: PCefHandler; browser: PCefBrowser; screen: Integer; rect: PCefRect): TCefRetval; stdcall;
-begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOngetRect(TCefBrowserRef.UnWrap(browser), screen, rect);
-end;
-
-function cef_handler_handle_get_screen_point(self: PCefHandler; browser: PCefBrowser; viewX, viewY: Integer; screenX, screenY: PInteger): TCefRetval; stdcall;
-begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOngetScreenPoint(TCefBrowserRef.UnWrap(browser), viewX, viewY, screenX, screenY);
-end;
-
-function cef_handler_handle_popup_change(self: PCefHandler; browser: PCefBrowser; show: Integer; const rect: PCefRect): TCefRetval; stdcall;
-begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnpopupChange(TCefBrowserRef.UnWrap(browser), show <> 0, rect);
-end;
-
-function cef_handler_handle_paint(self: PCefHandler; browser: PCefBrowser; typ: TCefPaintElementType; const dirtyRect: PCefRect; const buffer: Pointer): TCefRetval; stdcall;
-begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnPaint(TCefBrowserRef.UnWrap(browser), typ, dirtyRect, buffer);
-end;
-
-function cef_handler_handle_cursor_change(self: PCefHandler; browser: PCefBrowser; cursor: HCURSOR): TCefRetval; stdcall;
-begin
-  with TCefHandlerOwn(CefGetObject(self)) do
-    Result := doOnCursorChange(TCefBrowserRef.UnWrap(browser), cursor);
+  with TCefRenderHandlerOwn(CefGetObject(self)) do
+    OnCursorChange(TCefBrowserRef.UnWrap(browser), cursor);
 end;
 
 {  cef_stream_reader }
@@ -4679,22 +5176,23 @@ end;
 
 { cef_scheme_handler_factory}
 
-function cef_scheme_handler_factory_create(self: PCefSchemeHandlerFactory): PCefSchemeHandler; stdcall;
+function cef_scheme_handler_factory_create(self: PCefSchemeHandlerFactory;
+  const scheme_name: PCefString; request: PCefRequest): PCefSchemeHandler; stdcall;
 begin
   with TCefSchemeHandlerFactoryOwn(CefGetObject(self)) do
-    Result := CefGetData(New);
+    Result := CefGetData(New(CefString(scheme_name), TCefRequestRef.UnWrap(request)));
 end;
 
 { cef_scheme_handler }
 
 function cef_scheme_handler_process_request(self: PCefSchemeHandler;
-  request: PCefRequest; redirectUrl: PCefString; response: PCefresponse;
+  request_: PCefRequest; redirectUrl: PCefString; response: PCefresponse;
   var response_length: Integer): Integer; stdcall;
 var
   _redirectUrl: ustring;
 begin
   with TCefSchemeHandlerOwn(CefGetObject(self)) do
-    Result := Ord(ProcessRequest(TCefRequestRef.UnWrap(request),
+    Result := Ord(ProcessRequest(TCefRequestRef.UnWrap(request_),
       _redirectUrl, TCefResponseRef.UnWrap(response), response_length));
   if _redirectUrl <> '' then
     CefStringSet(redirectUrl, _redirectUrl);
@@ -4958,274 +5456,6 @@ begin
   LeaveCriticalSection(FCriticaSection);
 end;
 
-{ TCefHandlerOwn }
-
-constructor TCefHandlerOwn.Create;
-begin
-  inherited CreateData(SizeOf(TCefHandler));
-  with PCefHandler(FData)^ do
-  begin
-    handle_before_created := @cef_handler_handle_before_created;
-    handle_after_created := @cef_handler_handle_after_created;
-    handle_address_change := @cef_handler_handle_address_change;
-    handle_title_change := @cef_handler_handle_title_change;
-    handle_nav_state_change := @cef_handler_handle_nav_state_change;
-    handle_before_browse := @cef_handler_handle_before_browse;
-    handle_load_start := @cef_handler_handle_load_start;
-    handle_load_end := @cef_handler_handle_load_end;
-    handle_load_error := @cef_handler_handle_load_error;
-    handle_download_response := @cef_handler_handle_download_response;
-    handle_before_menu := @cef_handler_handle_before_menu;
-    handle_get_menu_label := @cef_handler_handle_get_menu_label;
-    handle_menu_action := @cef_handler_handle_menu_action;
-    handle_print_options := @cef_handler_handle_print_options;
-    handle_print_header_footer := @cef_handler_handle_print_header_footer;
-    handle_jsalert := @cef_handler_handle_jsalert;
-    handle_jsconfirm := @cef_handler_handle_jsconfirm;
-    handle_jsprompt := @cef_handler_handle_jsprompt;
-    handle_jsbinding := @cef_handler_handle_jsbinding;
-    handle_before_window_close := @cef_handler_handle_before_window_close;
-    handle_take_focus := @cef_handler_handle_take_focus;
-    handle_set_focus := @cef_handler_handle_set_focus;
-    handle_key_event := @cef_handler_handle_key_event;
-    handle_tooltip := @cef_handler_handle_tooltip;
-    handle_status := @cef_handler_handle_status;
-    handle_console_message := @cef_handler_handle_console_message;
-    handle_find_result := @cef_handler_handle_find_result;
-    handle_get_rect := @cef_handler_handle_get_rect;
-    handle_get_screen_point := @cef_handler_handle_get_screen_point;
-    handle_popup_change := @cef_handler_handle_popup_change;
-    handle_paint := @cef_handler_handle_paint;
-    handle_cursor_change := @cef_handler_handle_cursor_change;
-
-    // IO Thread
-    handle_before_resource_load := @cef_handler_handle_before_resource_load;
-    handle_protocol_execution := @cef_handler_handle_protocol_execution;
-    handle_authentication_request := @cef_handle_authentication_request;
-  end;
-end;
-
-function TCefHandlerOwn.doOnAddressChange(const browser: ICefBrowser;
-  const frame: ICefFrame; const url: ustring): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnAfterCreated(const browser: ICefBrowser): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnAuthenticationRequest(const browser: ICefBrowser;
-  isProxy: Boolean; const host, realm, scheme: ustring; var username,
-  password: ustring): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnBeforeBrowse(const browser: ICefBrowser;
-  const frame: ICefFrame; const request: ICefRequest; navType: TCefHandlerNavtype;
-  isRedirect: boolean): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnBeforeCreated(const parentBrowser: ICefBrowser;
-  var windowInfo: TCefWindowInfo; popup: Boolean; var popupFeatures: TCefPopupFeatures;
-  var handler: ICefBase; var url: ustring; var settings: TCefBrowserSettings): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnBeforeMenu(const browser: ICefBrowser;
-  const menuInfo: PCefHandlerMenuInfo): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnBeforeResourceLoad(const browser: ICefBrowser;
-  const request: ICefRequest; var redirectUrl: ustring; var resourceStream: ICefStreamReader;
-  const response: ICefResponse; loadFlags: Integer): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnBeforeWindowClose(
-  const browser: ICefBrowser): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnConsoleMessage(const browser: ICefBrowser;
-  const message, source: ustring; line: Integer): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnCursorChange(const browser: ICefBrowser;
-  cursor: HCURSOR): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnDownloadResponse(const browser: ICefBrowser;
-  const mimeType, fileName: ustring; contentLength: int64;
-  var handler: ICefDownloadHandler): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnFindResult(const browser: ICefBrowser; count: Integer;
-  selectionRect: PCefRect; identifier, activeMatchOrdinal, finalUpdate: Boolean): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnGetMenuLabel(const browser: ICefBrowser;
-  menuId: TCefHandlerMenuId; var caption: ustring): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnGetRect(const browser: ICefBrowser; screen: Integer;
-  rect: PCefRect): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnGetScreenPoint(const browser: ICefBrowser; viewX,
-  viewY: Integer; screenX, screenY: PInteger): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnJsAlert(const browser: ICefBrowser;
-  const frame: ICefFrame; const message: ustring): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnJsBinding(const browser: ICefBrowser;
-  const frame: ICefFrame; const obj: ICefv8Value): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnJsConfirm(const browser: ICefBrowser;
-  const frame: ICefFrame; const message: ustring;
-  var retval: Boolean): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnJsPrompt(const browser: ICefBrowser;
-  const frame: ICefFrame; const message, defaultValue: ustring;
-  var retval: Boolean; var return: ustring): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnKeyEvent(const browser: ICefBrowser;
-  event: TCefHandlerKeyEventType; code, modifiers: Integer;
-  isSystemKey: Boolean): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnLoadEnd(const browser: ICefBrowser;
-  const frame: ICefFrame; httpStatusCode: Integer): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnLoadError(const browser: ICefBrowser;
-  const frame: ICefFrame; errorCode: TCefHandlerErrorcode; const failedUrl: ustring;
-  var errorText: ustring): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnLoadStart(const browser: ICefBrowser;
-  const frame: ICefFrame): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnMenuAction(const browser: ICefBrowser;
-  menuId: TCefHandlerMenuId): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnNavStateChange(const browser: ICefBrowser;
-  canGoBack, canGoForward: Boolean): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnPaint(const browser: ICefBrowser;
-  typ: TCefPaintElementType; const dirtyRect: PCefRect;
-  const buffer: Pointer): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnPopupChange(const browser: ICefBrowser;
-  show: Boolean; const rect: PCefRect): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnPrintHeaderFooter(const browser: ICefBrowser;
-  const frame: ICefFrame; printInfo: PCefPrintInfo; const url, title: ustring;
-  currentPage, maxPages: Integer; var topLeft, topCenter, topRight, bottomLeft,
-  bottomCenter, bottomRight: ustring): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnPrintOptions(const browser: ICefBrowser;
-  printOptions: PCefPrintOptions): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnProtocolExecution(const browser: ICefBrowser;
-  const url: ustring; var AllowOsExecution: Boolean): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnSetFocus(const browser: ICefBrowser;
-  isWidget: Boolean): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnStatus(const browser: ICefBrowser;
-  const value: ustring; StatusType: TCefHandlerStatusType): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnTakeFocus(const browser: ICefBrowser;
-  reverse: Integer): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnTitleChange(const browser: ICefBrowser;
-  const title: ustring): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
-function TCefHandlerOwn.doOnTooltip(const browser: ICefBrowser;
-  var text: ustring): TCefRetval;
-begin
-  Result := RV_CONTINUE;
-end;
-
 { TCefBaseRef }
 
 constructor TCefBaseRef.Create(data: Pointer);
@@ -5350,9 +5580,9 @@ begin
   end;
 end;
 
-function TCefBrowserRef.GetHandler: ICefBase;
+function TCefBrowserRef.GetClient: ICefBase;
 begin
-  Result := TInterfacedObject(CefGetObject(PCefBrowser(FData)^.get_handler(PCefBrowser(FData)))) as ICefBase;
+  Result := TCefBaseRef.UnWrap(PCefBrowser(FData)^.get_client(PCefBrowser(FData)));
 end;
 
 function TCefBrowserRef.GetImage(typ: TCefPaintElementType; width,
@@ -5366,13 +5596,18 @@ begin
   Result := TCefFrameRef.UnWrap(PCefBrowser(FData)^.get_main_frame(PCefBrowser(FData)))
 end;
 
+function TCefBrowserRef.GetOpenerWindowHandle: TCefWindowHandle;
+begin
+  Result := PCefBrowser(FData)^.get_opener_window_handle(PCefBrowser(FData));
+end;
+
 function TCefBrowserRef.GetSize(typ: TCefPaintElementType; var width,
   height: Integer): Boolean;
 begin
   Result := PCefBrowser(FData)^.get_size(PCefBrowser(FData), typ, @width, @height) <> 0;
 end;
 
-function TCefBrowserRef.GetWindowHandle: CefWindowHandle;
+function TCefBrowserRef.GetWindowHandle: TCefWindowHandle;
 begin
   Result := PCefBrowser(FData)^.get_window_handle(PCefBrowser(FData));
 end;
@@ -6193,7 +6428,12 @@ begin
     cef_do_message_loop_work := GetProcAddress(LibHandle, 'cef_do_message_loop_work');
     cef_run_message_loop := GetProcAddress(LibHandle, 'cef_run_message_loop');
     cef_register_extension := GetProcAddress(LibHandle, 'cef_register_extension');
-    cef_register_scheme := GetProcAddress(LibHandle, 'cef_register_scheme');
+    cef_register_custom_scheme := GetProcAddress(LibHandle, 'cef_register_custom_scheme');
+    cef_register_scheme_handler_factory := GetProcAddress(LibHandle, 'cef_register_scheme_handler_factory');
+    cef_clear_scheme_handler_factories := GetProcAddress(LibHandle, 'cef_clear_scheme_handler_factories');
+    cef_add_cross_origin_whitelist_entry := GetProcAddress(LibHandle, 'cef_add_cross_origin_whitelist_entry');
+    cef_remove_cross_origin_whitelist_entry := GetProcAddress(LibHandle, 'cef_remove_cross_origin_whitelist_entry');
+    cef_clear_cross_origin_whitelist := GetProcAddress(LibHandle, 'cef_clear_cross_origin_whitelist');
     cef_currently_on := GetProcAddress(LibHandle, 'cef_currently_on');
     cef_post_task := GetProcAddress(LibHandle, 'cef_post_task');
     cef_post_delayed_task := GetProcAddress(LibHandle, 'cef_post_delayed_task');
@@ -6220,6 +6460,7 @@ begin
     cef_v8value_create_bool := GetProcAddress(LibHandle, 'cef_v8value_create_bool');
     cef_v8value_create_int := GetProcAddress(LibHandle, 'cef_v8value_create_int');
     cef_v8value_create_double := GetProcAddress(LibHandle, 'cef_v8value_create_double');
+    cef_v8value_create_date := GetProcAddress(LibHandle, 'cef_v8value_create_date');
     cef_v8value_create_string := GetProcAddress(LibHandle, 'cef_v8value_create_string');
     cef_v8value_create_object := GetProcAddress(LibHandle, 'cef_v8value_create_object');
     cef_v8value_create_object_with_accessor := GetProcAddress(LibHandle, 'cef_v8value_create_object_with_accessor');
@@ -6274,7 +6515,12 @@ begin
       Assigned(cef_do_message_loop_work) and
       Assigned(cef_run_message_loop) and
       Assigned(cef_register_extension) and
-      Assigned(cef_register_scheme) and
+      Assigned(cef_register_custom_scheme) and
+      Assigned(cef_register_scheme_handler_factory) and
+      Assigned(cef_clear_scheme_handler_factories) and
+      Assigned(cef_add_cross_origin_whitelist_entry) and
+      Assigned(cef_remove_cross_origin_whitelist_entry) and
+      Assigned(cef_clear_cross_origin_whitelist) and
       Assigned(cef_currently_on) and
       Assigned(cef_post_task) and
       Assigned(cef_post_delayed_task) and
@@ -6297,6 +6543,7 @@ begin
       Assigned(cef_v8value_create_bool) and
       Assigned(cef_v8value_create_int) and
       Assigned(cef_v8value_create_double) and
+      Assigned(cef_v8value_create_date) and
       Assigned(cef_v8value_create_string) and
       Assigned(cef_v8value_create_object) and
       Assigned(cef_v8value_create_object_with_accessor) and
@@ -6336,14 +6583,14 @@ begin
     end;
     settings.log_file := CefString(LogFile);
     settings.log_severity := LogSeverity;
-    cef_initialize(@settings, nil);
+    cef_initialize(@settings);
     if settings.extra_plugin_paths <> nil then
       cef_string_list_free(settings.extra_plugin_paths);
   end;
 end;
 
-function CefBrowserCreate(windowInfo: PCefWindowInfo; popup: Boolean;
-  handler: PCefHandler; const url: ustring): Boolean;
+function CefBrowserCreate(windowInfo: PCefWindowInfo; client: PCefClient;
+  const url: ustring; const settings: PCefBrowserSettings): Boolean;
 var
   u: TCefString;
 begin
@@ -6352,13 +6599,13 @@ begin
   Result :=
     cef_browser_create(
       windowInfo,
-      Ord(popup),
-      handler,
-      @u) <> 0;
+      client,
+      @u,
+      settings) <> 0;
 end;
 
-function CefBrowserCreateSync(windowInfo: PCefWindowInfo; popup: Boolean;
-  handler: PCefHandler; const url: ustring): ICefBrowser;
+function CefBrowserCreateSync(windowInfo: PCefWindowInfo; client: PCefClient;
+  const url: ustring; const settings: PCefBrowserSettings): ICefBrowser;
 var
   u: TCefString;
 begin
@@ -6367,9 +6614,9 @@ begin
   Result := TCefBrowserRef.UnWrap(
     cef_browser_create_sync(
       windowInfo,
-      Ord(popup),
-      handler,
-      @u));
+      client,
+      @u,
+      settings));
 end;
 
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
@@ -6451,19 +6698,66 @@ begin
     cef_string_clear(str);
 end;
 
-function CefRegisterScheme(const SchemeName, HostName: ustring;
-  isStandard, SyncMainThread: Boolean; const handler: TCefSchemeHandlerClass): Boolean;
+function CefRegisterSchemeHandlerFactory(const SchemeName, HostName: ustring;
+  SyncMainThread: Boolean; const handler: TCefSchemeHandlerClass): Boolean;
 var
   s, h: TCefString;
 begin
   CefLoadLibDefault;
   s := CefString(SchemeName);
   h := CefString(HostName);
-  Result := cef_register_scheme(
+  Result := cef_register_scheme_handler_factory(
     @s,
     @h,
-    Ord(isStandard),
     CefGetData(TCefSchemeHandlerFactoryOwn.Create(handler, SyncMainThread) as ICefBase)) <> 0;
+end;
+
+function CefClearSchemeHandlerFactories: Boolean;
+begin
+  CefLoadLibDefault;
+  Result := cef_clear_scheme_handler_factories <> 0;
+end;
+
+function CefRegisterCustomScheme(const SchemeName: ustring; IsStandard,
+  IsLocal, IsDisplayIsolated: Boolean): Boolean;
+var
+  s: TCefString;
+begin
+  CefLoadLibDefault;
+  s := CefString(SchemeName);
+  Result := cef_register_custom_scheme(@s, Ord(IsStandard),
+    Ord(IsLocal), Ord(IsDisplayIsolated)) <> 0;
+end;
+
+function CefAddCrossOriginWhitelistEntry(const SourceOrigin, TargetProtocol,
+  TargetDomain: ustring; AllowTargetSubdomains: Boolean): Boolean;
+var
+  so, tp, td: TCefString;
+begin
+  CefLoadLibDefault;
+  so := CefString(SourceOrigin);
+  tp := CefString(TargetProtocol);
+  td := CefString(TargetDomain);
+  Result := cef_add_cross_origin_whitelist_entry(@so, @tp, @td, Ord(AllowTargetSubdomains)) <> 0;
+end;
+
+function CefRemoveCrossOriginWhitelistEntry(
+  const SourceOrigin, TargetProtocol, TargetDomain: ustring;
+  AllowTargetSubdomains: Boolean): Boolean;
+var
+  so, tp, td: TCefString;
+begin
+  CefLoadLibDefault;
+  so := CefString(SourceOrigin);
+  tp := CefString(TargetProtocol);
+  td := CefString(TargetDomain);
+  Result := cef_remove_cross_origin_whitelist_entry(@so, @tp, @td, Ord(AllowTargetSubdomains)) <> 0;
+end;
+
+function CefClearCrossOriginWhitelist: Boolean;
+begin
+  CefLoadLibDefault;
+  Result := cef_clear_cross_origin_whitelist <> 0;
 end;
 
 function CefRegisterExtension(const name, code: ustring;
@@ -6503,9 +6797,10 @@ begin
   FSyncMainThread := SyncMainThread;
 end;
 
-function TCefSchemeHandlerFactoryOwn.New: ICefSchemeHandler;
+function TCefSchemeHandlerFactoryOwn.New(const scheme: ustring;
+  const request: ICefRequest): ICefSchemeHandler;
 begin
-  Result := FClass.Create(FSyncMainThread) as ICefSchemeHandler;
+  Result := FClass.Create(FSyncMainThread, scheme, request) as ICefSchemeHandler;
 end;
 
 { TCefSchemeHandlerOwn }
@@ -6516,10 +6811,13 @@ begin
   FCancelled := True;
 end;
 
-constructor TCefSchemeHandlerOwn.Create(SyncMainThread: Boolean);
+constructor TCefSchemeHandlerOwn.Create(SyncMainThread: Boolean;
+  const scheme: ustring; const request: ICefRequest);
 begin
   inherited CreateData(SizeOf(TCefSchemeHandler));
   FCancelled := False;
+  FScheme := scheme;
+  FRequest := request;
   with PCefSchemeHandler(FData)^ do
   begin
     if SyncMainThread then
@@ -6558,6 +6856,14 @@ end;
 class function TCefv8ValueRef.CreateBool(value: Boolean): ICefv8Value;
 begin
   Result := UnWrap(cef_v8value_create_bool(Ord(value)));
+end;
+
+class function TCefv8ValueRef.CreateDate(value: TDateTime): ICefv8Value;
+var
+  dt: TCefTime;
+begin
+  dt := DateTimeToCefTime(value);
+  Result := UnWrap(cef_v8value_create_date(@dt));
 end;
 
 class function TCefv8ValueRef.CreateDouble(value: Double): ICefv8Value;
@@ -6687,6 +6993,11 @@ begin
   Result := PCefV8Value(FData)^.get_bool_value(PCefV8Value(FData)) <> 0;
 end;
 
+function TCefv8ValueRef.GetDateValue: TDateTime;
+begin
+  Result := CefTimeToDateTime(PCefV8Value(FData)^.get_date_value(PCefV8Value(FData)));
+end;
+
 function TCefv8ValueRef.GetDoubleValue: Double;
 begin
   Result := PCefV8Value(FData)^.get_double_value(PCefV8Value(FData));
@@ -6771,6 +7082,11 @@ end;
 function TCefv8ValueRef.IsBool: Boolean;
 begin
   Result := PCefV8Value(FData)^.is_bool(PCefV8Value(FData)) <> 0;
+end;
+
+function TCefv8ValueRef.IsDate: Boolean;
+begin
+  Result := PCefV8Value(FData)^.is_date(PCefV8Value(FData)) <> 0;
 end;
 
 function TCefv8ValueRef.IsDouble: Boolean;
@@ -7983,6 +8299,11 @@ function TCefRTTIExtension.GetValue(pi: PTypeInfo; const v: ICefv8Value; var ret
       end;
       TValue.Make(@sv, pi, ret);
     end else
+    if v.IsDate then
+    begin
+      sv.fd := v.GetDateValue;
+      TValue.Make(@sv, pi, ret);
+    end else
       Exit(False);
     Result := True;
   end;
@@ -8335,6 +8656,14 @@ function TCefRTTIExtension.SetValue(const v: TValue; var ret: ICefv8Value): Bool
     Result := True;
   end;
 
+  function ProcessFloat: Boolean;
+  begin
+    if v.TypeInfo = TypeInfo(TDateTime) then
+      ret := TCefv8ValueRef.CreateDate(TValueData(v).FAsDouble) else
+      ret := TCefv8ValueRef.CreateDouble(v.AsExtended);
+    Result := True;
+  end;
+
 begin
   case v.TypeInfo.Kind of
     tkUString, tkLString, tkWString, tkChar, tkWChar:
@@ -8344,7 +8673,7 @@ begin
       if v.TypeInfo = TypeInfo(Boolean) then
         ret := TCefv8ValueRef.CreateBool(v.AsBoolean) else
         ret := TCefv8ValueRef.CreateInt(TValueData(v).FAsSLong);
-    tkFloat: ret := TCefv8ValueRef.CreateDouble(v.AsExtended);
+    tkFloat: if not ProcessFloat then Exit(False);
     tkInt64: ret := TCefv8ValueRef.CreateInt(v.AsInt64);
     tkClass: if not ProcessObject then Exit(False);
     tkClassRef: if not ProcessClass then Exit(False);
@@ -8627,14 +8956,519 @@ begin
     creation, lastAccess, expires, count, total, deleteCookie);
 end;
 
+{ TCefClientOwn }
+
+constructor TCefClientOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefClient));
+  with PCefClient(FData)^ do
+  begin
+    get_life_span_handler := @cef_client_get_life_span_handler;
+    get_load_handler := @cef_client_get_load_handler;
+    get_request_handler := @cef_client_get_request_handler;
+    get_display_handler := @cef_client_get_display_handler;
+    get_focus_handler := @cef_client_get_focus_handler;
+    get_keyboard_handler := @cef_client_get_keyboard_handler;
+    get_menu_handler := @cef_client_get_menu_handler;
+    get_print_handler := @cef_client_get_print_handler;
+    get_find_handler := @cef_client_get_find_handler;
+    get_jsdialog_handler := @cef_client_get_jsdialog_handler;
+    get_jsbinding_handler := @cef_client_get_jsbinding_handler;
+    get_render_handler := @cef_client_get_render_handler;
+  end;
+end;
+
+function TCefClientOwn.GetDisplayHandler: ICefBase;
+begin
+  Result := nil;
+end;
+
+function TCefClientOwn.GetFindHandler: ICefBase;
+begin
+  Result := nil;
+end;
+
+function TCefClientOwn.GetFocusHandler: ICefBase;
+begin
+  Result := nil;
+end;
+
+function TCefClientOwn.GetJsbindingHandler: ICefBase;
+begin
+  Result := nil;
+end;
+
+function TCefClientOwn.GetJsdialogHandler: ICefBase;
+begin
+  Result := nil;
+end;
+
+function TCefClientOwn.GetKeyboardHandler: ICefBase;
+begin
+  Result := nil;
+end;
+
+function TCefClientOwn.GetLifeSpanHandler: ICefBase;
+begin
+  Result := nil;
+end;
+
+function TCefClientOwn.GetLoadHandler: ICefBase;
+begin
+  Result := nil;
+end;
+
+function TCefClientOwn.GetMenuHandler: ICefBase;
+begin
+  Result := nil;
+end;
+
+function TCefClientOwn.GetPrintHandler: ICefBase;
+begin
+  Result := nil;
+end;
+
+function TCefClientOwn.GetRenderHandler: ICefBase;
+begin
+  Result := nil;
+end;
+
+function TCefClientOwn.GetRequestHandler: ICefBase;
+begin
+  Result := nil;
+end;
+
+{ TCefLifeSpanHandlerOwn }
+
+constructor TCefLifeSpanHandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefLifeSpanHandler));
+  with PCefLifeSpanHandler(FData)^ do
+  begin
+    on_before_popup := @cef_life_span_handler_on_before_popup;
+    on_after_created := @cef_life_span_handler_on_after_created;
+    on_before_close := @cef_life_span_handler_on_before_close;
+    run_modal := @cef_life_span_handler_run_modal;
+    quit_modal := @cef_life_span_handler_quit_modal;
+  end;
+end;
+
+procedure TCefLifeSpanHandlerOwn.OnAfterCreated(const browser: ICefBrowser);
+begin
+
+end;
+
+procedure TCefLifeSpanHandlerOwn.OnBeforeClose(const browser: ICefBrowser);
+begin
+
+end;
+
+function TCefLifeSpanHandlerOwn.OnBeforePopup(const parentBrowser: ICefBrowser;
+  var popupFeatures: TCefPopupFeatures; var windowInfo: TCefWindowInfo;
+  var url: ustring; var client: ICefBase;
+  var settings: TCefBrowserSettings): Boolean;
+begin
+  Result := False;
+end;
+
+procedure TCefLifeSpanHandlerOwn.QuitModal(const browser: ICefBrowser);
+begin
+
+end;
+
+function TCefLifeSpanHandlerOwn.RunModal(const browser: ICefBrowser): Boolean;
+begin
+  Result := False;
+end;
+
+
+{ TCefLoadHandlerOwn }
+
+constructor TCefLoadHandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefLoadHandler));
+  with PCefLoadHandler(FData)^ do
+  begin
+    on_load_start := @cef_load_handler_on_load_start;
+    on_load_end := @cef_load_handler_on_load_end;
+    on_load_error := @cef_load_handler_on_load_error;
+  end;
+end;
+
+procedure TCefLoadHandlerOwn.OnLoadEnd(const browser: ICefBrowser;
+  const frame: ICefFrame; httpStatusCode: Integer);
+begin
+
+end;
+
+function TCefLoadHandlerOwn.OnLoadError(const browser: ICefBrowser;
+  const frame: ICefFrame; errorCode: TCefHandlerErrorcode; const failedUrl: ustring;
+  var errorText: ustring): Boolean;
+begin
+  Result := False;
+end;
+
+procedure TCefLoadHandlerOwn.OnLoadStart(const browser: ICefBrowser;
+  const frame: ICefFrame);
+begin
+
+end;
+
+{ TCefContentFilterOwn }
+
+constructor TCefContentFilterOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefContentFilter));
+  with PCefContentFilter(FData)^ do
+  begin
+    process_data := @cef_content_filter_process_data;
+    drain := @cef_content_filter_drain;
+  end;
+end;
+
+procedure TCefContentFilterOwn.Drain(var remainder: ICefStreamReader);
+begin
+
+end;
+
+procedure TCefContentFilterOwn.ProcessData(const Data: Pointer; Size: Integer;
+  var SubstituteData: ICefStreamReader);
+begin
+
+end;
+
+{ TCefRequestHandlerOwn }
+
+constructor TCefRequestHandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefRequestHandler));
+  with PCefRequestHandler(FData)^ do
+  begin
+    on_before_browse := @cef_request_handler_on_before_browse;
+    on_before_resource_load := @cef_request_handler_on_before_resource_load;
+    on_resource_reponse := @cef_request_handler_on_resource_reponse;
+    on_protocol_execution := @cef_request_handler_on_protocol_execution;
+    get_download_handler := @cef_request_handler_get_download_handler;
+    get_auth_credentials := @cef_request_handler_get_auth_credentials;
+  end;
+
+end;
+
+function TCefRequestHandlerOwn.GetAuthCredentials(const browser: ICefBrowser;
+  isProxy: Boolean; const host, realm, scheme: ustring; var username,
+  password: ustring): Boolean;
+begin
+  Result := False;
+end;
+
+function TCefRequestHandlerOwn.GetDownloadHandler(const browser: ICefBrowser;
+  const mimeType, fileName: ustring; contentLength: int64;
+  var handler: ICefDownloadHandler): Boolean;
+begin
+  Result := False;
+end;
+
+function TCefRequestHandlerOwn.OnBeforeBrowse(const browser: ICefBrowser;
+  const frame: ICefFrame; const request: ICefRequest;
+  navType: TCefHandlerNavtype; isRedirect: Boolean): Boolean;
+begin
+  Result := False;
+end;
+
+function TCefRequestHandlerOwn.OnBeforeResourceLoad(const browser: ICefBrowser;
+  const request: ICefRequest; var redirectUrl: ustring;
+  var resourceStream: ICefStreamReader; const response: ICefResponse;
+  loadFlags: Integer): Boolean;
+begin
+  Result := False;
+end;
+
+function TCefRequestHandlerOwn.OnProtocolExecution(const browser: ICefBrowser;
+  const url: ustring; var allowOSExecution: Boolean): Boolean;
+begin
+  Result := False;
+end;
+
+procedure TCefRequestHandlerOwn.OnResourceResponse(const browser: ICefBrowser;
+  const url: ustring; const response: ICefResponse;
+  var filter: ICefBase);
+begin
+
+end;
+
+{ TCefDisplayHandlerOwn }
+
+constructor TCefDisplayHandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefDisplayHandler));
+  with PCefDisplayHandler(FData)^ do
+  begin
+    on_nav_state_change := @cef_display_handler_on_nav_state_change;
+    on_address_change := @cef_display_handler_on_address_change;
+    on_title_change := @cef_display_handler_on_title_change;
+    on_tooltip := @cef_display_handler_on_tooltip;
+    on_status_message := @cef_display_handler_on_status_message;
+  end;
+end;
+
+procedure TCefDisplayHandlerOwn.OnAddressChange(const browser: ICefBrowser;
+  const frame: ICefFrame; const url: ustring);
+begin
+
+end;
+
+function TCefDisplayHandlerOwn.OnConsoleMessage(const browser: ICefBrowser;
+  const message, source: ustring; line: Integer): Boolean;
+begin
+  Result := False;
+end;
+
+procedure TCefDisplayHandlerOwn.OnNavStateChange(const browser: ICefBrowser;
+  canGoBack, canGoForward: Boolean);
+begin
+
+end;
+
+procedure TCefDisplayHandlerOwn.OnStatusMessage(const browser: ICefBrowser;
+  const value: ustring; kind: TCefHandlerStatusType);
+begin
+
+end;
+
+procedure TCefDisplayHandlerOwn.OnTitleChange(const browser: ICefBrowser;
+  const title: ustring);
+begin
+
+end;
+
+function TCefDisplayHandlerOwn.OnTooltip(const browser: ICefBrowser;
+  var text: ustring): Boolean;
+begin
+  Result := False;
+end;
+
+{ TCefFocusHandlerOwn }
+
+constructor TCefFocusHandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefFocusHandler));
+  with PCefFocusHandler(FData)^ do
+  begin
+    on_take_focus := @cef_focus_handler_on_take_focus;
+    on_set_focus := @cef_focus_handler_on_set_focus;
+  end;
+end;
+
+function TCefFocusHandlerOwn.OnSetFocus(const browser: ICefBrowser;
+  isWidget: Boolean): Boolean;
+begin
+  Result := False;
+end;
+
+procedure TCefFocusHandlerOwn.OnTakeFocus(const browser: ICefBrowser;
+  next: Boolean);
+begin
+
+end;
+
+{ TCefKeyboardHandlerOwn }
+
+constructor TCefKeyboardHandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefKeyboardHandler));
+  with PCefKeyboardHandler(FData)^ do
+    on_key_event := @cef_keyboard_handler_on_key_event;
+end;
+
+function TCefKeyboardHandlerOwn.OnKeyEvent(const browser: ICefBrowser;
+  event: TCefHandlerKeyEventType; code, modifiers: Integer;
+  isSystemKey: Boolean): Boolean;
+begin
+  Result := False;
+end;
+
+{ TCefMenuHandlerOwn }
+
+constructor TCefMenuHandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefMenuHandler));
+  with PCefMenuHandler(FData)^ do
+  begin
+    on_before_menu := @cef_menu_handler_on_before_menu;
+    get_menu_label := @cef_menu_handler_get_menu_label;
+    on_menu_action := @cef_menu_handler_on_menu_action;
+  end;
+end;
+
+procedure TCefMenuHandlerOwn.GetMenuLabel(const browser: ICefBrowser;
+  menuId: TCefHandlerMenuId; var caption: ustring);
+begin
+
+end;
+
+function TCefMenuHandlerOwn.OnBeforeMenu(const browser: ICefBrowser;
+  const menuInfo: PCefHandlerMenuInfo): Boolean;
+begin
+  Result := False;
+end;
+
+function TCefMenuHandlerOwn.OnMenuAction(const browser: ICefBrowser;
+  menuId: TCefHandlerMenuId): Boolean;
+begin
+  Result := False;
+end;
+
+{ TCefPrintHandlerOwn }
+
+constructor TCefPrintHandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefPrintHandler));
+  with PCefPrintHandler(FData)^ do
+  begin
+    get_print_options := @cef_print_handler_get_print_options;
+    get_print_header_footer := @cef_print_handler_get_print_header_footer;
+  end;
+end;
+
+function TCefPrintHandlerOwn.GetPrintHeaderFooter(const browser: ICefBrowser;
+  const frame: ICefFrame; const printInfo: PCefPrintInfo; const url,
+  title: ustring; currentPage, maxPages: Integer; var topLeft, topCenter,
+  topRight, bottomLeft, bottomCenter, bottomRight: ustring): Boolean;
+begin
+  Result := False;
+end;
+
+function TCefPrintHandlerOwn.GetPrintOptions(const browser: ICefBrowser;
+  printOptions: PCefPrintOptions): Boolean;
+begin
+  Result := False;
+end;
+
+{ TCefFindHandlerOwn }
+
+constructor TCefFindHandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefFindHandler));
+  with PCefFindHandler(FData)^ do
+    on_find_result := @cef_find_handler_on_find_result;
+end;
+
+procedure TCefFindHandlerOwn.OnFindResult(const browser: ICefBrowser;
+  count: Integer; const selectionRect: PCefRect; identifier,
+  activeMatchOrdinal, finalUpdate: Boolean);
+begin
+
+end;
+
+{ TCefJsDialogHandlerOwn }
+
+constructor TCefJsDialogHandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefJsDialogHandler));
+  with PCefJsDialogHandler(FData)^ do
+  begin
+    on_jsalert := @cef_jsdialog_handler_on_jsalert;
+    on_jsconfirm := @cef_jsdialog_handler_on_jsconfirm;
+    on_jsprompt := @cef_jsdialog_handler_on_jsprompt;
+  end;
+end;
+
+function TCefJsDialogHandlerOwn.OnJsAlert(const browser: ICefBrowser;
+  const frame: ICefFrame; const message: ustring): Boolean;
+begin
+  Result := False;
+end;
+
+function TCefJsDialogHandlerOwn.OnJsConfirm(const browser: ICefBrowser;
+  const frame: ICefFrame; const message: ustring; var retval: Boolean): Boolean;
+begin
+  Result := False;
+end;
+
+function TCefJsDialogHandlerOwn.OnJsPrompt(const browser: ICefBrowser;
+  const frame: ICefFrame; const message, defaultValue: ustring;
+  var retval: Boolean; var return: ustring): Boolean;
+begin
+  Result := False;
+end;
+
+{ TCefJsBindingHandlerOwn }
+
+constructor TCefJsBindingHandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefJsBindingHandler));
+  with PCefJsBindingHandler(FData)^ do
+    on_jsbinding := @cef_jsbinding_handler_on_jsbinding;
+end;
+
+procedure TCefJsBindingHandlerOwn.OnJsBinding(const browser: ICefBrowser;
+  const frame: ICefFrame; const obj: ICefv8Value);
+begin
+
+end;
+
+{ TCefRenderHandlerOwn }
+
+constructor TCefRenderHandlerOwn.Create;
+begin
+
+end;
+
+function TCefRenderHandlerOwn.GetScreenPoint(const browser: ICefBrowser; viewX,
+  viewY: Integer; screenX, screenY: PInteger): Boolean;
+begin
+  Result := False;
+end;
+
+function TCefRenderHandlerOwn.GetScreenRect(const browser: ICefBrowser;
+  rect: PCefRect): Boolean;
+begin
+  Result := False;
+end;
+
+function TCefRenderHandlerOwn.GetViewRect(const browser: ICefBrowser;
+  rect: PCefRect): Boolean;
+begin
+  Result := False;
+end;
+
+procedure TCefRenderHandlerOwn.OnCursorChange(const browser: ICefBrowser;
+  cursor: TCefCursorHandle);
+begin
+
+end;
+
+procedure TCefRenderHandlerOwn.OnPaint(const browser: ICefBrowser;
+  kind: TCefPaintElementType; const dirtyRect: PCefRect; const buffer: Pointer);
+begin
+
+end;
+
+procedure TCefRenderHandlerOwn.OnPopupShow(const browser: ICefBrowser;
+  show: Boolean);
+begin
+
+end;
+
+procedure TCefRenderHandlerOwn.OnPopupSize(const browser: ICefBrowser;
+  const rect: PCefRect);
+begin
+
+end;
+
 initialization
   IsMultiThread := True;
 
 finalization
   if LibHandle <> 0 then
   begin
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+    // Work around: last chance to cleanup
+    PostQuitMessage(0);
+    cef_run_message_loop;
+{$ENDIF}
     cef_shutdown;
-    //FreeLibrary(LibHandle);
+    FreeLibrary(LibHandle);
   end;
 
 end.

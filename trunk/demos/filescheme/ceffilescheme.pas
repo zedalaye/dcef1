@@ -36,7 +36,7 @@ type
     function ReadResponse(DataOut: Pointer; BytesToRead: Integer;
       var BytesRead: Integer): Boolean; override;
   public
-    constructor Create(SyncMainThread: Boolean); override;
+    constructor Create(SyncMainThread: Boolean; const scheme: ustring; const request: ICefRequest); override;
     destructor Destroy; override;
   end;
 
@@ -221,9 +221,9 @@ end;
 
 { TFileScheme }
 
-constructor TFileScheme.Create(SyncMainThread: Boolean);
+constructor TFileScheme.Create(SyncMainThread: Boolean; const scheme: ustring; const request: ICefRequest);
 begin
-  inherited Create(SyncMainThread);
+  inherited;
   FDataStream := nil;
 end;
 
@@ -291,7 +291,7 @@ begin
     end;
     if response.MimeType = '' then
       response.MimeType := 'application/octet-stream';
-    FDataStream := TFileStream.Create(FPath, fmOpenRead);
+    FDataStream := TFileStream.Create(FPath, fmOpenRead or fmShareDenyNone);
   end else
   if DirectoryExists(FPath) then
   begin
