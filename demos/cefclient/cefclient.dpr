@@ -15,18 +15,38 @@ uses
   ceffilescheme in '..\filescheme\ceffilescheme.pas';
 
 type
-  THandler = class(TCefHandlerOwn)
+  TCustomClient = class(TCefClientOwn)
+  private
+    FLifeSpan: ICefBase;
+    FLoad: ICefBase;
+    FDisplay: ICefBase;
   protected
-    function doOnAfterCreated(const browser: ICefBrowser): TCefRetval; override;
-    function doOnTitleChange(const browser: ICefBrowser;
-      const title: ustring): TCefRetval; override;
-    function doOnAddressChange(const browser: ICefBrowser;
-      const frame: ICefFrame; const url: ustring): TCefRetval; override;
-    function doOnLoadStart(const browser: ICefBrowser;
-      const frame: ICefFrame): TCefRetval; override;
-    function doOnLoadEnd(const browser: ICefBrowser;
-      const frame: ICefFrame; httpStatusCode: Integer): TCefRetval; override;
+    function GetLifeSpanHandler: ICefBase; override;
+    function GetLoadHandler: ICefBase; override;
+    function GetDisplayHandler: ICefBase; override;
+  public
+    constructor Create; override;
   end;
+
+  TCustomLifeSpan = class(TCefLifeSpanHandlerOwn)
+  protected
+    procedure OnAfterCreated(const browser: ICefBrowser); override;
+  end;
+
+  TCustomLoad = class(TCefLoadHandlerOwn)
+  protected
+    procedure OnLoadStart(const browser: ICefBrowser; const frame: ICefFrame); override;
+    procedure OnLoadEnd(const browser: ICefBrowser; const frame: ICefFrame;
+      httpStatusCode: Integer); override;
+  end;
+
+  TCustomDisplay = class(TCefDisplayHandlerOwn)
+  protected
+    procedure OnAddressChange(const browser: ICefBrowser;
+      const frame: ICefFrame; const url: ustring); override;
+    procedure OnTitleChange(const browser: ICefBrowser; const title: ustring); override;
+  end;
+
 
   TScheme = class(TCefSchemeHandlerOwn)
   private
@@ -38,7 +58,8 @@ type
     function ReadResponse(DataOut: Pointer; BytesToRead: Integer;
       var BytesRead: Integer): Boolean; override;
   public
-    constructor Create(SyncMainThread: Boolean); override;
+    constructor Create(SyncMainThread: Boolean;
+      const scheme: ustring; const request: ICefRequest); override;
     destructor Destroy; override;
   end;
 
@@ -120,7 +141,7 @@ begin
         end;
       WM_CREATE:
         begin
-          handl := THandler.Create;
+          handl := TCustomClient.Create;
           x := 0;
           GetClientRect(Wnd, rect);
 
@@ -169,7 +190,7 @@ begin
           info.y := rect.top;
           info.Width := rect.right - rect.left;
           info.Height := rect.bottom - rect.top;
-          CefBrowserCreate(@info, False, handl.Wrap, navigateto);
+          CefBrowserCreate(@info, handl.Wrap, navigateto, nil);
           isLoading := False;
           canGoBack := False;
           canGoForward := False;
@@ -240,90 +261,96 @@ begin
           end;
           result := DefWindowProc(Wnd, message, wParam, lParam);
         end;
+      WM_CLOSE:
+        begin
+          SendMessage(browsrHwnd, WM_CLOSE, 0, 0);
+          result := DefWindowProc(Wnd, message, wParam, lParam);
+        end
      else
        result := DefWindowProc(Wnd, message, wParam, lParam);
      end;
 end;
 
-{ THandler }
 
-function THandler.doOnAddressChange(const browser: ICefBrowser;
-  const frame: ICefFrame; const url: ustring): TCefRetval;
+{ TCustomClient }
+
+constructor TCustomClient.Create;
 begin
-  Lock;
-  try
-    if (browser.GetWindowHandle = browsrHwnd) and frame.IsMain then
-      SetWindowTextW(editWnd, PWideChar(url));
-    Result := RV_CONTINUE;
-  finally
-    Unlock;
+  inherited;
+  FLifeSpan := TCustomLifeSpan.Create;
+  FLoad := TCustomLoad.Create;
+  FDisplay := TCustomDisplay.Create;
+end;
+
+function TCustomClient.GetDisplayHandler: ICefBase;
+begin
+  Result := FDisplay;
+end;
+
+function TCustomClient.GetLifeSpanHandler: ICefBase;
+begin
+  Result := FLifeSpan;
+end;
+
+function TCustomClient.GetLoadHandler: ICefBase;
+begin
+  Result := FLoad;
+end;
+
+{ TCustomLifeSpan }
+
+procedure TCustomLifeSpan.OnAfterCreated(const browser: ICefBrowser);
+begin
+  if not browser.IsPopup then
+  begin
+    // get the first browser
+    brows := browser;
+    browsrHwnd := brows.GetWindowHandle;
   end;
 end;
 
-function THandler.doOnAfterCreated(const browser: ICefBrowser): TCefRetval;
+{ TCustomLoad }
+
+procedure TCustomLoad.OnLoadEnd(const browser: ICefBrowser;
+  const frame: ICefFrame; httpStatusCode: Integer);
 begin
-  Lock;
-  try
-    if not browser.IsPopup then
-    begin
-      // get the first browser
-      brows := browser;
-      browsrHwnd := brows.GetWindowHandle;
-    end;
-  finally
-    Unlock;
-  end;
-  Result := RV_CONTINUE;
+  if browser.GetWindowHandle = browsrHwnd then
+    isLoading := False;
 end;
 
-function THandler.doOnLoadEnd(const browser: ICefBrowser;
-  const frame: ICefFrame; httpStatusCode: Integer): TCefRetval;
+procedure TCustomLoad.OnLoadStart(const browser: ICefBrowser;
+  const frame: ICefFrame);
 begin
-  Lock;
-  try
-    if browser.GetWindowHandle = browsrHwnd then
-      isLoading := False;
-    Result := RV_CONTINUE;
-  finally
-    Unlock;
+  if browser.GetWindowHandle = browsrHwnd then
+  begin
+    isLoading := True;
+    canGoBack := browser.CanGoBack;
+    canGoForward := browser.CanGoForward;
   end;
 end;
 
-function THandler.doOnLoadStart(const browser: ICefBrowser;
-  const frame: ICefFrame): TCefRetval;
+{ TCustomDisplay }
+
+procedure TCustomDisplay.OnAddressChange(const browser: ICefBrowser;
+  const frame: ICefFrame; const url: ustring);
 begin
-  Lock;
-  try
-    if browser.GetWindowHandle = browsrHwnd then
-    begin
-      isLoading := True;
-      canGoBack := browser.CanGoBack;
-      canGoForward := browser.CanGoForward;
-    end;
-    Result := RV_CONTINUE;
-  finally
-    Unlock;
-  end;
+  if (browser.GetWindowHandle = browsrHwnd) and frame.IsMain then
+    SetWindowTextW(editWnd, PWideChar(url));
 end;
 
-function THandler.doOnTitleChange(const browser: ICefBrowser;
-  const title: ustring): TCefRetval;
+procedure TCustomDisplay.OnTitleChange(const browser: ICefBrowser;
+  const title: ustring);
 begin
-  Lock;
-  try
-    if browser.GetWindowHandle = browsrHwnd then
-      SetWindowTextW(Window, PWideChar(title));
-    Result := RV_CONTINUE;
-  finally
-    Unlock;
-  end;
+  if browser.GetWindowHandle = browsrHwnd then
+    SetWindowTextW(Window, PWideChar(title));
 end;
 
 { TScheme }
 
-constructor TScheme.Create(SyncMainThread: Boolean);
+constructor TScheme.Create(SyncMainThread: Boolean;
+  const scheme: ustring; const request: ICefRequest);
 begin
-  inherited Create(SyncMainThread);
+  inherited;
   FResponse := TMemoryStream.Create;
 end;
 
@@ -454,8 +481,13 @@ var
   wndClass : TWndClass;
 begin
   CefLoadLibDefault;
-  CefRegisterScheme('client', 'test', False, False, TScheme);
-  CefRegisterScheme('file', '', True, False, TFileScheme);
+
+  CefRegisterCustomScheme('client', True, False, False);
+  CefRegisterCustomScheme('file', True, False, False);
+
+  CefRegisterSchemeHandlerFactory('client', 'test', False, TScheme);
+  CefRegisterSchemeHandlerFactory('file', '', False, TFileScheme);
+
   CefRegisterExtension('v8/test', code, TExtension.Create as ICefV8Handler);
   //navigateto := 'client://test/';
   //navigateto := 'file://c:\';

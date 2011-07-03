@@ -70,8 +70,9 @@ object MainForm: TMainForm
     OnTitleChange = crmTitleChange
     OnLoadStart = crmLoadStart
     OnLoadEnd = crmLoadEnd
-    OnDownloadResponse = crmDownloadResponse
-    OnStatus = crmStatus
+    OnGetDownloadHandler = crmGetDownloadHandler
+    OnAuthCredentials = crmAuthCredentials
+    OnStatusMessage = crmStatusMessage
   end
   object edAddress: TEdit
     Left = 95
