@@ -351,34 +351,45 @@ type
 
     property OnBeforePopup;
     property OnAfterCreated;
-    property OnAddressChange;
-    property OnTitleChange;
-    property OnNavStateChange;
-    property OnBeforeBrowse;
+    property OnBeforeClose;
+    property OnQuitModal;
+    property OnRunModal;
+
     property OnLoadStart;
     property OnLoadEnd;
     property OnLoadError;
+
+    property OnAuthCredentials;
+    property OnGetDownloadHandler;
+    property OnBeforeBrowse;
     property OnBeforeResourceLoad;
+    property OnProtocolExecution;
+    property OnResourceResponse;
+
+    property OnAddressChange;
+    property OnConsoleMessage;
+    property OnNavStateChange;
+    property OnStatusMessage;
+    property OnTitleChange;
+    property OnTooltip;
+
+    property OnTakeFocus;
+    property OnSetFocus;
+
+    property OnKeyEvent;
+
     property OnBeforeMenu;
     property OnGetMenuLabel;
     property OnMenuAction;
+
     property OnPrintHeaderFooter;
+    property OnPrintOptions;
+
     property OnJsAlert;
     property OnJsConfirm;
     property OnJsPrompt;
-    property OnBeforeClose;
-    property OnTakeFocus;
-    property OnSetFocus;
-    property OnKeyEvent;
-    property OnPrintOptions;
     property OnJsBinding;
-    property OnTooltip;
     property OnFindResult;
-    property OnGetDownloadHandler;
-    property OnConsoleMessage;
-    property OnAuthCredentials;
-    property OnStatusMessage;
-    property OnProtocolExecution;
 
     property Options;
     property FontOptions;
