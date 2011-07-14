@@ -9208,6 +9208,7 @@ begin
     on_title_change := @cef_display_handler_on_title_change;
     on_tooltip := @cef_display_handler_on_tooltip;
     on_status_message := @cef_display_handler_on_status_message;
+    on_console_message := @cef_display_handler_on_console_message;
   end;
 end;
 
