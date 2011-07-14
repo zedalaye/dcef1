@@ -236,7 +236,7 @@ type
     function doOnAddressChange(const browser: ICefBrowser;
       const frame: ICefFrame; const url: ustring): Boolean; virtual;
     function doOnConsoleMessage(const browser: ICefBrowser; const message,
-      source: ustring; line: Integer): Boolean; stdcall;
+      source: ustring; line: Integer): Boolean; virtual;
     function doOnNavStateChange(const browser: ICefBrowser; canGoBack,
       canGoForward: Boolean): Boolean; virtual;
     function doOnStatusMessage(const browser: ICefBrowser; const value: ustring;
