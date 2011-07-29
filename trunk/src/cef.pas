@@ -337,6 +337,9 @@ type
   end;
 
   TChromium = class(TCustomChromium)
+  public
+    property BrowserHandle;
+    property Browser;
   published
     property Color;
     property Align;
@@ -346,8 +349,6 @@ type
     property TabOrder;
     property TabStop;
     property Visible;
-    property BrowserHandle;
-    property Browser;
 
     property OnBeforePopup;
     property OnAfterCreated;
