@@ -66,13 +66,13 @@ object MainForm: TMainForm
     Anchors = [akLeft, akTop, akRight, akBottom]
     DefaultUrl = 'http://www.google.com'
     TabOrder = 0
-    OnAddressChange = crmAddressChange
-    OnTitleChange = crmTitleChange
     OnLoadStart = crmLoadStart
     OnLoadEnd = crmLoadEnd
-    OnGetDownloadHandler = crmGetDownloadHandler
     OnAuthCredentials = crmAuthCredentials
+    OnGetDownloadHandler = crmGetDownloadHandler
+    OnAddressChange = crmAddressChange
     OnStatusMessage = crmStatusMessage
+    OnTitleChange = crmTitleChange
   end
   object edAddress: TEdit
     Left = 95

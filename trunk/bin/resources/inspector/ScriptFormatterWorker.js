@@ -2,107 +2,944 @@
 
 
 onmessage = function(event) {
-var source = event.data;
-var formattedSource = beautify(source);
-var mapping = buildMapping(source, formattedSource);
-postMessage({ formattedSource: formattedSource, mapping: mapping });
+var result = {};
+if (event.data.mimeType === "text/html") {
+var formatter = new HTMLScriptFormatter();
+result = formatter.format(event.data.content);
+} else {
+result.mapping = { original: [0], formatted: [0] };
+result.content = formatScript(event.data.content, result.mapping, 0, 0);
+}
+postMessage(result);
 };
 
-function beautify(source)
+function formatScript(content, mapping, offset, formattedOffset)
 {
-var ast = parse.parse(source);
-var beautifyOptions = {
-indent_level: 4,
-indent_start: 0,
-quote_keys: false,
-space_colon: false
-};
-return process.gen_code(ast, beautifyOptions);
+var formattedContent;
+try {
+var tokenizer = new Tokenizer(content);
+var builder = new FormattedContentBuilder(tokenizer.content(), mapping, offset, formattedOffset);
+var formatter = new JavaScriptFormatter(tokenizer, builder);
+formatter.format();
+formattedContent = builder.content();
+} catch (e) {
+formattedContent = content;
+}
+return formattedContent;
 }
 
-function buildMapping(source, formattedSource)
+WebInspector = {};
+
+
+
+WebInspector.SourceTokenizer = function()
 {
-var mapping = { original: [], formatted: [] };
-var lastCodePosition = 0;
-var regexp = /[\$\.\w]+|{|}/g;
-    while (true) {
-        var match = regexp.exec(formattedSource);
-        if (!match)
-            break;
-        var position = source.indexOf(match[0], lastCodePosition);
-        if (position === -1)
-            continue;
-        mapping.original.push(position);
-        mapping.formatted.push(match.index);
-        lastCodePosition = position + match[0].length;
-    }
-    return mapping;
 }
+
+WebInspector.SourceTokenizer.prototype = {
+set line(line) {
+this._line = line;
+},
+
+set condition(condition)
+{
+this._condition = condition;
+},
+
+get condition()
+{
+return this._condition;
+},
+
+getLexCondition: function()
+{
+return this.condition.lexCondition;
+},
+
+setLexCondition: function(lexCondition)
+{
+this.condition.lexCondition = lexCondition;
+},
+
+_charAt: function(cursor)
+{
+return cursor < this._line.length ? this._line.charAt(cursor) : "\n";
+}
+}
+
+
+WebInspector.SourceTokenizer.Registry = function() {
+this._tokenizers = {};
+this._tokenizerConstructors = {
+"text/css": "SourceCSSTokenizer",
+"text/html": "SourceHTMLTokenizer",
+"text/javascript": "SourceJavaScriptTokenizer"
+};
+}
+
+WebInspector.SourceTokenizer.Registry.getInstance = function()
+{
+if (!WebInspector.SourceTokenizer.Registry._instance)
+WebInspector.SourceTokenizer.Registry._instance = new WebInspector.SourceTokenizer.Registry();
+return WebInspector.SourceTokenizer.Registry._instance;
+}
+
+WebInspector.SourceTokenizer.Registry.prototype = {
+getTokenizer: function(mimeType)
+{
+if (!this._tokenizerConstructors[mimeType])
+return null;
+var tokenizerClass = this._tokenizerConstructors[mimeType];
+var tokenizer = this._tokenizers[tokenizerClass];
+if (!tokenizer) {
+tokenizer = new WebInspector[tokenizerClass]();
+this._tokenizers[tokenizerClass] = tokenizer;
+}
+return tokenizer;
+}
+}
+;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+WebInspector.SourceHTMLTokenizer = function()
+{
+WebInspector.SourceTokenizer.call(this);
+
+
+this._lexConditions = {
+INITIAL: 0,
+COMMENT: 1,
+DOCTYPE: 2,
+TAG: 3,
+DSTRING: 4,
+SSTRING: 5
+};
+this.case_INITIAL = 1000;
+this.case_COMMENT = 1001;
+this.case_DOCTYPE = 1002;
+this.case_TAG = 1003;
+this.case_DSTRING = 1004;
+this.case_SSTRING = 1005;
+
+this._parseConditions = {
+INITIAL: 0,
+ATTRIBUTE: 1,
+ATTRIBUTE_VALUE: 2,
+LINKIFY: 4,
+A_NODE: 8,
+SCRIPT: 16,
+STYLE: 32
+};
+
+this.condition = this.createInitialCondition();
+}
+
+WebInspector.SourceHTMLTokenizer.prototype = {
+createInitialCondition: function()
+{
+return { lexCondition: this._lexConditions.INITIAL, parseCondition: this._parseConditions.INITIAL };
+},
+
+set line(line) {
+if (this._condition.internalJavaScriptTokenizerCondition) {
+var match = /<\/script/i.exec(line);
+if (match) {
+this._internalJavaScriptTokenizer.line = line.substring(0, match.index);
+} else
+this._internalJavaScriptTokenizer.line = line;
+} else if (this._condition.internalCSSTokenizerCondition) {
+var match = /<\/style/i.exec(line);
+if (match) {
+this._internalCSSTokenizer.line = line.substring(0, match.index);
+} else
+this._internalCSSTokenizer.line = line;
+}
+this._line = line;
+},
+
+_isExpectingAttribute: function()
+{
+return this._condition.parseCondition & this._parseConditions.ATTRIBUTE;
+},
+
+_isExpectingAttributeValue: function()
+{
+return this._condition.parseCondition & this._parseConditions.ATTRIBUTE_VALUE;
+},
+
+_setExpectingAttribute: function()
+{
+if (this._isExpectingAttributeValue())
+this._condition.parseCondition ^= this._parseConditions.ATTRIBUTE_VALUE;
+this._condition.parseCondition |= this._parseConditions.ATTRIBUTE;
+},
+
+_setExpectingAttributeValue: function()
+{
+if (this._isExpectingAttribute())
+this._condition.parseCondition ^= this._parseConditions.ATTRIBUTE;
+this._condition.parseCondition |= this._parseConditions.ATTRIBUTE_VALUE;
+},
+
+_stringToken: function(cursor, stringEnds)
+{
+if (!this._isExpectingAttributeValue()) {
+this.tokenType = null;
+return cursor;
+}
+this.tokenType = this._attrValueTokenType();
+if (stringEnds)
+this._setExpectingAttribute();
+return cursor;
+},
+
+_attrValueTokenType: function()
+{
+if (this._condition.parseCondition & this._parseConditions.LINKIFY) {
+if (this._condition.parseCondition & this._parseConditions.A_NODE)
+return "html-external-link";
+return "html-resource-link";
+}
+return "html-attribute-value";
+},
+
+get _internalJavaScriptTokenizer()
+{
+return WebInspector.SourceTokenizer.Registry.getInstance().getTokenizer("text/javascript");
+},
+
+get _internalCSSTokenizer()
+{
+return WebInspector.SourceTokenizer.Registry.getInstance().getTokenizer("text/css");
+},
+
+scriptStarted: function(cursor)
+{
+this._condition.internalJavaScriptTokenizerCondition = this._internalJavaScriptTokenizer.createInitialCondition();
+},
+
+scriptEnded: function(cursor)
+{
+},
+
+styleSheetStarted: function(cursor)
+{
+this._condition.internalCSSTokenizerCondition = this._internalCSSTokenizer.createInitialCondition();
+},
+
+styleSheetEnded: function(cursor)
+{
+},
+
+nextToken: function(cursor)
+{
+if (this._condition.internalJavaScriptTokenizerCondition) {
+
+this.line = this._line;
+if (cursor !== this._internalJavaScriptTokenizer._line.length) {
+
+this._internalJavaScriptTokenizer.condition = this._condition.internalJavaScriptTokenizerCondition;
+var result = this._internalJavaScriptTokenizer.nextToken(cursor);
+this.tokenType = this._internalJavaScriptTokenizer.tokenType;
+this._condition.internalJavaScriptTokenizerCondition = this._internalJavaScriptTokenizer.condition;
+return result;
+} else if (cursor !== this._line.length)
+delete this._condition.internalJavaScriptTokenizerCondition;
+} else if (this._condition.internalCSSTokenizerCondition) {
+
+this.line = this._line;
+if (cursor !== this._internalCSSTokenizer._line.length) {
+
+this._internalCSSTokenizer.condition = this._condition.internalCSSTokenizerCondition;
+var result = this._internalCSSTokenizer.nextToken(cursor);
+this.tokenType = this._internalCSSTokenizer.tokenType;
+this._condition.internalCSSTokenizerCondition = this._internalCSSTokenizer.condition;
+return result;
+} else if (cursor !== this._line.length)
+delete this._condition.internalCSSTokenizerCondition;
+}
+
+var cursorOnEnter = cursor;
+var gotoCase = 1;
+while (1) {
+switch (gotoCase)
+
+
+{
+case 1: var yych;
+var yyaccept = 0;
+if (this.getLexCondition() < 3) {
+if (this.getLexCondition() < 1) {
+{ gotoCase = this.case_INITIAL; continue; };
+} else {
+if (this.getLexCondition() < 2) {
+{ gotoCase = this.case_COMMENT; continue; };
+} else {
+{ gotoCase = this.case_DOCTYPE; continue; };
+}
+}
+} else {
+if (this.getLexCondition() < 4) {
+{ gotoCase = this.case_TAG; continue; };
+} else {
+if (this.getLexCondition() < 5) {
+{ gotoCase = this.case_DSTRING; continue; };
+} else {
+{ gotoCase = this.case_SSTRING; continue; };
+}
+}
+}
+
+case this.case_COMMENT:
+
+yych = this._charAt(cursor);
+if (yych <= '\f') {
+if (yych == '\n') { gotoCase = 4; continue; };
+{ gotoCase = 3; continue; };
+} else {
+if (yych <= '\r') { gotoCase = 4; continue; };
+if (yych == '-') { gotoCase = 6; continue; };
+{ gotoCase = 3; continue; };
+}
+case 2:
+{ this.tokenType = "html-comment"; return cursor; }
+case 3:
+yyaccept = 0;
+yych = this._charAt(YYMARKER = ++cursor);
+{ gotoCase = 9; continue; };
+case 4:
+++cursor;
+case 5:
+{ this.tokenType = null; return cursor; }
+case 6:
+yyaccept = 1;
+yych = this._charAt(YYMARKER = ++cursor);
+if (yych != '-') { gotoCase = 5; continue; };
+case 7:
+++cursor;
+yych = this._charAt(cursor);
+if (yych == '>') { gotoCase = 10; continue; };
+case 8:
+yyaccept = 0;
+YYMARKER = ++cursor;
+yych = this._charAt(cursor);
+case 9:
+if (yych <= '\f') {
+if (yych == '\n') { gotoCase = 2; continue; };
+{ gotoCase = 8; continue; };
+} else {
+if (yych <= '\r') { gotoCase = 2; continue; };
+if (yych == '-') { gotoCase = 12; continue; };
+{ gotoCase = 8; continue; };
+}
+case 10:
+++cursor;
+this.setLexCondition(this._lexConditions.INITIAL);
+{ this.tokenType = "html-comment"; return cursor; }
+case 12:
+++cursor;
+yych = this._charAt(cursor);
+if (yych == '-') { gotoCase = 7; continue; };
+cursor = YYMARKER;
+if (yyaccept <= 0) {
+{ gotoCase = 2; continue; };
+} else {
+{ gotoCase = 5; continue; };
+}
+
+case this.case_DOCTYPE:
+yych = this._charAt(cursor);
+if (yych <= '\f') {
+if (yych == '\n') { gotoCase = 18; continue; };
+{ gotoCase = 17; continue; };
+} else {
+if (yych <= '\r') { gotoCase = 18; continue; };
+if (yych == '>') { gotoCase = 20; continue; };
+{ gotoCase = 17; continue; };
+}
+case 16:
+{ this.tokenType = "html-doctype"; return cursor; }
+case 17:
+yych = this._charAt(++cursor);
+{ gotoCase = 23; continue; };
+case 18:
+++cursor;
+{ this.tokenType = null; return cursor; }
+case 20:
+++cursor;
+this.setLexCondition(this._lexConditions.INITIAL);
+{ this.tokenType = "html-doctype"; return cursor; }
+case 22:
+++cursor;
+yych = this._charAt(cursor);
+case 23:
+if (yych <= '\f') {
+if (yych == '\n') { gotoCase = 16; continue; };
+{ gotoCase = 22; continue; };
+} else {
+if (yych <= '\r') { gotoCase = 16; continue; };
+if (yych == '>') { gotoCase = 16; continue; };
+{ gotoCase = 22; continue; };
+}
+
+case this.case_DSTRING:
+yych = this._charAt(cursor);
+if (yych <= '\f') {
+if (yych == '\n') { gotoCase = 28; continue; };
+{ gotoCase = 27; continue; };
+} else {
+if (yych <= '\r') { gotoCase = 28; continue; };
+if (yych == '"') { gotoCase = 30; continue; };
+{ gotoCase = 27; continue; };
+}
+case 26:
+{ return this._stringToken(cursor); }
+case 27:
+yych = this._charAt(++cursor);
+{ gotoCase = 34; continue; };
+case 28:
+++cursor;
+{ this.tokenType = null; return cursor; }
+case 30:
+++cursor;
+case 31:
+this.setLexCondition(this._lexConditions.TAG);
+{ return this._stringToken(cursor, true); }
+case 32:
+yych = this._charAt(++cursor);
+{ gotoCase = 31; continue; };
+case 33:
+++cursor;
+yych = this._charAt(cursor);
+case 34:
+if (yych <= '\f') {
+if (yych == '\n') { gotoCase = 26; continue; };
+{ gotoCase = 33; continue; };
+} else {
+if (yych <= '\r') { gotoCase = 26; continue; };
+if (yych == '"') { gotoCase = 32; continue; };
+{ gotoCase = 33; continue; };
+}
+
+case this.case_INITIAL:
+yych = this._charAt(cursor);
+if (yych == '<') { gotoCase = 39; continue; };
+++cursor;
+{ this.tokenType = null; return cursor; }
+case 39:
+yyaccept = 0;
+yych = this._charAt(YYMARKER = ++cursor);
+if (yych <= '/') {
+if (yych == '!') { gotoCase = 44; continue; };
+if (yych >= '/') { gotoCase = 41; continue; };
+} else {
+if (yych <= 'S') {
+if (yych >= 'S') { gotoCase = 42; continue; };
+} else {
+if (yych == 's') { gotoCase = 42; continue; };
+}
+}
+case 40:
+this.setLexCondition(this._lexConditions.TAG);
+{
+if (this._condition.parseCondition & (this._parseConditions.SCRIPT | this._parseConditions.STYLE)) {
+
+this.setLexCondition(this._lexConditions.INITIAL);
+this.tokenType = null;
+return cursor;
+}
+
+this._condition.parseCondition = this._parseConditions.INITIAL;
+this.tokenType = "html-tag";
+return cursor;
+}
+case 41:
+yyaccept = 0;
+yych = this._charAt(YYMARKER = ++cursor);
+if (yych == 'S') { gotoCase = 73; continue; };
+if (yych == 's') { gotoCase = 73; continue; };
+{ gotoCase = 40; continue; };
+case 42:
+yych = this._charAt(++cursor);
+if (yych <= 'T') {
+if (yych == 'C') { gotoCase = 62; continue; };
+if (yych >= 'T') { gotoCase = 63; continue; };
+} else {
+if (yych <= 'c') {
+if (yych >= 'c') { gotoCase = 62; continue; };
+} else {
+if (yych == 't') { gotoCase = 63; continue; };
+}
+}
+case 43:
+cursor = YYMARKER;
+{ gotoCase = 40; continue; };
+case 44:
+yych = this._charAt(++cursor);
+if (yych <= 'C') {
+if (yych != '-') { gotoCase = 43; continue; };
+} else {
+if (yych <= 'D') { gotoCase = 46; continue; };
+if (yych == 'd') { gotoCase = 46; continue; };
+{ gotoCase = 43; continue; };
+}
+yych = this._charAt(++cursor);
+if (yych == '-') { gotoCase = 54; continue; };
+{ gotoCase = 43; continue; };
+case 46:
+yych = this._charAt(++cursor);
+if (yych == 'O') { gotoCase = 47; continue; };
+if (yych != 'o') { gotoCase = 43; continue; };
+case 47:
+yych = this._charAt(++cursor);
+if (yych == 'C') { gotoCase = 48; continue; };
+if (yych != 'c') { gotoCase = 43; continue; };
+case 48:
+yych = this._charAt(++cursor);
+if (yych == 'T') { gotoCase = 49; continue; };
+if (yych != 't') { gotoCase = 43; continue; };
+case 49:
+yych = this._charAt(++cursor);
+if (yych == 'Y') { gotoCase = 50; continue; };
+if (yych != 'y') { gotoCase = 43; continue; };
+case 50:
+yych = this._charAt(++cursor);
+if (yych == 'P') { gotoCase = 51; continue; };
+if (yych != 'p') { gotoCase = 43; continue; };
+case 51:
+yych = this._charAt(++cursor);
+if (yych == 'E') { gotoCase = 52; continue; };
+if (yych != 'e') { gotoCase = 43; continue; };
+case 52:
+++cursor;
+this.setLexCondition(this._lexConditions.DOCTYPE);
+{ this.tokenType = "html-doctype"; return cursor; }
+case 54:
+++cursor;
+yych = this._charAt(cursor);
+if (yych <= '\f') {
+if (yych == '\n') { gotoCase = 57; continue; };
+{ gotoCase = 54; continue; };
+} else {
+if (yych <= '\r') { gotoCase = 57; continue; };
+if (yych != '-') { gotoCase = 54; continue; };
+}
+++cursor;
+yych = this._charAt(cursor);
+if (yych == '-') { gotoCase = 59; continue; };
+{ gotoCase = 43; continue; };
+case 57:
+++cursor;
+this.setLexCondition(this._lexConditions.COMMENT);
+{ this.tokenType = "html-comment"; return cursor; }
+case 59:
+++cursor;
+yych = this._charAt(cursor);
+if (yych != '>') { gotoCase = 54; continue; };
+++cursor;
+{ this.tokenType = "html-comment"; return cursor; }
+case 62:
+yych = this._charAt(++cursor);
+if (yych == 'R') { gotoCase = 68; continue; };
+if (yych == 'r') { gotoCase = 68; continue; };
+{ gotoCase = 43; continue; };
+case 63:
+yych = this._charAt(++cursor);
+if (yych == 'Y') { gotoCase = 64; continue; };
+if (yych != 'y') { gotoCase = 43; continue; };
+case 64:
+yych = this._charAt(++cursor);
+if (yych == 'L') { gotoCase = 65; continue; };
+if (yych != 'l') { gotoCase = 43; continue; };
+case 65:
+yych = this._charAt(++cursor);
+if (yych == 'E') { gotoCase = 66; continue; };
+if (yych != 'e') { gotoCase = 43; continue; };
+case 66:
+++cursor;
+this.setLexCondition(this._lexConditions.TAG);
+{
+if (this._condition.parseCondition & this._parseConditions.STYLE) {
+
+this.setLexCondition(this._lexConditions.INITIAL);
+this.tokenType = null;
+return cursor;
+}
+this.tokenType = "html-tag";
+this._condition.parseCondition = this._parseConditions.STYLE;
+this._setExpectingAttribute();
+return cursor;
+}
+case 68:
+yych = this._charAt(++cursor);
+if (yych == 'I') { gotoCase = 69; continue; };
+if (yych != 'i') { gotoCase = 43; continue; };
+case 69:
+yych = this._charAt(++cursor);
+if (yych == 'P') { gotoCase = 70; continue; };
+if (yych != 'p') { gotoCase = 43; continue; };
+case 70:
+yych = this._charAt(++cursor);
+if (yych == 'T') { gotoCase = 71; continue; };
+if (yych != 't') { gotoCase = 43; continue; };
+case 71:
+++cursor;
+this.setLexCondition(this._lexConditions.TAG);
+{
+if (this._condition.parseCondition & this._parseConditions.SCRIPT) {
+
+this.setLexCondition(this._lexConditions.INITIAL);
+this.tokenType = null;
+return cursor;
+}
+this.tokenType = "html-tag";
+this._condition.parseCondition = this._parseConditions.SCRIPT;
+this._setExpectingAttribute();
+return cursor;
+}
+case 73:
+yych = this._charAt(++cursor);
+if (yych <= 'T') {
+if (yych == 'C') { gotoCase = 75; continue; };
+if (yych <= 'S') { gotoCase = 43; continue; };
+} else {
+if (yych <= 'c') {
+if (yych <= 'b') { gotoCase = 43; continue; };
+{ gotoCase = 75; continue; };
+} else {
+if (yych != 't') { gotoCase = 43; continue; };
+}
+}
+yych = this._charAt(++cursor);
+if (yych == 'Y') { gotoCase = 81; continue; };
+if (yych == 'y') { gotoCase = 81; continue; };
+{ gotoCase = 43; continue; };
+case 75:
+yych = this._charAt(++cursor);
+if (yych == 'R') { gotoCase = 76; continue; };
+if (yych != 'r') { gotoCase = 43; continue; };
+case 76:
+yych = this._charAt(++cursor);
+if (yych == 'I') { gotoCase = 77; continue; };
+if (yych != 'i') { gotoCase = 43; continue; };
+case 77:
+yych = this._charAt(++cursor);
+if (yych == 'P') { gotoCase = 78; continue; };
+if (yych != 'p') { gotoCase = 43; continue; };
+case 78:
+yych = this._charAt(++cursor);
+if (yych == 'T') { gotoCase = 79; continue; };
+if (yych != 't') { gotoCase = 43; continue; };
+case 79:
+++cursor;
+this.setLexCondition(this._lexConditions.TAG);
+{
+this.tokenType = "html-tag";
+this._condition.parseCondition = this._parseConditions.INITIAL;
+this.scriptEnded(cursor - 8);
+return cursor;
+}
+case 81:
+yych = this._charAt(++cursor);
+if (yych == 'L') { gotoCase = 82; continue; };
+if (yych != 'l') { gotoCase = 43; continue; };
+case 82:
+yych = this._charAt(++cursor);
+if (yych == 'E') { gotoCase = 83; continue; };
+if (yych != 'e') { gotoCase = 43; continue; };
+case 83:
+++cursor;
+this.setLexCondition(this._lexConditions.TAG);
+{
+this.tokenType = "html-tag";
+this._condition.parseCondition = this._parseConditions.INITIAL;
+this.styleSheetEnded(cursor - 7);
+return cursor;
+}
+
+case this.case_SSTRING:
+yych = this._charAt(cursor);
+if (yych <= '\f') {
+if (yych == '\n') { gotoCase = 89; continue; };
+{ gotoCase = 88; continue; };
+} else {
+if (yych <= '\r') { gotoCase = 89; continue; };
+if (yych == '\'') { gotoCase = 91; continue; };
+{ gotoCase = 88; continue; };
+}
+case 87:
+{ return this._stringToken(cursor); }
+case 88:
+yych = this._charAt(++cursor);
+{ gotoCase = 95; continue; };
+case 89:
+++cursor;
+{ this.tokenType = null; return cursor; }
+case 91:
+++cursor;
+case 92:
+this.setLexCondition(this._lexConditions.TAG);
+{ return this._stringToken(cursor, true); }
+case 93:
+yych = this._charAt(++cursor);
+{ gotoCase = 92; continue; };
+case 94:
+++cursor;
+yych = this._charAt(cursor);
+case 95:
+if (yych <= '\f') {
+if (yych == '\n') { gotoCase = 87; continue; };
+{ gotoCase = 94; continue; };
+} else {
+if (yych <= '\r') { gotoCase = 87; continue; };
+if (yych == '\'') { gotoCase = 93; continue; };
+{ gotoCase = 94; continue; };
+}
+
+case this.case_TAG:
+yych = this._charAt(cursor);
+if (yych <= '&') {
+if (yych <= '\r') {
+if (yych == '\n') { gotoCase = 100; continue; };
+if (yych >= '\r') { gotoCase = 100; continue; };
+} else {
+if (yych <= ' ') {
+if (yych >= ' ') { gotoCase = 100; continue; };
+} else {
+if (yych == '"') { gotoCase = 102; continue; };
+}
+}
+} else {
+if (yych <= '>') {
+if (yych <= ';') {
+if (yych <= '\'') { gotoCase = 103; continue; };
+} else {
+if (yych <= '<') { gotoCase = 100; continue; };
+if (yych <= '=') { gotoCase = 104; continue; };
+{ gotoCase = 106; continue; };
+}
+} else {
+if (yych <= '[') {
+if (yych >= '[') { gotoCase = 100; continue; };
+} else {
+if (yych == ']') { gotoCase = 100; continue; };
+}
+}
+}
+++cursor;
+yych = this._charAt(cursor);
+{ gotoCase = 119; continue; };
+case 99:
+{
+if (this._condition.parseCondition === this._parseConditions.SCRIPT || this._condition.parseCondition === this._parseConditions.STYLE) {
+
+this.tokenType = null;
+return cursor;
+}
+
+if (this._condition.parseCondition === this._parseConditions.INITIAL) {
+this.tokenType = "html-tag";
+this._setExpectingAttribute();
+var token = this._line.substring(cursorOnEnter, cursor);
+if (token === "a")
+this._condition.parseCondition |= this._parseConditions.A_NODE;
+else if (this._condition.parseCondition & this._parseConditions.A_NODE)
+this._condition.parseCondition ^= this._parseConditions.A_NODE;
+} else if (this._isExpectingAttribute()) {
+var token = this._line.substring(cursorOnEnter, cursor);
+if (token === "href" || token === "src")
+this._condition.parseCondition |= this._parseConditions.LINKIFY;
+else if (this._condition.parseCondition |= this._parseConditions.LINKIFY)
+this._condition.parseCondition ^= this._parseConditions.LINKIFY;
+this.tokenType = "html-attribute-name";
+} else if (this._isExpectingAttributeValue())
+this.tokenType = this._attrValueTokenType();
+else
+this.tokenType = null;
+return cursor;
+}
+case 100:
+++cursor;
+{ this.tokenType = null; return cursor; }
+case 102:
+yyaccept = 0;
+yych = this._charAt(YYMARKER = ++cursor);
+{ gotoCase = 115; continue; };
+case 103:
+yyaccept = 0;
+yych = this._charAt(YYMARKER = ++cursor);
+{ gotoCase = 109; continue; };
+case 104:
+++cursor;
+{
+if (this._isExpectingAttribute())
+this._setExpectingAttributeValue();
+this.tokenType = null;
+return cursor;
+}
+case 106:
+++cursor;
+this.setLexCondition(this._lexConditions.INITIAL);
+{
+this.tokenType = "html-tag";
+if (this._condition.parseCondition & this._parseConditions.SCRIPT) {
+this.scriptStarted(cursor);
+
+return cursor;
+}
+
+if (this._condition.parseCondition & this._parseConditions.STYLE) {
+this.styleSheetStarted(cursor);
+
+return cursor;
+}
+
+this._condition.parseCondition = this._parseConditions.INITIAL;
+return cursor;
+}
+case 108:
+++cursor;
+yych = this._charAt(cursor);
+case 109:
+if (yych <= '\f') {
+if (yych != '\n') { gotoCase = 108; continue; };
+} else {
+if (yych <= '\r') { gotoCase = 110; continue; };
+if (yych == '\'') { gotoCase = 112; continue; };
+{ gotoCase = 108; continue; };
+}
+case 110:
+++cursor;
+this.setLexCondition(this._lexConditions.SSTRING);
+{ return this._stringToken(cursor); }
+case 112:
+++cursor;
+{ return this._stringToken(cursor, true); }
+case 114:
+++cursor;
+yych = this._charAt(cursor);
+case 115:
+if (yych <= '\f') {
+if (yych != '\n') { gotoCase = 114; continue; };
+} else {
+if (yych <= '\r') { gotoCase = 116; continue; };
+if (yych == '"') { gotoCase = 112; continue; };
+{ gotoCase = 114; continue; };
+}
+case 116:
+++cursor;
+this.setLexCondition(this._lexConditions.DSTRING);
+{ return this._stringToken(cursor); }
+case 118:
+++cursor;
+yych = this._charAt(cursor);
+case 119:
+if (yych <= '"') {
+if (yych <= '\r') {
+if (yych == '\n') { gotoCase = 99; continue; };
+if (yych <= '\f') { gotoCase = 118; continue; };
+{ gotoCase = 99; continue; };
+} else {
+if (yych == ' ') { gotoCase = 99; continue; };
+if (yych <= '!') { gotoCase = 118; continue; };
+{ gotoCase = 99; continue; };
+}
+} else {
+if (yych <= '>') {
+if (yych == '\'') { gotoCase = 99; continue; };
+if (yych <= ';') { gotoCase = 118; continue; };
+{ gotoCase = 99; continue; };
+} else {
+if (yych <= '[') {
+if (yych <= 'Z') { gotoCase = 118; continue; };
+{ gotoCase = 99; continue; };
+} else {
+if (yych == ']') { gotoCase = 99; continue; };
+{ gotoCase = 118; continue; };
+}
+}
+}
+}
+
+}
+}
+}
+
+WebInspector.SourceHTMLTokenizer.prototype.__proto__ = WebInspector.SourceTokenizer.prototype;
+;
+
+HTMLScriptFormatter = function()
+{
+WebInspector.SourceHTMLTokenizer.call(this);
+}
+
+HTMLScriptFormatter.prototype = {
+format: function(content)
+{
+this.line = content;
+this._content = content;
+this._formattedContent = "";
+this._mapping = { original: [0], formatted: [0] };
+this._position = 0;
+
+var cursor = 0;
+while (cursor < this._content.length)
+cursor = this.nextToken(cursor);
+
+this._formattedContent += this._content.substring(this._position);
+return { content: this._formattedContent, mapping: this._mapping };
+},
+
+scriptStarted: function(cursor)
+{
+this._formattedContent += this._content.substring(this._position, cursor);
+this._formattedContent += "\n";
+this._position = cursor;
+},
+
+scriptEnded: function(cursor)
+{
+if (cursor === this._position)
+return;
+
+var scriptContent = this._content.substring(this._position, cursor);
+var formattedScriptContent = formatScript(scriptContent, this._mapping, this._position, this._formattedContent.length);
+
+this._formattedContent += formattedScriptContent;
+this._position = cursor;
+},
+
+styleSheetStarted: function(cursor)
+{
+},
+
+styleSheetEnded: function(cursor)
+{
+}
+}
+
+HTMLScriptFormatter.prototype.__proto__ = WebInspector.SourceHTMLTokenizer.prototype;
 
 function require()
 {
-    return parse;
+return parse;
 }
 
 var exports = {};
-/***********************************************************************
 
-A JavaScript tokenizer / parser / beautifier / compressor.
-
-This version is suitable for Node.js.  With minimal changes (the
-exports stuff) it should work on any JS platform.
-
-This file contains the tokenizer/parser.  It is a port to JavaScript
-of parse-js [1], a JavaScript parser library written in Common Lisp
-by Marijn Haverbeke.  Thank you Marijn!
-
-[1] http:
-
-Exported functions:
-
-- tokenizer(code) -- returns a function.  Call the returned
-function to fetch the next token.
-
-- parse(code) -- returns an AST of the given JavaScript code.
-
--------------------------------- (C) ---------------------------------
-
-Author: Mihai Bazon
-<mihai.bazon@gmail.com>
-http:
-
-Distributed under the BSD license:
-
-Copyright 2010 (c) Mihai Bazon <mihai.bazon@gmail.com>
-Based on parse-js (http:
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions
-are met:
-
-* Redistributions of source code must retain the above
-copyright notice, this list of conditions and the following
-disclaimer.
-
-* Redistributions in binary form must reproduce the above
-copyright notice, this list of conditions and the following
-disclaimer in the documentation and/or other materials
-provided with the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER “AS IS” AND ANY
-EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
-OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
-TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
-THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
-SUCH DAMAGE.
-
-***********************************************************************/
 
 
 
@@ -1295,1436 +2132,878 @@ exports.is_identifier_char = is_identifier_char;
 ;
 var parse = exports;
 
-var exports = {};
 
 
-var jsp = require("./parse-js"),
-slice = jsp.slice,
-member = jsp.member,
-PRECEDENCE = jsp.PRECEDENCE,
-OPERATORS = jsp.OPERATORS;
+function FormattedContentBuilder(content, mapping, originalOffset, formattedOffset)
+{
+this._originalContent = content;
+this._originalOffset = originalOffset;
+this._lastOriginalPosition = 0;
 
+this._formattedContent = [];
+this._formattedContentLength = 0;
+this._formattedOffset = formattedOffset;
+this._lastFormattedPosition = 0;
 
+this._mapping = mapping;
 
-function ast_walker(ast) {
-function _vardefs(defs) {
-return [ this[0], MAP(defs, function(def){
-var a = [ def[0] ];
-if (def.length > 1)
-a[1] = walk(def[1]);
-return a;
-}) ];
-};
-var walkers = {
-"string": function(str) {
-return [ this[0], str ];
+this._lineNumber = 0;
+this._nestingLevelLevel = 0;
+}
+
+FormattedContentBuilder.prototype = {
+addToken: function(token)
+{
+for (var i = 0; i < token.comments_before.length; ++i)
+this._addComment(token.comments_before[i]);
+
+while (this._lineNumber < token.line) {
+this._addText("\n");
+this._addIndent();
+this._needNewLine = false;
+this._lineNumber += 1;
+}
+
+if (this._needNewLine) {
+this._addText("\n");
+this._addIndent();
+this._needNewLine = false;
+}
+
+this._addMappingIfNeeded(token.pos);
+this._addText(this._originalContent.substring(token.pos, token.endPos));
+this._lineNumber = token.endLine;
 },
-"num": function(num) {
-return [ this[0], num ];
+
+addSpace: function()
+{
+this._addText(" ");
 },
-"name": function(name) {
-return [ this[0], name ];
+
+addNewLine: function()
+{
+this._needNewLine = true;
 },
-"toplevel": function(statements) {
-return [ this[0], MAP(statements, walk) ];
+
+increaseNestingLevel: function()
+{
+this._nestingLevelLevel += 1;
 },
-"block": function(statements) {
-var out = [ this[0] ];
-if (statements != null)
-out.push(MAP(statements, walk));
-return out;
+
+decreaseNestingLevel: function()
+{
+this._nestingLevelLevel -= 1;
 },
-"var": _vardefs,
-"const": _vardefs,
-"try": function(t, c, f) {
-return [
-this[0],
-MAP(t, walk),
-c != null ? [ c[0], MAP(c[1], walk) ] : null,
-f != null ? MAP(f, walk) : null
+
+content: function()
+{
+return this._formattedContent.join("");
+},
+
+mapping: function()
+{
+return { original: this._originalPositions, formatted: this._formattedPositions };
+},
+
+_addIndent: function()
+{
+for (var i = 0; i < this._nestingLevelLevel * 4; ++i)
+this.addSpace();
+},
+
+_addComment: function(comment)
+{
+if (this._lineNumber < comment.line) {
+for (var j = this._lineNumber; j < comment.line; ++j)
+this._addText("\n");
+this._lineNumber = comment.line;
+this._needNewLine = false;
+this._addIndent();
+} else
+this.addSpace();
+
+this._addMappingIfNeeded(comment.pos);
+if (comment.type === "comment1")
+this._addText("//");
+else
+this._addText("/*");
+
+this._addText(comment.value);
+
+if (comment.type !== "comment1") {
+this._addText("*/");
+var position;
+while ((position = comment.value.indexOf("\n", position + 1)) !== -1)
+this._lineNumber += 1;
+}
+},
+
+_addText: function(text)
+{
+this._formattedContent.push(text);
+this._formattedContentLength += text.length;
+},
+
+_addMappingIfNeeded: function(originalPosition)
+{
+if (originalPosition - this._lastOriginalPosition === this._formattedContentLength - this._lastFormattedPosition)
+return;
+this._mapping.original.push(this._originalOffset + originalPosition);
+this._lastOriginalPosition = originalPosition;
+this._mapping.formatted.push(this._formattedOffset + this._formattedContentLength);
+this._lastFormattedPosition = this._formattedContentLength;
+}
+}
+
+var tokens = [
+["EOS"],
+["LPAREN", "("], ["RPAREN", ")"], ["LBRACK", "["], ["RBRACK", "]"], ["LBRACE", "{"], ["RBRACE", "}"], ["COLON", ":"], ["SEMICOLON", ";"], ["PERIOD", "."], ["CONDITIONAL", "?"],
+["INC", "++"], ["DEC", "--"],
+["ASSIGN", "="], ["ASSIGN_BIT_OR", "|="], ["ASSIGN_BIT_XOR", "^="], ["ASSIGN_BIT_AND", "&="], ["ASSIGN_SHL", "<<="], ["ASSIGN_SAR", ">>="], ["ASSIGN_SHR", ">>>="],
+["ASSIGN_ADD", "+="], ["ASSIGN_SUB", "-="], ["ASSIGN_MUL", "*="], ["ASSIGN_DIV", "/="], ["ASSIGN_MOD", "%="],
+["COMMA", ","], ["OR", "||"], ["AND", "&&"], ["BIT_OR", "|"], ["BIT_XOR", "^"], ["BIT_AND", "&"], ["SHL", "<<"], ["SAR", ">>"], ["SHR", ">>>"],
+["ADD", "+"], ["SUB", "-"], ["MUL", "*"], ["DIV", "/"], ["MOD", "%"],
+["EQ", "=="], ["NE", "!="], ["EQ_STRICT", "==="], ["NE_STRICT", "!=="], ["LT", "<"], ["GT", ">"], ["LTE", "<="], ["GTE", ">="],
+["INSTANCEOF", "instanceof"], ["IN", "in"], ["NOT", "!"], ["BIT_NOT", "~"], ["DELETE", "delete"], ["TYPEOF", "typeof"], ["VOID", "void"],
+["BREAK", "break"], ["CASE", "case"], ["CATCH", "catch"], ["CONTINUE", "continue"], ["DEBUGGER", "debugger"], ["DEFAULT", "default"], ["DO", "do"], ["ELSE", "else"], ["FINALLY", "finally"],
+["FOR", "for"], ["FUNCTION", "function"], ["IF", "if"], ["NEW", "new"], ["RETURN", "return"], ["SWITCH", "switch"], ["THIS", "this"], ["THROW", "throw"], ["TRY", "try"], ["VAR", "var"],
+["WHILE", "while"], ["WITH", "with"], ["NULL_LITERAL", "null"], ["TRUE_LITERAL", "true"], ["FALSE_LITERAL", "false"], ["NUMBER"], ["STRING"], ["IDENTIFIER"], ["CONST", "const"]
 ];
-},
-"throw": function(expr) {
-return [ this[0], walk(expr) ];
-},
-"new": function(ctor, args) {
-return [ this[0], walk(ctor), MAP(args, walk) ];
-},
-"switch": function(expr, body) {
-return [ this[0], walk(expr), MAP(body, function(branch){
-return [ branch[0] ? walk(branch[0]) : null,
-MAP(branch[1], walk) ];
-}) ];
-},
-"break": function(label) {
-return [ this[0], label ];
-},
-"continue": function(label) {
-return [ this[0], label ];
-},
-"conditional": function(cond, t, e) {
-return [ this[0], walk(cond), walk(t), walk(e) ];
-},
-"assign": function(op, lvalue, rvalue) {
-return [ this[0], op, walk(lvalue), walk(rvalue) ];
-},
-"dot": function(expr) {
-return [ this[0], walk(expr) ].concat(slice(arguments, 1));
-},
-"call": function(expr, args) {
-return [ this[0], walk(expr), MAP(args, walk) ];
-},
-"function": function(name, args, body) {
-return [ this[0], name, args.slice(), MAP(body, walk) ];
-},
-"defun": function(name, args, body) {
-return [ this[0], name, args.slice(), MAP(body, walk) ];
-},
-"if": function(conditional, t, e) {
-return [ this[0], walk(conditional), walk(t), walk(e) ];
-},
-"for": function(init, cond, step, block) {
-return [ this[0], walk(init), walk(cond), walk(step), walk(block) ];
-},
-"for-in": function(has_var, key, hash, block) {
-return [ this[0], has_var, key, walk(hash), walk(block) ];
-},
-"while": function(cond, block) {
-return [ this[0], walk(cond), walk(block) ];
-},
-"do": function(cond, block) {
-return [ this[0], walk(cond), walk(block) ];
-},
-"return": function(expr) {
-return [ this[0], walk(expr) ];
-},
-"binary": function(op, left, right) {
-return [ this[0], op, walk(left), walk(right) ];
-},
-"unary-prefix": function(op, expr) {
-return [ this[0], op, walk(expr) ];
-},
-"unary-postfix": function(op, expr) {
-return [ this[0], op, walk(expr) ];
-},
-"sub": function(expr, subscript) {
-return [ this[0], walk(expr), walk(subscript) ];
-},
-"object": function(props) {
-return [ this[0], MAP(props, function(p){
-return p.length == 2
-? [ p[0], walk(p[1]) ]
-: [ p[0], walk(p[1]), p[2] ]; 
-}) ];
-},
-"regexp": function(rx, mods) {
-return [ this[0], rx, mods ];
-},
-"array": function(elements) {
-return [ this[0], MAP(elements, walk) ];
-},
-"stat": function(stat) {
-return [ this[0], walk(stat) ];
-},
-"seq": function() {
-return [ this[0] ].concat(MAP(slice(arguments), walk));
-},
-"label": function(name, block) {
-return [ this[0], name, walk(block) ];
-},
-"with": function(expr, block) {
-return [ this[0], walk(expr), walk(block) ];
-},
-"atom": function(name) {
-return [ this[0], name ];
+
+var Tokens = {};
+for (var i = 0; i < tokens.length; ++i)
+Tokens[tokens[i][0]] = i;
+
+var TokensByValue = {};
+for (var i = 0; i < tokens.length; ++i) {
+if (tokens[i][1])
+TokensByValue[tokens[i][1]] = i;
 }
+
+var TokensByType = {
+"eof": Tokens.EOS,
+"name": Tokens.IDENTIFIER,
+"num": Tokens.NUMBER,
+"regexp": Tokens.DIV,
+"string": Tokens.STRING
 };
 
-var user = {};
-var stack = [];
-function walk(ast) {
-if (ast == null)
-return null;
-try {
-stack.push(ast);
-var type = ast[0];
-var gen = user[type];
-if (gen) {
-var ret = gen.apply(ast, ast.slice(1));
-if (ret != null)
-return ret;
+function Tokenizer(content)
+{
+this._readNextToken = parse.tokenizer(content);
+this._state = this._readNextToken.context();
 }
-gen = walkers[type];
-return gen.apply(ast, ast.slice(1));
-} finally {
-stack.pop();
-}
-};
 
-function with_walkers(walkers, cont){
-var save = {}, i;
-for (i in walkers) if (HOP(walkers, i)) {
-save[i] = user[i];
-user[i] = walkers[i];
-}
-var ret = cont();
-for (i in save) if (HOP(save, i)) {
-if (!save[i]) delete user[i];
-else user[i] = save[i];
-}
-return ret;
-};
-
-return {
-walk: walk,
-with_walkers: with_walkers,
-parent: function() {
-return stack[stack.length - 2]; 
+Tokenizer.prototype = {
+content: function()
+{
+return this._state.text;
 },
-stack: function() {
-return stack;
+
+next: function(forceRegexp)
+{
+var uglifyToken = this._readNextToken(forceRegexp);
+uglifyToken.endPos = this._state.pos;
+uglifyToken.endLine = this._state.line;
+uglifyToken.token = this._convertUglifyToken(uglifyToken);
+return uglifyToken;
+},
+
+_convertUglifyToken: function(uglifyToken)
+{
+var token = TokensByType[uglifyToken.type];
+if (typeof token === "number")
+return token;
+token = TokensByValue[uglifyToken.value];
+if (typeof token === "number")
+return token;
+throw "Unknown token type " + uglifyToken.type;
 }
-};
-};
-
-
-
-function Scope(parent) {
-this.names = {};        
-this.mangled = {};      
-this.rev_mangled = {};  
-this.cname = -1;        
-this.refs = {};         
-this.uses_with = false; 
-this.uses_eval = false; 
-this.parent = parent;   
-this.children = [];     
-if (parent) {
-this.level = parent.level + 1;
-parent.children.push(this);
-} else {
-this.level = 0;
 }
-};
 
-var base54 = (function(){
-var DIGITS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ$_";
-return function(num) {
-var ret = "";
+function JavaScriptFormatter(tokenizer, builder)
+{
+this._tokenizer = tokenizer;
+this._builder = builder;
+this._token = null;
+this._nextToken = this._tokenizer.next();
+}
+
+JavaScriptFormatter.prototype = {
+format: function()
+{
+this._parseSourceElements(Tokens.EOS);
+this._consume(Tokens.EOS);
+},
+
+_peek: function()
+{
+return this._nextToken.token;
+},
+
+_next: function()
+{
+if (this._token && this._token.token === Tokens.EOS)
+throw "Unexpected EOS token";
+
+this._builder.addToken(this._nextToken);
+this._token = this._nextToken;
+this._nextToken = this._tokenizer.next(this._forceRegexp);
+this._forceRegexp = false;
+return this._token.token;
+},
+
+_consume: function(token)
+{
+var next = this._next();
+if (next !== token)
+throw "Unexpected token in consume: expected " + token + ", actual " + next;
+},
+
+_expect: function(token)
+{
+var next = this._next();
+if (next !== token)
+throw "Unexpected token: expected " + token + ", actual " + next;
+},
+
+_expectSemicolon: function()
+{
+if (this._peek() === Tokens.SEMICOLON)
+this._consume(Tokens.SEMICOLON);
+},
+
+_hasLineTerminatorBeforeNext: function()
+{
+return this._nextToken.nlb;
+},
+
+_parseSourceElements: function(endToken)
+{
+while (this._peek() !== endToken) {
+this._parseStatement();
+this._builder.addNewLine();
+}
+},
+
+_parseStatementOrBlock: function()
+{
+if (this._peek() === Tokens.LBRACE) {
+this._builder.addSpace();
+this._parseBlock();
+return true;
+}
+
+this._builder.addNewLine();
+this._builder.increaseNestingLevel();
+this._parseStatement();
+this._builder.decreaseNestingLevel();
+},
+
+_parseStatement: function()
+{
+switch (this._peek()) {
+case Tokens.LBRACE:
+return this._parseBlock();
+case Tokens.CONST:
+case Tokens.VAR:
+return this._parseVariableStatement();
+case Tokens.SEMICOLON:
+return this._next();
+case Tokens.IF:
+return this._parseIfStatement();
+case Tokens.DO:
+return this._parseDoWhileStatement();
+case Tokens.WHILE:
+return this._parseWhileStatement();
+case Tokens.FOR:
+return this._parseForStatement();
+case Tokens.CONTINUE:
+return this._parseContinueStatement();
+case Tokens.BREAK:
+return this._parseBreakStatement();
+case Tokens.RETURN:
+return this._parseReturnStatement();
+case Tokens.WITH:
+return this._parseWithStatement();
+case Tokens.SWITCH:
+return this._parseSwitchStatement();
+case Tokens.THROW:
+return this._parseThrowStatement();
+case Tokens.TRY:
+return this._parseTryStatement();
+case Tokens.FUNCTION:
+return this._parseFunctionDeclaration();
+case Tokens.DEBUGGER:
+return this._parseDebuggerStatement();
+default:
+return this._parseExpressionOrLabelledStatement();
+}
+},
+
+_parseFunctionDeclaration: function()
+{
+this._expect(Tokens.FUNCTION);
+this._builder.addSpace();
+this._expect(Tokens.IDENTIFIER);
+this._parseFunctionLiteral()
+},
+
+_parseBlock: function()
+{
+this._expect(Tokens.LBRACE);
+this._builder.addNewLine();
+this._builder.increaseNestingLevel();
+while (this._peek() !== Tokens.RBRACE) {
+this._parseStatement();
+this._builder.addNewLine();
+}
+this._builder.decreaseNestingLevel();
+this._expect(Tokens.RBRACE);
+},
+
+_parseVariableStatement: function()
+{
+this._parseVariableDeclarations();
+this._expectSemicolon();
+},
+
+_parseVariableDeclarations: function()
+{
+if (this._peek() === Tokens.VAR)
+this._consume(Tokens.VAR);
+else
+this._consume(Tokens.CONST)
+this._builder.addSpace();
+
+var isFirstVariable = true;
 do {
-ret = DIGITS.charAt(num % 54) + ret;
-num = Math.floor(num / 54);
-} while (num > 0);
-return ret;
-};
-})();
-
-Scope.prototype = {
-has: function(name) {
-for (var s = this; s; s = s.parent)
-if (HOP(s.names, name))
-return s;
-},
-has_mangled: function(mname) {
-for (var s = this; s; s = s.parent)
-if (HOP(s.rev_mangled, mname))
-return s;
-},
-toJSON: function() {
-return {
-names: this.names,
-uses_eval: this.uses_eval,
-uses_with: this.uses_with
-};
+if (!isFirstVariable) {
+this._consume(Tokens.COMMA);
+this._builder.addSpace();
+}
+isFirstVariable = false;
+this._expect(Tokens.IDENTIFIER);
+if (this._peek() === Tokens.ASSIGN) {
+this._builder.addSpace();
+this._consume(Tokens.ASSIGN);
+this._builder.addSpace();
+this._parseAssignmentExpression();
+}
+} while (this._peek() === Tokens.COMMA);
 },
 
-next_mangled: function() {
+_parseExpressionOrLabelledStatement: function()
+{
+this._parseExpression();
+if (this._peek() === Tokens.COLON) {
+this._expect(Tokens.COLON);
+this._builder.addSpace();
+this._parseStatement();
+}
+this._expectSemicolon();
+},
 
+_parseIfStatement: function()
+{
+this._expect(Tokens.IF);
+this._builder.addSpace();
+this._expect(Tokens.LPAREN);
+this._parseExpression();
+this._expect(Tokens.RPAREN);
 
+var isBlock = this._parseStatementOrBlock();
+if (this._peek() === Tokens.ELSE) {
+if (isBlock)
+this._builder.addSpace();
+else
+this._builder.addNewLine();
+this._next();
 
-
-
-
-
-
-
-
-
-
-
-
-for (;;) {
-var m = base54(++this.cname), prior;
-
-
-prior = this.has_mangled(m);
-if (prior && this.refs[prior.rev_mangled[m]] === prior)
-continue;
-
-
-prior = this.has(m);
-if (prior && prior !== this && this.refs[m] === prior && !prior.has_mangled(m))
-continue;
-
-
-if (HOP(this.refs, m) && this.refs[m] == null)
-continue;
-
-
-if (!is_identifier(m))
-continue;
-
-return m;
+if (this._peek() === Tokens.IF) {
+this._builder.addSpace();
+this._parseStatement();
+} else
+this._parseStatementOrBlock();
 }
 },
-get_mangled: function(name, newMangle) {
-if (this.uses_eval || this.uses_with) return name; 
-var s = this.has(name);
-if (!s) return name; 
-if (HOP(s.mangled, name)) return s.mangled[name]; 
-if (!newMangle) return name;                      
 
-var m = s.next_mangled();
-s.rev_mangled[m] = name;
-return s.mangled[name] = m;
+_parseContinueStatement: function()
+{
+this._expect(Tokens.CONTINUE);
+var token = this._peek();
+if (!this._hasLineTerminatorBeforeNext() && token !== Tokens.SEMICOLON && token !== Tokens.RBRACE && token !== Tokens.EOS) {
+this._builder.addSpace();
+this._expect(Tokens.IDENTIFIER);
+}
+this._expectSemicolon();
 },
-define: function(name) {
-if (name != null)
-return this.names[name] = name;
+
+_parseBreakStatement: function()
+{
+this._expect(Tokens.BREAK);
+var token = this._peek();
+if (!this._hasLineTerminatorBeforeNext() && token !== Tokens.SEMICOLON && token !== Tokens.RBRACE && token !== Tokens.EOS) {
+this._builder.addSpace();
+this._expect(Tokens.IDENTIFIER);
 }
-};
-
-function ast_add_scope(ast) {
-
-var current_scope = null;
-var w = ast_walker(), walk = w.walk;
-var having_eval = [];
-
-function with_new_scope(cont) {
-current_scope = new Scope(current_scope);
-var ret = current_scope.body = cont();
-ret.scope = current_scope;
-current_scope = current_scope.parent;
-return ret;
-};
-
-function define(name) {
-return current_scope.define(name);
-};
-
-function reference(name) {
-current_scope.refs[name] = true;
-};
-
-function _lambda(name, args, body) {
-return [ this[0], define(name), args, with_new_scope(function(){
-MAP(args, define);
-return MAP(body, walk);
-})];
-};
-
-return with_new_scope(function(){
-
-var ret = w.with_walkers({
-"function": _lambda,
-"defun": _lambda,
-"with": function(expr, block) {
-for (var s = current_scope; s; s = s.parent)
-s.uses_with = true;
+this._expectSemicolon();
 },
-"var": function(defs) {
-MAP(defs, function(d){ define(d[0]) });
+
+_parseReturnStatement: function()
+{
+this._expect(Tokens.RETURN);
+var token = this._peek();
+if (!this._hasLineTerminatorBeforeNext() && token !== Tokens.SEMICOLON && token !== Tokens.RBRACE && token !== Tokens.EOS) {
+this._builder.addSpace();
+this._parseExpression();
+}
+this._expectSemicolon();
 },
-"const": function(defs) {
-MAP(defs, function(d){ define(d[0]) });
+
+_parseWithStatement: function()
+{
+this._expect(Tokens.WITH);
+this._builder.addSpace();
+this._expect(Tokens.LPAREN);
+this._parseExpression();
+this._expect(Tokens.RPAREN);
+this._parseStatementOrBlock();
 },
-"try": function(t, c, f) {
-if (c != null) return [
-this[0],
-MAP(t, walk),
-[ define(c[0]), MAP(c[1], walk) ],
-f != null ? MAP(f, walk) : null
-];
+
+_parseCaseClause: function()
+{
+if (this._peek() === Tokens.CASE) {
+this._expect(Tokens.CASE);
+this._builder.addSpace();
+this._parseExpression();
+} else
+this._expect(Tokens.DEFAULT);
+this._expect(Tokens.COLON);
+this._builder.addNewLine();
+
+this._builder.increaseNestingLevel();
+while (this._peek() !== Tokens.CASE && this._peek() !== Tokens.DEFAULT && this._peek() !== Tokens.RBRACE) {
+this._parseStatement();
+this._builder.addNewLine();
+}
+this._builder.decreaseNestingLevel();
 },
-"name": function(name) {
-if (name == "eval")
-having_eval.push(current_scope);
-reference(name);
+
+_parseSwitchStatement: function()
+{
+this._expect(Tokens.SWITCH);
+this._builder.addSpace();
+this._expect(Tokens.LPAREN);
+this._parseExpression();
+this._expect(Tokens.RPAREN);
+this._builder.addSpace();
+
+this._expect(Tokens.LBRACE);
+this._builder.addNewLine();
+this._builder.increaseNestingLevel();
+while (this._peek() !== Tokens.RBRACE)
+this._parseCaseClause();
+this._builder.decreaseNestingLevel();
+this._expect(Tokens.RBRACE);
 },
-"for-in": function(has_var, name) {
-if (has_var) define(name);
-else reference(name);
-}
-}, function(){
-return walk(ast);
-});
 
-
-
-
-
-
-
-MAP(having_eval, function(scope){
-if (!scope.has("eval")) while (scope) {
-scope.uses_eval = true;
-scope = scope.parent;
-}
-});
-
-
-
-
-function fixrefs(scope, i) {
-
-for (i = scope.children.length; --i >= 0;)
-fixrefs(scope.children[i]);
-for (i in scope.refs) if (HOP(scope.refs, i)) {
-
-for (var origin = scope.has(i), s = scope; s; s = s.parent) {
-s.refs[i] = origin;
-if (s === origin) break;
-}
-}
-};
-fixrefs(current_scope);
-
-return ret;
-});
-
-};
-
-
-
-function ast_mangle(ast, do_toplevel) {
-var w = ast_walker(), walk = w.walk, scope;
-
-function get_mangled(name, newMangle) {
-if (!do_toplevel && !scope.parent) return name; 
-return scope.get_mangled(name, newMangle);
-};
-
-function _lambda(name, args, body) {
-if (name) name = get_mangled(name);
-body = with_scope(body.scope, function(){
-args = MAP(args, function(name){ return get_mangled(name) });
-return MAP(body, walk);
-});
-return [ this[0], name, args, body ];
-};
-
-function with_scope(s, cont) {
-var _scope = scope;
-scope = s;
-for (var i in s.names) if (HOP(s.names, i)) {
-get_mangled(i, true);
-}
-var ret = cont();
-ret.scope = s;
-scope = _scope;
-return ret;
-};
-
-function _vardefs(defs) {
-return [ this[0], MAP(defs, function(d){
-return [ get_mangled(d[0]), walk(d[1]) ];
-}) ];
-};
-
-return w.with_walkers({
-"function": _lambda,
-"defun": function() {
-
-
-var ast = _lambda.apply(this, arguments);
-switch (w.parent()[0]) {
-case "toplevel":
-case "function":
-case "defun":
-return MAP.at_top(ast);
-}
-return ast;
+_parseThrowStatement: function()
+{
+this._expect(Tokens.THROW);
+this._builder.addSpace();
+this._parseExpression();
+this._expectSemicolon();
 },
-"var": _vardefs,
-"const": _vardefs,
-"name": function(name) {
-return [ this[0], get_mangled(name) ];
-},
-"try": function(t, c, f) {
-return [ this[0],
-MAP(t, walk),
-c != null ? [ get_mangled(c[0]), MAP(c[1], walk) ] : null,
-f != null ? MAP(f, walk) : null ];
-},
-"toplevel": function(body) {
-var self = this;
-return with_scope(self.scope, function(){
-return [ self[0], MAP(body, walk) ];
-});
-},
-"for-in": function(has_var, name, obj, stat) {
-return [ this[0], has_var, get_mangled(name), walk(obj), walk(stat) ];
-}
-}, function() {
-return walk(ast_add_scope(ast));
-});
-};
 
+_parseTryStatement: function()
+{
+this._expect(Tokens.TRY);
+this._builder.addSpace();
+this._parseBlock();
 
-
-var warn = function(){};
-
-function best_of(ast1, ast2) {
-return gen_code(ast1).length > gen_code(ast2[0] == "stat" ? ast2[1] : ast2).length ? ast2 : ast1;
-};
-
-function last_stat(b) {
-if (b[0] == "block" && b[1] && b[1].length > 0)
-return b[1][b[1].length - 1];
-return b;
+var token = this._peek();
+if (token === Tokens.CATCH) {
+this._builder.addSpace();
+this._consume(Tokens.CATCH);
+this._builder.addSpace();
+this._expect(Tokens.LPAREN);
+this._expect(Tokens.IDENTIFIER);
+this._expect(Tokens.RPAREN);
+this._builder.addSpace();
+this._parseBlock();
+token = this._peek();
 }
 
-function aborts(t) {
-if (t) {
-t = last_stat(t);
-if (t[0] == "return" || t[0] == "break" || t[0] == "continue" || t[0] == "throw")
-return true;
-}
-};
-
-function boolean_expr(expr) {
-return ( (expr[0] == "unary-prefix"
-&& member(expr[1], [ "!", "delete" ])) ||
-
-(expr[0] == "binary"
-&& member(expr[1], [ "in", "instanceof", "==", "!=", "===", "!==", "<", "<=", ">=", ">" ])) ||
-
-(expr[0] == "binary"
-&& member(expr[1], [ "&&", "||" ])
-&& boolean_expr(expr[2])
-&& boolean_expr(expr[3])) ||
-
-(expr[0] == "conditional"
-&& boolean_expr(expr[2])
-&& boolean_expr(expr[3])) ||
-
-(expr[0] == "assign"
-&& expr[1] === true
-&& boolean_expr(expr[3])) ||
-
-(expr[0] == "seq"
-&& boolean_expr(expr[expr.length - 1]))
-);
-};
-
-function make_conditional(c, t, e) {
-if (c[0] == "unary-prefix" && c[1] == "!") {
-return e ? [ "conditional", c[2], e, t ] : [ "binary", "||", c[2], t ];
-} else {
-return e ? [ "conditional", c, t, e ] : [ "binary", "&&", c, t ];
-}
-};
-
-function empty(b) {
-return !b || (b[0] == "block" && (!b[1] || b[1].length == 0));
-};
-
-function ast_squeeze(ast, options) {
-options = defaults(options, {
-make_seqs   : true,
-dead_code   : true,
-keep_comps  : true,
-no_warnings : false
-});
-
-var w = ast_walker(), walk = w.walk, scope;
-
-function negate(c) {
-var not_c = [ "unary-prefix", "!", c ];
-switch (c[0]) {
-case "unary-prefix":
-return c[1] == "!" && boolean_expr(c[2]) ? c[2] : not_c;
-case "seq":
-c = slice(c);
-c[c.length - 1] = negate(c[c.length - 1]);
-return c;
-case "conditional":
-return best_of(not_c, [ "conditional", c[1], negate(c[2]), negate(c[3]) ]);
-case "binary":
-var op = c[1], left = c[2], right = c[3];
-if (!options.keep_comps) switch (op) {
-case "<="  : return [ "binary", ">", left, right ];
-case "<"   : return [ "binary", ">=", left, right ];
-case ">="  : return [ "binary", "<", left, right ];
-case ">"   : return [ "binary", "<=", left, right ];
-}
-switch (op) {
-case "=="  : return [ "binary", "!=", left, right ];
-case "!="  : return [ "binary", "==", left, right ];
-case "===" : return [ "binary", "!==", left, right ];
-case "!==" : return [ "binary", "===", left, right ];
-case "&&"  : return best_of(not_c, [ "binary", "||", negate(left), negate(right) ]);
-case "||"  : return best_of(not_c, [ "binary", "&&", negate(left), negate(right) ]);
-}
-break;
-}
-return not_c;
-};
-
-function with_scope(s, cont) {
-var _scope = scope;
-scope = s;
-var ret = cont();
-ret.scope = s;
-scope = _scope;
-return ret;
-};
-
-function is_constant(node) {
-return node[0] == "string" || node[0] == "num";
-};
-
-function rmblock(block) {
-if (block != null && block[0] == "block" && block[1] && block[1].length == 1)
-block = block[1][0];
-return block;
-};
-
-function _lambda(name, args, body) {
-return [ this[0], name, args, with_scope(body.scope, function(){
-return tighten(MAP(body, walk), "lambda");
-}) ];
-};
-
-
-
-
-
-
-
-
-function tighten(statements, block_type) {
-statements = statements.reduce(function(a, stat){
-if (stat[0] == "block") {
-if (stat[1]) {
-a.push.apply(a, stat[1]);
-}
-} else {
-a.push(stat);
-}
-return a;
-}, []);
-
-statements = (function(a, prev){
-statements.forEach(function(cur){
-if (prev && ((cur[0] == "var" && prev[0] == "var") ||
-(cur[0] == "const" && prev[0] == "const"))) {
-prev[1] = prev[1].concat(cur[1]);
-} else {
-a.push(cur);
-prev = cur;
-}
-});
-return a;
-})([]);
-
-if (options.dead_code) statements = (function(a, has_quit){
-statements.forEach(function(st){
-if (has_quit) {
-if (member(st[0], [ "function", "defun" , "var", "const" ])) {
-a.push(st);
-}
-else if (!options.no_warnings)
-warn("Removing unreachable code: " + gen_code(st, true));
-}
-else {
-a.push(st);
-if (member(st[0], [ "return", "throw", "break", "continue" ]))
-has_quit = true;
-}
-});
-return a;
-})([]);
-
-if (options.make_seqs) statements = (function(a, prev) {
-statements.forEach(function(cur){
-if (prev && prev[0] == "stat" && cur[0] == "stat") {
-prev[1] = [ "seq", prev[1], cur[1] ];
-} else {
-a.push(cur);
-prev = cur;
-}
-});
-return a;
-})([]);
-
-if (block_type == "lambda") statements = (function(i, a, stat){
-while (i < statements.length) {
-stat = statements[i++];
-if (stat[0] == "if" && !stat[3]) {
-if (stat[2][0] == "return" && stat[2][1] == null) {
-a.push(make_if(negate(stat[1]), [ "block", statements.slice(i) ]));
-break;
-}
-var last = last_stat(stat[2]);
-if (last[0] == "return" && last[1] == null) {
-a.push(make_if(stat[1], [ "block", stat[2][1].slice(0, -1) ], [ "block", statements.slice(i) ]));
-break;
-}
-}
-a.push(stat);
-}
-return a;
-})(0, []);
-
-return statements;
-};
-
-function make_if(c, t, e) {
-c = walk(c);
-t = walk(t);
-e = walk(e);
-
-if (empty(t)) {
-c = negate(c);
-t = e;
-e = null;
-} else if (empty(e)) {
-e = null;
-} else {
-
-(function(){
-var a = gen_code(c);
-var n = negate(c);
-var b = gen_code(n);
-if (b.length < a.length) {
-var tmp = t;
-t = e;
-e = tmp;
-c = n;
-}
-})();
-}
-if (empty(e) && empty(t))
-return [ "stat", c ];
-var ret = [ "if", c, t, e ];
-if (t[0] == "if" && empty(t[3]) && empty(e)) {
-ret = best_of(ret, walk([ "if", [ "binary", "&&", c, t[1] ], t[2] ]));
-}
-else if (t[0] == "stat") {
-if (e) {
-if (e[0] == "stat") {
-ret = best_of(ret, [ "stat", make_conditional(c, t[1], e[1]) ]);
-}
-}
-else {
-ret = best_of(ret, [ "stat", make_conditional(c, t[1]) ]);
-}
-}
-else if (e && t[0] == e[0] && (t[0] == "return" || t[0] == "throw")) {
-ret = best_of(ret, [ t[0], make_conditional(c, t[1], e[1] ) ]);
-}
-else if (e && aborts(t)) {
-ret = [ [ "if", c, t ] ];
-if (e[0] == "block") {
-if (e[1]) ret = ret.concat(e[1]);
-}
-else {
-ret.push(e);
-}
-ret = walk([ "block", ret ]);
-}
-else if (t && aborts(e)) {
-ret = [ [ "if", negate(c), e ] ];
-if (t[0] == "block") {
-if (t[1]) ret = ret.concat(t[1]);
-} else {
-ret.push(t);
-}
-ret = walk([ "block", ret ]);
-}
-return ret;
-};
-
-return w.with_walkers({
-"sub": function(expr, subscript) {
-if (subscript[0] == "string") {
-var name = subscript[1];
-if (is_identifier(name)) {
-return [ "dot", walk(expr), name ];
-}
+if (token === Tokens.FINALLY) {
+this._consume(Tokens.FINALLY);
+this._builder.addSpace();
+this._parseBlock();
 }
 },
-"if": make_if,
-"toplevel": function(body) {
-return [ "toplevel", with_scope(this.scope, function(){
-return tighten(MAP(body, walk));
-}) ];
+
+_parseDoWhileStatement: function()
+{
+this._expect(Tokens.DO);
+var isBlock = this._parseStatementOrBlock();
+if (isBlock)
+this._builder.addSpace();
+else
+this._builder.addNewLine();
+this._expect(Tokens.WHILE);
+this._builder.addSpace();
+this._expect(Tokens.LPAREN);
+this._parseExpression();
+this._expect(Tokens.RPAREN);
+this._expectSemicolon();
 },
-"switch": function(expr, body) {
-var last = body.length - 1;
-return [ "switch", walk(expr), MAP(body, function(branch, i){
-var block = tighten(MAP(branch[1], walk));
-if (i == last && block.length > 0) {
-var node = block[block.length - 1];
-if (node[0] == "break" && !node[1])
-block.pop();
+
+_parseWhileStatement: function()
+{
+this._expect(Tokens.WHILE);
+this._builder.addSpace();
+this._expect(Tokens.LPAREN);
+this._parseExpression();
+this._expect(Tokens.RPAREN);
+this._parseStatementOrBlock();
+},
+
+_parseForStatement: function()
+{
+this._expect(Tokens.FOR);
+this._builder.addSpace();
+this._expect(Tokens.LPAREN);
+if (this._peek() !== Tokens.SEMICOLON) {
+if (this._peek() === Tokens.VAR || this._peek() === Tokens.CONST) {
+this._parseVariableDeclarations();
+if (this._peek() === Tokens.IN) {
+this._builder.addSpace();
+this._consume(Tokens.IN);
+this._builder.addSpace();
+this._parseExpression();
 }
-return [ branch[0] ? walk(branch[0]) : null, block ];
-}) ];
-},
-"function": _lambda,
-"defun": _lambda,
-"block": function(body) {
-if (body) return rmblock([ "block", tighten(MAP(body, walk)) ]);
-},
-"binary": function(op, left, right) {
-left = walk(left);
-right = walk(right);
-var best = [ "binary", op, left, right ];
-if (is_constant(right) && is_constant(left)) {
-var val = {};
-var orig = val;
-switch (op) {
-case "+"   : val = left[1] +   right[1]; break;
-case "*"   : val = left[1] *   right[1]; break;
-case "/"   : val = left[1] /   right[1]; break;
-case "-"   : val = left[1] -   right[1]; break;
-case "<<"  : val = left[1] <<  right[1]; break;
-case ">>"  : val = left[1] >>  right[1]; break;
-case ">>>" : val = left[1] >>> right[1]; break;
-case "=="  : val = left[1] ==  right[1]; break;
-case "===" : val = left[1] === right[1]; break;
-case "!="  : val = left[1] !=  right[1]; break;
-case "!==" : val = left[1] !== right[1]; break;
-case "<"   : val = left[1] <   right[1]; break;
-case "<="  : val = left[1] <=  right[1]; break;
-case ">"   : val = left[1] >   right[1]; break;
-case ">="  : val = left[1] >=  right[1]; break;
+} else
+this._parseExpression();
 }
-if (val !== orig) {
-switch (typeof val) {
-case "string": val = [ "string", val ]; break;
-case "boolean": val = [ "name", val+"" ]; break;
-case "number": val = [ "num", val ]; break;
-default: return best;
+
+if (this._peek() !== Tokens.RPAREN) {
+this._expect(Tokens.SEMICOLON);
+this._builder.addSpace();
+if (this._peek() !== Tokens.SEMICOLON)
+this._parseExpression();
+this._expect(Tokens.SEMICOLON);
+this._builder.addSpace();
+if (this._peek() !== Tokens.RPAREN)
+this._parseExpression();
 }
-best = best_of(best, walk(val));
-}
-}
-return best;
+this._expect(Tokens.RPAREN);
+
+this._parseStatementOrBlock();
 },
-"conditional": function(c, t, e) {
-return make_conditional(walk(c), walk(t), walk(e));
-},
-"try": function(t, c, f) {
-return [
-"try",
-tighten(MAP(t, walk)),
-c != null ? [ c[0], tighten(MAP(c[1], walk)) ] : null,
-f != null ? tighten(MAP(f, walk)) : null
-];
-},
-"unary-prefix": function(op, expr) {
-expr = walk(expr);
-var ret = [ "unary-prefix", op, expr ];
-if (op == "!")
-ret = best_of(ret, negate(expr));
-return ret;
-},
-"name": function(name) {
-switch (name) {
-case "true": return [ "unary-prefix", "!", [ "num", 0 ]];
-case "false": return [ "unary-prefix", "!", [ "num", 1 ]];
+
+_parseExpression: function()
+{
+this._parseAssignmentExpression();
+while (this._peek() === Tokens.COMMA) {
+this._expect(Tokens.COMMA);
+this._builder.addSpace();
+this._parseAssignmentExpression();
 }
 },
-"new": function(ctor, args) {
-if (ctor[0] == "name" && ctor[1] == "Array" && !scope.has("Array")) {
-if (args.length != 1) {
-return [ "array", args ];
-} else {
-return [ "call", [ "name", "Array" ], args ];
+
+_parseAssignmentExpression: function()
+{
+this._parseConditionalExpression();
+var token = this._peek();
+if (Tokens.ASSIGN <= token && token <= Tokens.ASSIGN_MOD) {
+this._builder.addSpace();
+this._next();
+this._builder.addSpace();
+this._parseAssignmentExpression();
 }
+},
+
+_parseConditionalExpression: function()
+{
+this._parseBinaryExpression();
+if (this._peek() === Tokens.CONDITIONAL) {
+this._builder.addSpace();
+this._consume(Tokens.CONDITIONAL);
+this._builder.addSpace();
+this._parseAssignmentExpression();
+this._builder.addSpace();
+this._expect(Tokens.COLON);
+this._builder.addSpace();
+this._parseAssignmentExpression();
 }
 },
-"call": function(expr, args) {
-if (expr[0] == "name" && expr[1] == "Array" && args.length != 1 && !scope.has("Array")) {
-return [ "array", args ];
+
+_parseBinaryExpression: function()
+{
+this._parseUnaryExpression();
+var token = this._peek();
+while (Tokens.OR <= token && token <= Tokens.IN) {
+this._builder.addSpace();
+this._next();
+this._builder.addSpace();
+this._parseBinaryExpression();
+token = this._peek();
 }
-}
-}, function() {
-return walk(ast_add_scope(ast));
-});
-};
-
-
-
-var DOT_CALL_NO_PARENS = jsp.array_to_hash([
-"name",
-"array",
-"string",
-"dot",
-"sub",
-"call",
-"regexp"
-]);
-
-function make_string(str) {
-var dq = 0, sq = 0;
-str = str.replace(/[\\\b\f\n\r\t\x22\x27]/g, function(s){
-switch (s) {
-case "\\": return "\\\\";
-case "\b": return "\\b";
-case "\f": return "\\f";
-case "\n": return "\\n";
-case "\r": return "\\r";
-case "\t": return "\\t";
-case '"': ++dq; return '"';
-case "'": ++sq; return "'";
-}
-return s;
-});
-if (dq > sq) {
-return "'" + str.replace(/\x27/g, "\\'") + "'";
-} else {
-return '"' + str.replace(/\x22/g, '\\"') + '"';
-}
-};
-
-function gen_code(ast, beautify) {
-if (beautify) beautify = defaults(beautify, {
-indent_start : 0,
-indent_level : 4,
-quote_keys   : false,
-space_colon  : false
-});
-var indentation = 0,
-newline = beautify ? "\n" : "",
-space = beautify ? " " : "";
-
-function indent(line) {
-if (line == null)
-line = "";
-if (beautify)
-line = repeat_string(" ", beautify.indent_start + indentation * beautify.indent_level) + line;
-return line;
-};
-
-function with_indent(cont, incr) {
-if (incr == null) incr = 1;
-indentation += incr;
-try { return cont.apply(null, slice(arguments, 1)); }
-finally { indentation -= incr; }
-};
-
-function add_spaces(a) {
-if (beautify)
-return a.join(" ");
-var b = [];
-for (var i = 0; i < a.length; ++i) {
-var next = a[i + 1];
-b.push(a[i]);
-if (next &&
-((/[a-z0-9_\x24]$/i.test(a[i].toString()) && /^[a-z0-9_\x24]/i.test(next.toString())) ||
-(/[\+\-]$/.test(a[i].toString()) && /^[\+\-]/.test(next.toString())))) {
-b.push(" ");
-}
-}
-return b.join("");
-};
-
-function add_commas(a) {
-return a.join("," + space);
-};
-
-function parenthesize(expr) {
-var gen = make(expr);
-for (var i = 1; i < arguments.length; ++i) {
-var el = arguments[i];
-if ((el instanceof Function && el(expr)) || expr[0] == el)
-return "(" + gen + ")";
-}
-return gen;
-};
-
-function best_of(a) {
-if (a.length == 1) {
-return a[0];
-}
-if (a.length == 2) {
-var b = a[1];
-a = a[0];
-return a.length <= b.length ? a : b;
-}
-return best_of([ a[0], best_of(a.slice(1)) ]);
-};
-
-function needs_parens(expr) {
-if (expr[0] == "function") {
-
-
-
-
-
-
-
-
-var a = slice($stack), self = a.pop(), p = a.pop();
-while (p) {
-if (p[0] == "stat") return true;
-if ((p[0] == "seq" && p[1] === self) ||
-(p[0] == "call" && p[1] === self) ||
-(p[0] == "binary" && p[2] === self)) {
-self = p;
-p = a.pop();
-} else {
-return false;
-}
-}
-}
-return !HOP(DOT_CALL_NO_PARENS, expr[0]);
-};
-
-function make_num(num) {
-var str = num.toString(10), a = [ str.replace(/^0\./, ".") ], m;
-if (Math.floor(num) === num) {
-a.push("0x" + num.toString(16).toLowerCase(), 
-"0" + num.toString(8)); 
-if ((m = /^(.*?)(0+)$/.exec(num))) {
-a.push(m[1] + "e" + m[2].length);
-}
-} else if ((m = /^0?\.(0+)(.*)$/.exec(num))) {
-a.push(m[2] + "e-" + (m[1].length + m[2].length),
-str.substr(str.indexOf(".")));
-}
-return best_of(a);
-};
-
-var generators = {
-"string": make_string,
-"num": make_num,
-"name": make_name,
-"toplevel": function(statements) {
-return make_block_statements(statements)
-.join(newline + newline);
 },
-"block": make_block,
-"var": function(defs) {
-return "var " + add_commas(MAP(defs, make_1vardef)) + ";";
-},
-"const": function(defs) {
-return "const " + add_commas(MAP(defs, make_1vardef)) + ";";
-},
-"try": function(tr, ca, fi) {
-var out = [ "try", make_block(tr) ];
-if (ca) out.push("catch", "(" + ca[0] + ")", make_block(ca[1]));
-if (fi) out.push("finally", make_block(fi));
-return add_spaces(out);
-},
-"throw": function(expr) {
-return add_spaces([ "throw", make(expr) ]) + ";";
-},
-"new": function(ctor, args) {
-args = args.length > 0 ? "(" + add_commas(MAP(args, make)) + ")" : "";
-return add_spaces([ "new", parenthesize(ctor, "seq", "binary", "conditional", "assign", function(expr){
-var w = ast_walker(), has_call = {};
-try {
-w.with_walkers({
-"call": function() { throw has_call },
-"function": function() { return this }
-}, function(){
-w.walk(expr);
-});
-} catch(ex) {
-if (ex === has_call)
-return true;
-throw ex;
-}
-}) + args ]);
-},
-"switch": function(expr, body) {
-return add_spaces([ "switch", "(" + make(expr) + ")", make_switch_block(body) ]);
-},
-"break": function(label) {
-var out = "break";
-if (label != null)
-out += " " + make_name(label);
-return out + ";";
-},
-"continue": function(label) {
-var out = "continue";
-if (label != null)
-out += " " + make_name(label);
-return out + ";";
-},
-"conditional": function(co, th, el) {
-return add_spaces([ parenthesize(co, "assign", "seq", "conditional"), "?",
-parenthesize(th, "seq"), ":",
-parenthesize(el, "seq") ]);
-},
-"assign": function(op, lvalue, rvalue) {
-if (op && op !== true) op += "=";
-else op = "=";
-return add_spaces([ make(lvalue), op, parenthesize(rvalue, "seq") ]);
-},
-"dot": function(expr) {
-var out = make(expr), i = 1;
-if (expr[0] == "num")
-out += ".";
-else if (needs_parens(expr))
-out = "(" + out + ")";
-while (i < arguments.length)
-out += "." + make_name(arguments[i++]);
-return out;
-},
-"call": function(func, args) {
-var f = make(func);
-if (needs_parens(func))
-f = "(" + f + ")";
-return f + "(" + add_commas(MAP(args, function(expr){
-return parenthesize(expr, "seq");
-})) + ")";
-},
-"function": make_function,
-"defun": make_function,
-"if": function(co, th, el) {
-var out = [ "if", "(" + make(co) + ")", el ? make_then(th) : make(th) ];
-if (el) {
-out.push("else", make(el));
-}
-return add_spaces(out);
-},
-"for": function(init, cond, step, block) {
-var out = [ "for" ];
-init = (init != null ? make(init) : "").replace(/;*\s*$/, ";" + space);
-cond = (cond != null ? make(cond) : "").replace(/;*\s*$/, ";" + space);
-step = (step != null ? make(step) : "").replace(/;*\s*$/, "");
-var args = init + cond + step;
-if (args == "; ; ") args = ";;";
-out.push("(" + args + ")", make(block));
-return add_spaces(out);
-},
-"for-in": function(has_var, key, hash, block) {
-var out = add_spaces([ "for", "(" ]);
-if (has_var)
-out += "var ";
-out += add_spaces([ make_name(key) + " in " + make(hash) + ")", make(block) ]);
-return out;
-},
-"while": function(condition, block) {
-return add_spaces([ "while", "(" + make(condition) + ")", make(block) ]);
-},
-"do": function(condition, block) {
-return add_spaces([ "do", make(block), "while", "(" + make(condition) + ")" ]) + ";";
-},
-"return": function(expr) {
-var out = [ "return" ];
-if (expr != null) out.push(make(expr));
-return add_spaces(out) + ";";
-},
-"binary": function(operator, lvalue, rvalue) {
-var left = make(lvalue), right = make(rvalue);
 
-
-
-if (member(lvalue[0], [ "assign", "conditional", "seq" ]) ||
-lvalue[0] == "binary" && PRECEDENCE[operator] > PRECEDENCE[lvalue[1]]) {
-left = "(" + left + ")";
-}
-if (member(rvalue[0], [ "assign", "conditional", "seq" ]) ||
-rvalue[0] == "binary" && PRECEDENCE[operator] >= PRECEDENCE[rvalue[1]] &&
-!(rvalue[1] == operator && member(operator, [ "&&", "||", "*" ]))) {
-right = "(" + right + ")";
-}
-return add_spaces([ left, operator, right ]);
+_parseUnaryExpression: function()
+{
+var token = this._peek();
+if ((Tokens.NOT <= token && token <= Tokens.VOID) || token === Tokens.ADD || token === Tokens.SUB || token ===  Tokens.INC || token === Tokens.DEC) {
+this._next();
+if (token === Tokens.DELETE || token === Tokens.TYPEOF || token === Tokens.VOID)
+this._builder.addSpace();
+this._parseUnaryExpression();
+} else
+return this._parsePostfixExpression();
 },
-"unary-prefix": function(operator, expr) {
-var val = make(expr);
-if (!(expr[0] == "num" || (expr[0] == "unary-prefix" && !HOP(OPERATORS, operator + expr[1])) || !needs_parens(expr)))
-val = "(" + val + ")";
-return operator + (jsp.is_alphanumeric_char(operator.charAt(0)) ? " " : "") + val;
+
+_parsePostfixExpression: function()
+{
+this._parseLeftHandSideExpression();
+var token = this._peek();
+if (!this._hasLineTerminatorBeforeNext() && (token === Tokens.INC || token === Tokens.DEC))
+this._next();
 },
-"unary-postfix": function(operator, expr) {
-var val = make(expr);
-if (!(expr[0] == "num" || (expr[0] == "unary-postfix" && !HOP(OPERATORS, operator + expr[1])) || !needs_parens(expr)))
-val = "(" + val + ")";
-return val + operator;
-},
-"sub": function(expr, subscript) {
-var hash = make(expr);
-if (needs_parens(expr))
-hash = "(" + hash + ")";
-return hash + "[" + make(subscript) + "]";
-},
-"object": function(props) {
-if (props.length == 0)
-return "{}";
-return "{" + newline + with_indent(function(){
-return MAP(props, function(p){
-if (p.length == 3) {
 
+_parseLeftHandSideExpression: function()
+{
+if (this._peek() === Tokens.NEW)
+this._parseNewExpression();
+else
+this._parseMemberExpression();
 
-return indent(make_function(p[0], p[1][2], p[1][3], p[2]));
-}
-var key = p[0], val = make(p[1]);
-if (beautify && beautify.quote_keys) {
-key = make_string(key);
-} else if ((typeof key == "number" || !beautify && +key + "" == key)
-&& parseFloat(key) >= 0) {
-key = make_num(+key);
-} else if (!is_identifier(key)) {
-key = make_string(key);
-}
-return indent(add_spaces(beautify && beautify.space_colon
-? [ key, ":", val ]
-: [ key + ":", val ]));
-}).join("," + newline);
-}) + newline + indent("}");
-},
-"regexp": function(rx, mods) {
-return "/" + rx + "/" + mods;
-},
-"array": function(elements) {
-if (elements.length == 0) return "[]";
-return add_spaces([ "[", add_commas(MAP(elements, function(el){
-if (!beautify && el[0] == "atom" && el[1] == "undefined") return "";
-return parenthesize(el, "seq");
-})), "]" ]);
-},
-"stat": function(stmt) {
-return make(stmt).replace(/;*\s*$/, ";");
-},
-"seq": function() {
-return add_commas(MAP(slice(arguments), make));
-},
-"label": function(name, block) {
-return add_spaces([ make_name(name), ":", make(block) ]);
-},
-"with": function(expr, block) {
-return add_spaces([ "with", "(" + make(expr) + ")", make(block) ]);
-},
-"atom": function(name) {
-return make_name(name);
-}
-};
-
-
-
-
-
-
-
-
-function make_then(th) {
-if (th[0] == "do") {
-
-
-
-
-return make([ "block", [ th ]]);
-}
-var b = th;
 while (true) {
-var type = b[0];
-if (type == "if") {
-if (!b[3])
+switch (this._peek()) {
+case Tokens.LBRACK:
+this._consume(Tokens.LBRACK);
+this._parseExpression();
+this._expect(Tokens.RBRACK);
+break;
 
-return make([ "block", [ th ]]);
-b = b[3];
-}
-else if (type == "while" || type == "do") b = b[2];
-else if (type == "for" || type == "for-in") b = b[4];
-else break;
-}
-return make(th);
-};
+case Tokens.LPAREN:
+this._parseArguments();
+break;
 
-function make_function(name, args, body, keyword) {
-var out = keyword || "function";
-if (name) {
-out += " " + make_name(name);
-}
-out += "(" + add_commas(MAP(args, make_name)) + ")";
-return add_spaces([ out, make_block(body) ]);
-};
+case Tokens.PERIOD:
+this._consume(Tokens.PERIOD);
+this._expect(Tokens.IDENTIFIER);
+break;
 
-function make_name(name) {
-return name.toString();
-};
-
-function make_block_statements(statements) {
-for (var a = [], last = statements.length - 1, i = 0; i <= last; ++i) {
-var stat = statements[i];
-var code = make(stat);
-if (code != ";") {
-if (!beautify && i == last) {
-if ((stat[0] == "while" && empty(stat[2])) ||
-(member(stat[0], [ "for", "for-in"] ) && empty(stat[4])) ||
-(stat[0] == "if" && empty(stat[2]) && !stat[3]) ||
-(stat[0] == "if" && stat[3] && empty(stat[3]))) {
-code = code.replace(/;*\s*$/, ";");
-} else {
-code = code.replace(/;+\s*$/, "");
+default:
+return;
 }
 }
-a.push(code);
+},
+
+_parseNewExpression: function()
+{
+this._expect(Tokens.NEW);
+this._builder.addSpace();
+if (this._peek() === Tokens.NEW)
+this._parseNewExpression();
+else
+this._parseMemberExpression();
+},
+
+_parseMemberExpression: function()
+{
+if (this._peek() === Tokens.FUNCTION) {
+this._expect(Tokens.FUNCTION);
+if (this._peek() === Tokens.IDENTIFIER) {
+this._builder.addSpace();
+this._expect(Tokens.IDENTIFIER);
+}
+this._parseFunctionLiteral();
+} else
+this._parsePrimaryExpression();
+
+while (true) {
+switch (this._peek()) {
+case Tokens.LBRACK:
+this._consume(Tokens.LBRACK);
+this._parseExpression();
+this._expect(Tokens.RBRACK);
+break;
+
+case Tokens.PERIOD:
+this._consume(Tokens.PERIOD);
+this._expect(Tokens.IDENTIFIER);
+break;
+
+case Tokens.LPAREN:
+this._parseArguments();
+break;
+
+default:
+return;
 }
 }
-return MAP(a, indent);
-};
+},
 
-function make_switch_block(body) {
-var n = body.length;
-if (n == 0) return "{}";
-return "{" + newline + MAP(body, function(branch, i){
-var has_body = branch[1].length > 0, code = with_indent(function(){
-return indent(branch[0]
-? add_spaces([ "case", make(branch[0]) + ":" ])
-: "default:");
-}, 0.5) + (has_body ? newline + with_indent(function(){
-return make_block_statements(branch[1]).join(newline);
-}) : "");
-if (!beautify && has_body && i < n - 1)
-code += ";";
-return code;
-}).join(newline) + newline + indent("}");
-};
+_parseDebuggerStatement: function()
+{
+this._expect(Tokens.DEBUGGER);
+this._expectSemicolon();
+},
 
-function make_block(statements) {
-if (!statements) return ";";
-if (statements.length == 0) return "{}";
-return "{" + newline + with_indent(function(){
-return make_block_statements(statements).join(newline);
-}) + newline + indent("}");
-};
-
-function make_1vardef(def) {
-var name = def[0], val = def[1];
-if (val != null)
-name = add_spaces([ name, "=", make(val) ]);
-return name;
-};
-
-var $stack = [];
-
-function make(node) {
-var type = node[0];
-var gen = generators[type];
-if (!gen)
-throw new Error("Can't find generator for \"" + type + "\"");
-$stack.push(node);
-var ret = gen.apply(type, node.slice(1));
-$stack.pop();
-return ret;
-};
-
-return make(ast);
-};
-
-function split_lines(code, max_line_length) {
-var splits = [ 0 ];
-jsp.parse(function(){
-var next_token = jsp.tokenizer(code);
-var last_split = 0;
-var prev_token;
-function current_length(tok) {
-return tok.pos - last_split;
-};
-function split_here(tok) {
-last_split = tok.pos;
-splits.push(last_split);
-};
-function custom(){
-var tok = next_token.apply(this, arguments);
-out: {
-if (prev_token) {
-if (prev_token.type == "keyword") break out;
+_parsePrimaryExpression: function()
+{
+switch (this._peek()) {
+case Tokens.THIS:
+return this._consume(Tokens.THIS);
+case Tokens.NULL_LITERAL:
+return this._consume(Tokens.NULL_LITERAL);
+case Tokens.TRUE_LITERAL:
+return this._consume(Tokens.TRUE_LITERAL);
+case Tokens.FALSE_LITERAL:
+return this._consume(Tokens.FALSE_LITERAL);
+case Tokens.IDENTIFIER:
+return this._consume(Tokens.IDENTIFIER);
+case Tokens.NUMBER:
+return this._consume(Tokens.NUMBER);
+case Tokens.STRING:
+return this._consume(Tokens.STRING);
+case Tokens.ASSIGN_DIV:
+return this._parseRegExpLiteral();
+case Tokens.DIV:
+return this._parseRegExpLiteral();
+case Tokens.LBRACK:
+return this._parseArrayLiteral();
+case Tokens.LBRACE:
+return this._parseObjectLiteral();
+case Tokens.LPAREN:
+this._consume(Tokens.LPAREN);
+this._parseExpression();
+this._expect(Tokens.RPAREN);
+return;
+default:
+return this._next();
 }
-if (current_length(tok) > max_line_length) {
-switch (tok.type) {
-case "keyword":
-case "atom":
-case "name":
-case "punc":
-split_here(tok);
-break out;
+},
+
+_parseArrayLiteral: function()
+{
+this._expect(Tokens.LBRACK);
+this._builder.increaseNestingLevel();
+while (this._peek() !== Tokens.RBRACK) {
+if (this._peek() !== Tokens.COMMA)
+this._parseAssignmentExpression();
+if (this._peek() !== Tokens.RBRACK) {
+this._expect(Tokens.COMMA);
+this._builder.addSpace();
 }
 }
+this._builder.decreaseNestingLevel();
+this._expect(Tokens.RBRACK);
+},
+
+_parseObjectLiteralGetSet: function()
+{
+var token = this._peek();
+if (token === Tokens.IDENTIFIER || token === Tokens.NUMBER || token === Tokens.STRING ||
+Tokens.DELETE <= token && token <= Tokens.FALSE_LITERAL ||
+token === Tokens.INSTANCEOF || token === Tokens.IN || token === Tokens.CONST) {
+this._next();
+this._parseFunctionLiteral();
 }
-prev_token = tok;
-return tok;
-};
-custom.context = function() {
-return next_token.context.apply(this, arguments);
-};
-return custom;
-}());
-return splits.map(function(pos, i){
-return code.substring(pos, splits[i + 1] || code.length);
-}).join("\n");
-};
+},
 
-
-
-function repeat_string(str, i) {
-if (i <= 0) return "";
-if (i == 1) return str;
-var d = repeat_string(str, i >> 1);
-d += d;
-if (i & 1) d += str;
-return d;
-};
-
-function defaults(args, defs) {
-var ret = {};
-if (args === true)
-args = {};
-for (var i in defs) if (HOP(defs, i)) {
-ret[i] = (args && HOP(args, i)) ? args[i] : defs[i];
+_parseObjectLiteral: function()
+{
+this._expect(Tokens.LBRACE);
+this._builder.increaseNestingLevel();
+while (this._peek() !== Tokens.RBRACE) {
+var token = this._peek();
+switch (token) {
+case Tokens.IDENTIFIER:
+this._consume(Tokens.IDENTIFIER);
+var name = this._token.value;
+if ((name === "get" || name === "set") && this._peek() !== Tokens.COLON) {
+this._builder.addSpace();
+this._parseObjectLiteralGetSet();
+if (this._peek() !== Tokens.RBRACE) {
+this._expect(Tokens.COMMA);
 }
-return ret;
-};
-
-function is_identifier(name) {
-return /^[a-z_$][a-z0-9_$]*$/i.test(name)
-&& name != "this"
-&& !HOP(jsp.KEYWORDS_ATOM, name)
-&& !HOP(jsp.RESERVED_WORDS, name)
-&& !HOP(jsp.KEYWORDS, name);
-};
-
-function HOP(obj, prop) {
-return Object.prototype.hasOwnProperty.call(obj, prop);
-};
-
-
-
-var MAP;
-
-(function(){
-MAP = function(a, f, o) {
-var ret = [];
-for (var i = 0; i < a.length; ++i) {
-var val = f.call(o, a[i], i);
-if (val instanceof AtTop) ret.unshift(val.v);
-else ret.push(val);
+continue;
 }
-return ret;
-};
-MAP.at_top = function(val) { return new AtTop(val) };
-function AtTop(val) { this.v = val };
-})();
+break;
 
+case Tokens.STRING:
+this._consume(Tokens.STRING);
+break;
 
+case Tokens.NUMBER:
+this._consume(Tokens.NUMBER);
+break;
 
-exports.ast_walker = ast_walker;
-exports.ast_mangle = ast_mangle;
-exports.ast_squeeze = ast_squeeze;
-exports.gen_code = gen_code;
-exports.ast_add_scope = ast_add_scope;
-exports.ast_squeeze_more = require("./squeeze-more").ast_squeeze_more;
-exports.set_logger = function(logger) { warn = logger };
-exports.make_string = make_string;
-exports.split_lines = split_lines;
+default:
+this._next();
+}
+
+this._expect(Tokens.COLON);
+this._builder.addSpace();
+this._parseAssignmentExpression();
+if (this._peek() !== Tokens.RBRACE) {
+this._expect(Tokens.COMMA);
+}
+}
+this._builder.decreaseNestingLevel();
+
+this._expect(Tokens.RBRACE);
+},
+
+_parseRegExpLiteral: function()
+{
+if (this._nextToken.type === "regexp")
+this._next();
+else {
+this._forceRegexp = true;
+this._next();
+}
+},
+
+_parseArguments: function()
+{
+this._expect(Tokens.LPAREN);
+var done = (this._peek() === Tokens.RPAREN);
+while (!done) {
+this._parseAssignmentExpression();
+done = (this._peek() === Tokens.RPAREN);
+if (!done) {
+this._expect(Tokens.COMMA);
+this._builder.addSpace();
+}
+}
+this._expect(Tokens.RPAREN);
+},
+
+_parseFunctionLiteral: function()
+{
+this._expect(Tokens.LPAREN);
+var done = (this._peek() === Tokens.RPAREN);
+while (!done) {
+this._expect(Tokens.IDENTIFIER);
+done = (this._peek() === Tokens.RPAREN);
+if (!done) {
+this._expect(Tokens.COMMA);
+this._builder.addSpace();
+}
+}
+this._expect(Tokens.RPAREN);
+this._builder.addSpace();
+
+this._expect(Tokens.LBRACE);
+this._builder.addNewLine();
+this._builder.increaseNestingLevel();
+this._parseSourceElements(Tokens.RBRACE);
+this._builder.decreaseNestingLevel();
+this._expect(Tokens.RBRACE);
+}
+}
 ;
-var process = exports;

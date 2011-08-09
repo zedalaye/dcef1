@@ -30,7 +30,7 @@ type
     var popupFeatures: TCefPopupFeatures; var windowInfo: TCefWindowInfo;
     var url: ustring; var client: ICefBase; out Result: Boolean) of object;
   TOnAfterCreated = procedure(Sender: TCustomChromium; const browser: ICefBrowser) of object;
-  TOnQuitModal = procedure(Sender: TCustomChromium; const browser: ICefBrowser) of object;
+  TOnClose = procedure(Sender: TCustomChromium; const browser: ICefBrowser; out Result: Boolean) of object;
   TOnRunModal = procedure(Sender: TCustomChromium; const browser: ICefBrowser; out Result: Boolean) of object;
 
   TOnLoadStart = procedure(Sender: TCustomChromium; const browser: ICefBrowser; const frame: ICefFrame) of object;
@@ -150,7 +150,7 @@ type
     FOnBeforePopup: TOnBeforePopup;
     FOnAfterCreated: TOnAfterCreated;
     FOnBeforeClose: TOnBeforeClose;
-    FOnQuitModal: TOnQuitModal;
+    FOnClose: TOnClose;
     FOnRunModal: TOnRunModal;
 
     FOnLoadStart: TOnLoadStart;
@@ -208,7 +208,7 @@ type
       var url: ustring; var client: ICefBase): Boolean; virtual;
     procedure doOnAfterCreated(const browser: ICefBrowser); virtual;
     function doOnBeforeClose(const browser: ICefBrowser): Boolean; virtual;
-    procedure doOnQuitModal(const browser: ICefBrowser); virtual;
+    function doOnClose(const browser: ICefBrowser): Boolean; virtual;
     function doOnRunModal(const browser: ICefBrowser): Boolean; virtual;
 
     procedure doOnLoadStart(const browser: ICefBrowser; const frame: ICefFrame); virtual;
@@ -284,7 +284,7 @@ type
     property OnBeforePopup: TOnBeforePopup read FOnBeforePopup write FOnBeforePopup;
     property OnAfterCreated: TOnAfterCreated read FOnAfterCreated write FOnAfterCreated;
     property OnBeforeClose: TOnBeforeClose read FOnBeforeClose write FOnBeforeClose;
-    property OnQuitModal: TOnQuitModal read FOnQuitModal write FOnQuitModal;
+    property OnClose: TOnClose read FOnClose write FOnClose;
     property OnRunModal: TOnRunModal read FOnRunModal write FOnRunModal;
 
     property OnLoadStart: TOnLoadStart read FOnLoadStart write FOnLoadStart;
@@ -353,7 +353,7 @@ type
     property OnBeforePopup;
     property OnAfterCreated;
     property OnBeforeClose;
-    property OnQuitModal;
+    property OnClose;
     property OnRunModal;
 
     property OnLoadStart;
@@ -447,7 +447,7 @@ type
     procedure OnAfterCreated(const browser: ICefBrowser); override;
     procedure OnBeforeClose(const browser: ICefBrowser); override;
     function RunModal(const browser: ICefBrowser): Boolean; override;
-    procedure QuitModal(const browser: ICefBrowser); override;
+    function DoClose(const browser: ICefBrowser): Boolean; override;
   public
     constructor Create(crm: TCustomChromium); reintroduce;
   end;
@@ -661,12 +661,12 @@ end;
 
 destructor TCustomChromium.Destroy;
 begin
+  if FBrowser <> nil then
+    FBrowser.ParentWindowWillClose;
   if FHandler <> nil then
     (FHandler as ICefClientHandler).Disconnect;
   FHandler := nil;
   FBrowser := nil;
-//  SendMessage(FBrowserHandle, WM_CLOSE, 0, 0);
-//  SendMessage(FBrowserHandle, WM_DESTROY, 0, 0);
   FFontOptions.Free;
   inherited;
 end;
@@ -892,10 +892,11 @@ begin
     FOnProtocolExecution(Self, browser, url, AllowOsExecution, Result);
 end;
 
-procedure TCustomChromium.doOnQuitModal(const browser: ICefBrowser);
+function TCustomChromium.doOnClose(const browser: ICefBrowser): Boolean;
 begin
-  if Assigned(FOnQuitModal) then
-    FOnQuitModal(Self, browser);
+  Result := False;
+  if Assigned(FOnClose) then
+    FOnClose(Self, browser, Result);
 end;
 
 procedure TCustomChromium.doOnResourceResponse(const browser: ICefBrowser;
@@ -1024,6 +1025,7 @@ procedure TCustomChromium.ReCreateBrowser(const url: string);
 begin
   if (FBrowser <> nil) and (FBrowserHandle <> 0) then
   begin
+    FBrowser.ParentWindowWillClose;
     SendMessage(FBrowserHandle, WM_CLOSE, 0, 0);
     SendMessage(FBrowserHandle, WM_DESTROY, 0, 0);
     FBrowserHandle := 0;
@@ -1235,9 +1237,9 @@ begin
   Result := FCrm.doOnBeforePopup(parentBrowser, popupFeatures, windowInfo, url, client);
 end;
 
-procedure TCustomLifeSpanHandler.QuitModal(const browser: ICefBrowser);
+function TCustomLifeSpanHandler.DoClose(const browser: ICefBrowser): Boolean;
 begin
-  FCrm.doOnQuitModal(browser);
+  Result := FCrm.doOnClose(browser);
 end;
 
 function TCustomLifeSpanHandler.RunModal(const browser: ICefBrowser): Boolean;
