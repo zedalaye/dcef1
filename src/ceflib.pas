@@ -936,6 +936,11 @@ type
     // Base structure.
     base: TCefBase;
 
+    // Call this function before destroying a contained browser window. This
+    // function performs any internal cleanup that may be needed before the
+    // browser window is destroyed.
+    parent_window_will_close: procedure(self: PCefBrowser); stdcall;
+
     // Closes this browser window.
     close_browser: procedure(self: PCefBrowser); stdcall;
 
@@ -948,7 +953,7 @@ type
     // Returns true (1) if the browser can navigate forwards.
     can_go_forward: function(self: PCefBrowser): Integer; stdcall;
 
-    // Navigate backwards.
+    // Navigate forwards.
     go_forward: procedure(self: PCefBrowser); stdcall;
 
     // Reload the current page.
@@ -1181,20 +1186,22 @@ type
     // Called after a new window is created.
     on_after_created: procedure(self: PCefLifeSpanHandler; browser: PCefBrowser); stdcall;
 
-    // Called just before a window is closed. If this is a modal window and you
-    // handled the run_modal() event you can use this callback to restore the
-    // opener window to a usable state.
-    on_before_close: procedure(self: PCefLifeSpanHandler; browser: PCefBrowser); stdcall;
-
-    // Called to enter the modal loop. Provide your own modal loop here. Return
-    // true (1) if you ran your own modal loop and false (0) to use the default.
-    // You can also use this event to know when a modal window is about to start.
+    // Called when a modal window is about to display and the modal loop should
+    // begin running. Return false (0) to use the default modal loop
+    // implementation or true (1) to use a custom implementation.
     run_modal: function(self: PCefLifeSpanHandler; browser: PCefBrowser): Integer; stdcall;
 
-    // Called when a modal browser window has been destroyed. You must implement
-    // this if you are handling run_modal(). You can also use this event to know
-    // when a modal window is about to be closed.
-    quit_modal: procedure(self: PCefLifeSpanHandler; browser: PCefBrowser); stdcall;
+    // Called when a window has recieved a request to close. Return false (0) to
+    // proceed with the window close or true (1) to cancel the window close. If
+    // this is a modal window and a custom modal loop implementation was provided
+    // in run_modal() this callback should be used to restore the opener window to
+    // a usable state.
+    do_close: function(self: PCefLifeSpanHandler; browser: PCefBrowser): Integer; stdcall;
+
+    // Called just before a window is closed. If this is a modal window and a
+    // custom modal loop implementation was provided in run_modal() this callback
+    // should be used to exit the custom modal loop.
+    on_before_close: procedure(self: PCefLifeSpanHandler; browser: PCefBrowser); stdcall;
   end;
 
   // Implement this structure to handle events related to browser load status. The
@@ -1238,8 +1245,7 @@ type
     // Base structure.
     base: TCefBase;
 
-    // Called on the UI thread before browser navigation. The client has an
-    // opportunity to modify the |request| object if desired. Return true (1) to
+    // Called on the UI thread before browser navigation. Return true (1) to
     // cancel the navigation or false (0) to allow the navigation to proceed.
     on_before_browse: function(self: PCefRequestHandler;
         browser: PCefBrowser; frame: PCefFrame;
@@ -1264,7 +1270,7 @@ type
     // Called on the UI thread after a response to the resource request is
     // received. Set |filter| if response content needs to be monitored and/or
     // modified as it arrives.
-    on_resource_reponse: procedure(self: PCefRequestHandler;
+    on_resource_response: procedure(self: PCefRequestHandler;
         browser: PCefBrowser; const url: PCefString;
         response: PCefResponse; var filter: PCefContentFilter); stdcall;
 
@@ -2580,6 +2586,7 @@ type
 
   ICefBrowser = interface(ICefBase)
     ['{BA003C2E-CF15-458F-9D4A-FE3CEFCF3EEF}']
+    procedure ParentWindowWillClose;
     procedure CloseBrowser;
     function CanGoBack: Boolean;
     procedure GoBack;
@@ -3050,6 +3057,7 @@ type
 
   TCefBrowserRef = class(TCefBaseRef, ICefBrowser)
   protected
+    procedure ParentWindowWillClose;
     procedure CloseBrowser;
     function CanGoBack: Boolean;
     procedure GoBack;
@@ -3299,7 +3307,7 @@ type
     procedure OnAfterCreated(const browser: ICefBrowser); virtual;
     procedure OnBeforeClose(const browser: ICefBrowser); virtual;
     function RunModal(const browser: ICefBrowser): Boolean; virtual;
-    procedure QuitModal(const browser: ICefBrowser); virtual;
+    function DoClose(const browser: ICefBrowser): Boolean; virtual;
   public
     constructor Create; virtual;
   end;
@@ -4663,10 +4671,10 @@ begin
     Result := Ord(RunModal(TCefBrowserRef.UnWrap(browser)));
 end;
 
-procedure cef_life_span_handler_quit_modal(self: PCefLifeSpanHandler; browser: PCefBrowser); stdcall;
+function cef_life_span_handler_do_close(self: PCefLifeSpanHandler; browser: PCefBrowser): Integer; stdcall;
 begin
-  with TCefLifeSpanHandlerOwn(CefGetObject(self)) do
-    QuitModal(TCefBrowserRef.UnWrap(browser));
+  with TCefLifeSpanHandlerOwn(CefGetObject(self)) do
+    Result := Ord(DoClose(TCefBrowserRef.UnWrap(browser)));
 end;
 
 { cef_load_handler }
@@ -4766,7 +4774,7 @@ begin
   end;
 end;
 
-procedure cef_request_handler_on_resource_reponse(self: PCefRequestHandler;
+procedure cef_request_handler_on_resource_response(self: PCefRequestHandler;
   browser: PCefBrowser; const url: PCefString; response: PCefResponse;
   var filter: PCefContentFilter); stdcall;
 var
@@ -5650,6 +5658,11 @@ end;
 function TCefBrowserRef.IsWindowRenderingDisabled: Boolean;
 begin
   Result := PCefBrowser(FData)^.is_window_rendering_disabled(PCefBrowser(FData)) <> 0;
+end;
+
+procedure TCefBrowserRef.ParentWindowWillClose;
+begin
+  PCefBrowser(FData)^.parent_window_will_close(PCefBrowser(FData));
 end;
 
 procedure TCefBrowserRef.Reload;
@@ -9049,7 +9062,7 @@ begin
     on_after_created := @cef_life_span_handler_on_after_created;
     on_before_close := @cef_life_span_handler_on_before_close;
     run_modal := @cef_life_span_handler_run_modal;
-    quit_modal := @cef_life_span_handler_quit_modal;
+    do_close := @cef_life_span_handler_do_close;
   end;
 end;
 
@@ -9071,9 +9084,9 @@ begin
   Result := False;
 end;
 
-procedure TCefLifeSpanHandlerOwn.QuitModal(const browser: ICefBrowser);
+function TCefLifeSpanHandlerOwn.DoClose(const browser: ICefBrowser): Boolean;
 begin
-
+  Result := False;
 end;
 
 function TCefLifeSpanHandlerOwn.RunModal(const browser: ICefBrowser): Boolean;
@@ -9146,7 +9159,7 @@ begin
   begin
     on_before_browse := @cef_request_handler_on_before_browse;
     on_before_resource_load := @cef_request_handler_on_before_resource_load;
-    on_resource_reponse := @cef_request_handler_on_resource_reponse;
+    on_resource_response := @cef_request_handler_on_resource_response;
     on_protocol_execution := @cef_request_handler_on_protocol_execution;
     get_download_handler := @cef_request_handler_get_download_handler;
     get_auth_credentials := @cef_request_handler_get_auth_credentials;
@@ -9463,11 +9476,6 @@ initialization
 finalization
   if LibHandle <> 0 then
   begin
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-    // Work around: last chance to cleanup
-    PostQuitMessage(0);
-    cef_run_message_loop;
-{$ENDIF}
     cef_shutdown;
     FreeLibrary(LibHandle);
   end;

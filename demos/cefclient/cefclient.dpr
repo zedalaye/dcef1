@@ -263,7 +263,8 @@ begin
         end;
       WM_CLOSE:
         begin
-          SendMessage(browsrHwnd, WM_CLOSE, 0, 0);
+          if brows <> nil then
+            brows.ParentWindowWillClose;
           result := DefWindowProc(Wnd, message, wParam, lParam);
         end
      else

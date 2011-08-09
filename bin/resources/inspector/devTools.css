@@ -365,104 +365,6 @@ body.inactive .audit-launcher-view button, .audit-launcher-view button:disabled 
     content: url(Images/profileSmallIcon.png);
 }
 
-.heap-snapshot-view {
-    display: none;
-    overflow: hidden;
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-}
-
-.heap-snapshot-view.visible {
-    display: block;
-}
-
-.heap-snapshot-view .data-grid {
-    border: none;
-    max-height: 100%;
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
-    bottom: 93px;
-}
-
-.heap-snapshot-view .data-grid th.count-column {
-    text-align: center;
-}
-
-.heap-snapshot-view .data-grid td.count-column {
-    text-align: right;
-}
-
-.heap-snapshot-view .data-grid th.size-column {
-    text-align: center;
-}
-
-.heap-snapshot-view .data-grid td.size-column {
-    text-align: right;
-}
-
-.heap-snapshot-view .data-grid th.countDelta-column {
-    text-align: center;
-}
-
-.heap-snapshot-view .data-grid td.countDelta-column {
-    text-align: right;
-}
-
-.heap-snapshot-view .data-grid th.sizeDelta-column {
-    text-align: center;
-}
-
-.heap-snapshot-view .data-grid td.sizeDelta-column {
-    text-align: right;
-}
-
-#heap-snapshot-summary-container {
-    position: absolute;
-    padding-top: 20px;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 93px;
-    margin-left: -1px;
-    border-left: 1px solid rgb(102, 102, 102);
-    background-color: rgb(101, 111, 130);
-    background-image: -webkit-gradient(linear, left top, left bottom, from(rgba(0, 0, 0, 0.5)), to(rgba(0, 0, 0, 0)));
-    background-repeat: repeat-x;
-    background-position: top;
-    text-align: center;
-    text-shadow: black 0 1px 1px;
-    white-space: nowrap;
-    color: white;
-    -webkit-background-size: 1px 6px;
-    -webkit-background-origin: padding;
-    -webkit-background-clip: padding;
-}
-
-.heap-snapshot-summary {
-    display: inline-block;
-    width: 50%;
-    min-width: 300px;
-    position: relative;
-}
-
-.heap-snapshot-summary canvas.summary-graph {
-    width: 225px;
-}
-
-.heap-snapshot-summary-label {
-    font-size: 12px;
-    font-weight: bold;
-    position: absolute;
-    top: 1px;
-    width: 50%;
-    left: 25%;
-}
-
 .detailed-heapshot-view {
     display: none;
     overflow: hidden;
@@ -471,27 +373,22 @@ body.inactive .audit-launcher-view button, .audit-launcher-view button:disabled 
     left: 0;
     right: 0;
     bottom: 0;
-    -webkit-box-orient: vertical;
 }
 
 .detailed-heapshot-view.visible {
-    display: -webkit-box;
+    display: block;
 }
 
 .detailed-heapshot-view .view {
     display: none;
-    -webkit-box-flex: 3;
-    -webkit-box-orient: vertical;
 }
 
 .detailed-heapshot-view .view.visible {
-    display: -webkit-box;
+    display: block;
 }
 
 .detailed-heapshot-view .data-grid {
     border: none;
-    position: relative;
-    -webkit-box-flex: 1;
 }
 
 .detailed-heapshot-view .data-grid td.count-column {
@@ -552,22 +449,56 @@ body.inactive .audit-launcher-view button, .audit-launcher-view button:disabled 
     background-color: #d6dde5;
 }
 
-.detailed-heapshot-view .retaining-paths-view {
-    -webkit-box-flex: 1;
+.detailed-heapshot-view .data-grid {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
 }
 
-.detailed-heapshot-view .retaining-paths-view .title {
-    background-color: rgb(235, 235, 235);
-    background-image: url(Images/statusbarBackground.png);
-    background-repeat: repeat-x;
+.detailed-heapshot-view .views-container { 
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 173px;
+}
+
+.detailed-heapshot-view .views-container .view {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.detailed-heapshot-view .retaining-paths-view {
+    height: 150px;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+
+.detailed-heapshot-view .retainers-view-header {
+    background-image: url(Images/statusbarResizerVertical.png), url(Images/statusbarBackground.png);
+    background-repeat: no-repeat, repeat-x;
+    background-position: right center, center;
+    cursor: row-resize;
     height: 23px;
     font: -webkit-small-control;
     font-weight: bold;
     color: rgb(48, 48, 48);
     text-shadow: rgba(255, 255, 255, 0.75) 0 1px 0;
+    display: block;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 150px;
 }
 
-.detailed-heapshot-view .retaining-paths-view .title > span {
+.detailed-heapshot-view .retainers-view-header .title > span {
     display: inline-block;
     padding-top: 3px;
     vertical-align: middle;
@@ -575,12 +506,8 @@ body.inactive .audit-launcher-view button, .audit-launcher-view button:disabled 
     margin-right: 8px;
 }
 
-.detailed-heapshot-view .retaining-paths-to-windows {
-    
-}
-
 .heapshot-help-status-bar-item .glyph {
-    -webkit-mask-image: url(Images/helpButtonGlyph.png);
+    -webkit-mask-position: -160px 0;
 }
 
 table.heapshot-help {
@@ -693,7 +620,7 @@ body.detached.platform-mac-snowleopard:not(.remote) #toolbar {
 body.attached #toolbar {
     height: 34px;
     border-top: 1px solid rgb(100, 100, 100);
-    cursor: row-resize;
+    cursor: ns-resize;
     padding-left: 0;
 }
 
@@ -1041,7 +968,7 @@ body.drawer-visible #main-status-bar {
     background-image: url(Images/statusbarResizerVertical.png), url(Images/statusbarBackground.png);
     background-repeat: no-repeat, repeat-x;
     background-position: right center, center;
-    cursor: row-resize;
+    cursor: ns-resize;
 }
 
 body.drawer-visible #main-status-bar * {
@@ -1144,19 +1071,21 @@ select.status-bar-item:active {
     -webkit-mask-image: url(Images/statusbarButtonGlyphs.png);
 }
 
-#dock-status-bar-item .glyph {
+
+button.dock-status-bar-item.status-bar-item .glyph {
     -webkit-mask-position: 0 -48px;
 }
 
-body.detached #dock-status-bar-item .glyph {
+button.dock-status-bar-item.status-bar-item.toggled-on .glyph {
     -webkit-mask-position: -32px -24px;
+    background-color: rgba(0, 0, 0, 0.75);
 }
 
 body.port-qt #dock-status-bar-item {
     display: none
 }
 
-#console-status-bar-item .glyph {
+.console-status-bar-item .glyph {
     -webkit-mask-position: -64px -24px;
 }
 
@@ -1269,7 +1198,8 @@ body.platform-linux .monospace, body.platform-linux .source-code {
 
 #console-prompt {
     position: relative;
-    padding: 1px 22px 1px 24px;
+    padding: 1px 22px 1px 0px;
+    margin-left: 24px;
     min-height: 16px; 
     white-space: pre-wrap;
     -webkit-user-modify: read-write-plaintext-only;
@@ -1286,7 +1216,8 @@ body.platform-linux .monospace, body.platform-linux .source-code {
 .console-message, .console-user-command {
     position: relative;
     border-bottom: 1px solid rgb(240, 240, 240);
-    padding: 1px 22px 1px 24px;
+    padding: 1px 22px 1px 0px;
+    margin-left: 24px;
     min-height: 16px;
 }
 
@@ -1302,7 +1233,7 @@ body.platform-linux .monospace, body.platform-linux .source-code {
     position: absolute;
     display: block;
     content: "";
-    left: 7px;
+    left: -14px;
     top: 0.8em;
     width: 10px;
     height: 10px;
@@ -1354,6 +1285,8 @@ body.platform-linux .monospace, body.platform-linux .source-code {
     top: 0.6em;
     width: 11px;
     height: 12px;
+    left: -16px;
+    position: absolute;
 }
 
 .console-group.collapsed .console-group-title::before {
@@ -1364,8 +1297,27 @@ body.platform-linux .monospace, body.platform-linux .source-code {
     display: none;
 }
 
-.console-error-level .console-message-text {
-    color: red;
+.console-group {
+    position: relative;
+}
+
+.console-group-bracket {
+    position:absolute;
+    top: 15px;
+    left: 13px;
+    bottom: 5px;
+    width: 3px;
+    border-style: solid;
+    border-color: #A3A3A3;
+    border-width: 0px 0px 1px 1px;
+}
+
+.console-group.collapsed > .console-group-bracket {
+    display: none;
+}
+
+.console-error-level .console-message-text, .console-error-level .section .header .title {
+    color: red !important;
 }
 
 .console-debug-level .console-message-text {
@@ -1477,6 +1429,7 @@ body.platform-linux .monospace, body.platform-linux .source-code {
     position: relative;
     display: inline-block;
     vertical-align: top;
+    color: black;
 }
 
 .console-formatted-object .section, .console-formatted-node .section {
@@ -1522,6 +1475,15 @@ body.platform-linux .monospace, body.platform-linux .source-code {
 
 .panel.visible {
     display: block;
+}
+
+iframe.extension {
+    width: 100%;
+}
+
+iframe.panel.extension {
+    display: block;
+    height: 100%;
 }
 
 .webkit-line-gutter-backdrop {
@@ -1650,10 +1612,6 @@ body.platform-linux .monospace, body.platform-linux .source-code {
 
 #elements-content > ol {
     display: inline-block;
-}
-
-#elements-content .dom-shadow-root {
-    color: rgb(90, 90, 90);
 }
 
 #elements-sidebar {
@@ -1832,10 +1790,6 @@ body.platform-linux .monospace, body.platform-linux .source-code {
     text-indent: -12px
 }
 
-.outline-disclosure li .webkit-html-tag.shadow {
-    opacity: 0.7;
-}
-
 .outline-disclosure li .webkit-html-tag.close {
     margin-left: -12px;
 }
@@ -1941,10 +1895,6 @@ body.inactive .placard.selected {
 .section {
     position: relative;
     margin-top: 1px;
-}
-
-.watch-expressions-buttons-container {
-    text-align: center;
 }
 
 .events-pane .section:not(:nth-of-type(1)) {
@@ -2190,6 +2140,14 @@ li.editing .swatch, li.editing .enabled-button,  li.editing-sub-part .delete-but
     display: none !important;
 }
 
+.properties-tree.watch-expressions {
+    padding-bottom: 8px;
+}
+
+.properties-tree.watch-expressions li {
+    padding-top: 2px;
+}
+
 .watch-expressions > li.editing-sub-part .name {
     display: block; 
     width: 100%;
@@ -2209,15 +2167,22 @@ li.editing .swatch, li.editing .enabled-button,  li.editing-sub-part .delete-but
     text-overflow: clip;
 }
 
-/* FIXME: need a better icon (comment in bug 27514) */
 .section .properties .delete-button {
     width: 10px;
     height: 10px;
-    background-image: url(Images/errorIcon.png);
+    background-image: url(Images/deleteIcon.png);
     background-position: 0 0;
     background-color: transparent;
     background-repeat: no-repeat;
     border: 0 none transparent;
+    position: absolute;
+    margin-left: -25px;
+    margin-top: 2px;
+    display: none;
+}
+
+.section .properties li.hovered .delete-button {
+    display: inline;
 }
 
 .section .properties .name, .event-properties .name {
@@ -2304,7 +2269,6 @@ li.editing .swatch, li.editing .enabled-button,  li.editing-sub-part .delete-but
     color: transparent;
     background-color: transparent;
     border: none;
-    background-image: url(Images/paneSettingsButtons.png);
     background-repeat: no-repeat;
     margin: 1px 0 0 0;
     padding: 0;
@@ -2320,18 +2284,25 @@ li.editing .swatch, li.editing .enabled-button,  li.editing-sub-part .delete-but
     background-position: -46px 0px;
 }
 
+.pane > .title > select.select-settings {
+    background-image: url(Images/paneSettingsButtons.png);
+}
+
+.pane > .title > select.select-filter {
+    background-image: url(Images/paneFilterButtons.png);
+}
+
 .pane > .title > select > option, .pane > .title > select > hr {
     color: black;
 }
 
-.pane > .title > button.add {
+.pane > .title > .pane-title-button {
     float: right;
     width: 23px;
     height: 17px;
     color: transparent;
     background-color: transparent;
     border: none;
-    background-image: url(Images/paneAddButtons.png);
     background-repeat: no-repeat;
     margin: 1px 0 0 0;
     padding: 0;
@@ -2339,12 +2310,20 @@ li.editing .swatch, li.editing .enabled-button,  li.editing-sub-part .delete-but
     -webkit-appearance: none;
 }
 
-.pane > .title > button.add:hover {
+.pane > .title > .pane-title-button:hover {
     background-position: -23px 0px;
 }
 
-.pane > .title > button.add:active {
+.pane > .title > .pane-title-button:active {
     background-position: -46px 0px;
+}
+
+.pane > .title > .pane-title-button.add {
+    background-image: url(Images/paneAddButtons.png);
+}
+
+.pane > .title > .pane-title-button.refresh {
+    background-image: url(Images/paneRefreshButtons.png);
 }
 
 .pane > .body {
@@ -3273,7 +3252,7 @@ button.enable-toggle-status-bar-item.toggled-on .glyph {
     bottom: 0;
     right: 225px;
     width: 16px;
-    cursor: col-resize;
+    cursor: ew-resize;
     background-image: url(Images/statusbarResizerHorizontal.png);
     background-repeat: no-repeat;
     background-position: center;
@@ -3806,7 +3785,7 @@ button.enable-toggle-status-bar-item.toggled-on .glyph {
     bottom: 0;
     width: 5px;
     z-index: 500;
-    cursor: col-resize;
+    cursor: ew-resize;
 }
 
 .resources .sidebar-resizer-vertical {
@@ -4314,7 +4293,7 @@ body.inactive li.selected .bubble.search-matches {
     margin-right: -2px;
     background-color: rgb(153, 153, 153);
     z-index: 500;
-    cursor: col-resize;
+    cursor: ew-resize;
     -webkit-border-radius: 2px;
     -webkit-box-shadow: white 1px 0 0, white -1px 0 0, white 0 1px 0, white 0 -1px 0;
 }
@@ -4607,7 +4586,7 @@ body.inactive li.selected .bubble.search-matches {
 }
 
 .timeline-filter-status-bar-item .glyph {
-    -webkit-mask-position: -224px 0;
+    -webkit-mask-position: -32px -48px;
 }
 
 .timeline-filter-status-bar-item.toggled-on .glyph {
@@ -5135,6 +5114,12 @@ a.worker-item:hover {
     padding: 5px;
 }
 
+.resource-view.html iframe {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+}
+
 /* inspectorSyntaxHighlight.css */
 
 /*
@@ -5334,7 +5319,7 @@ a.worker-item:hover {
     background-color: white;
 }
 
-.network-sidebar .data-grid td.name-column {
+.network-sidebar .data-grid tr:not(.filler) td.name-column {
     font-weight: bold;
     cursor: pointer;
 }
@@ -6109,7 +6094,7 @@ body.attached .help-window-outer {
     top: 32px;
     left: 0;
     width: 100%;
-    bottom: 24px;
+    bottom: 23px;
 }
 
 .help-window-main {
@@ -6500,6 +6485,11 @@ body.platform-mac .help-key {
     -webkit-user-modify: read-write-plaintext-only;
 }
 
+.text-editor-read-only {
+    -webkit-user-modify: read-only;
+    background-color: rgb(240, 240, 240);
+}
+
 .webkit-line-decorations {
     pointer-events: none;
     -webkit-user-select: none;
@@ -6687,11 +6677,11 @@ body.detached.platform-mac-leopard.inactive #toolbar {
 }
 
 body.detached.platform-mac-snowleopard #toolbar {
-    background-image: -webkit-gradient(linear, left top, left bottom, from(rgb(189, 189, 189)), to(rgb(151, 151, 151))) !important;
+    background-image: -webkit-gradient(linear, left top, left bottom, from(rgb(189, 189, 189)), to(rgb(167, 167, 167))) !important;
 }
 
 body.detached.platform-mac-snowleopard.inactive #toolbar {
-    background-image: -webkit-gradient(linear, left top, left bottom, from(rgb(215, 215, 215)), to(rgb(207, 207, 207))) !important;
+    background-image: -webkit-gradient(linear, left top, left bottom, from(rgb(228, 228, 228)), to(rgb(216, 216, 216))) !important;
 }
 
 body.platform-linux #scripts-files {
