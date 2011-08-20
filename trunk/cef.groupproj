@@ -12,6 +12,9 @@
 			<Projects Include="demos\guiclient\guiclient.dproj">
 				<Dependencies/>
 			</Projects>
+			<Projects Include="demos\offscreen\offscreen.dproj">
+				<Dependencies/>
+			</Projects>
 		</ItemGroup>
 		<ProjectExtensions>
 			<Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -24,37 +27,46 @@
 			<MSBuild Projects="src\cefcomponent.dproj"/>
 		</Target>
 		<Target Name="cefcomponent:Clean">
-			<MSBuild Projects="src\cefcomponent.dproj" Targets="Clean"/>
+			<MSBuild Targets="Clean" Projects="src\cefcomponent.dproj"/>
 		</Target>
 		<Target Name="cefcomponent:Make">
-			<MSBuild Projects="src\cefcomponent.dproj" Targets="Make"/>
+			<MSBuild Targets="Make" Projects="src\cefcomponent.dproj"/>
 		</Target>
 		<Target Name="cefclient">
 			<MSBuild Projects="demos\cefclient\cefclient.dproj"/>
 		</Target>
 		<Target Name="cefclient:Clean">
-			<MSBuild Projects="demos\cefclient\cefclient.dproj" Targets="Clean"/>
+			<MSBuild Targets="Clean" Projects="demos\cefclient\cefclient.dproj"/>
 		</Target>
 		<Target Name="cefclient:Make">
-			<MSBuild Projects="demos\cefclient\cefclient.dproj" Targets="Make"/>
+			<MSBuild Targets="Make" Projects="demos\cefclient\cefclient.dproj"/>
 		</Target>
 		<Target Name="guiclient">
 			<MSBuild Projects="demos\guiclient\guiclient.dproj"/>
 		</Target>
 		<Target Name="guiclient:Clean">
-			<MSBuild Projects="demos\guiclient\guiclient.dproj" Targets="Clean"/>
+			<MSBuild Targets="Clean" Projects="demos\guiclient\guiclient.dproj"/>
 		</Target>
 		<Target Name="guiclient:Make">
-			<MSBuild Projects="demos\guiclient\guiclient.dproj" Targets="Make"/>
+			<MSBuild Targets="Make" Projects="demos\guiclient\guiclient.dproj"/>
+		</Target>
+		<Target Name="offscreen">
+			<MSBuild Projects="demos\offscreen\offscreen.dproj"/>
+		</Target>
+		<Target Name="offscreen:Clean">
+			<MSBuild Targets="Clean" Projects="demos\offscreen\offscreen.dproj"/>
+		</Target>
+		<Target Name="offscreen:Make">
+			<MSBuild Targets="Make" Projects="demos\offscreen\offscreen.dproj"/>
 		</Target>
 		<Target Name="Build">
-			<CallTarget Targets="cefcomponent;cefclient;guiclient"/>
+			<CallTarget Targets="cefcomponent;cefclient;guiclient;offscreen"/>
 		</Target>
 		<Target Name="Clean">
-			<CallTarget Targets="cefcomponent:Clean;cefclient:Clean;guiclient:Clean"/>
+			<CallTarget Targets="cefcomponent:Clean;cefclient:Clean;guiclient:Clean;offscreen:Clean"/>
 		</Target>
 		<Target Name="Make">
-			<CallTarget Targets="cefcomponent:Make;cefclient:Make;guiclient:Make"/>
+			<CallTarget Targets="cefcomponent:Make;cefclient:Make;guiclient:Make;offscreen:Make"/>
 		</Target>
-		<Import Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')" Project="$(BDS)\Bin\CodeGear.Group.Targets"/>
+		<Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 	</Project>

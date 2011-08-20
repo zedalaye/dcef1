@@ -1054,7 +1054,8 @@ type
       width, height: Integer; buffer: Pointer): Integer; stdcall;
 
     // Send a key event to the browser.
-    send_key_event: procedure(self: PCefBrowser; kind: TCefKeyType; key, modifiers, sysChar, imeChar: Integer); stdcall;
+    send_key_event: procedure(self: PCefBrowser; kind: TCefKeyType; key, modifiers,
+      sysChar, imeChar: Integer); stdcall;
 
     // Send a mouse click event to the browser. The |x| and |y| coordinates are
     // relative to the upper-left corner of the view.
@@ -2621,9 +2622,10 @@ type
 {$IFNDEF FPC}
     function GetBitmap(typ: TCefPaintElementType; Bitmap: TBitmap): Boolean;
 {$ENDIF}
-    procedure SendKeyEvent(typ: TCefKeyType; key, modifiers, sysChar, imeChar: Integer);
-    procedure SendMouseClickEvent(x, y: Integer; typ: TCefMouseButtonType; mouseUp, clickCount: Integer);
-    procedure SendMouseMoveEvent(x, y, mouseLeave: Integer);
+    procedure SendKeyEvent(typ: TCefKeyType; key, modifiers: Integer; sysChar, imeChar: Boolean);
+    procedure SendMouseClickEvent(x, y: Integer; typ: TCefMouseButtonType;
+      mouseUp: Boolean; clickCount: Integer);
+    procedure SendMouseMoveEvent(x, y: Integer; mouseLeave: Boolean);
     procedure SendMouseWheelEvent(x, y, delta: Integer);
     procedure SendFocusEvent(setFocus: Integer);
     procedure SendCaptureLostEvent;
@@ -3092,9 +3094,10 @@ type
 {$IFNDEF FPC}
     function GetBitmap(typ: TCefPaintElementType; Bitmap: TBitmap): Boolean;
 {$ENDIF}
-    procedure SendKeyEvent(typ: TCefKeyType; key, modifiers, sysChar, imeChar: Integer);
-    procedure SendMouseClickEvent(x, y: Integer; typ: TCefMouseButtonType; mouseUp, clickCount: Integer);
-    procedure SendMouseMoveEvent(x, y, mouseLeave: Integer);
+    procedure SendKeyEvent(typ: TCefKeyType; key, modifiers: Integer; sysChar, imeChar: Boolean);
+    procedure SendMouseClickEvent(x, y: Integer; typ: TCefMouseButtonType;
+      mouseUp: Boolean; clickCount: Integer);
+    procedure SendMouseMoveEvent(x, y: Integer; mouseLeave: Boolean);
     procedure SendMouseWheelEvent(x, y, delta: Integer);
     procedure SendFocusEvent(setFocus: Integer);
     procedure SendCaptureLostEvent;
@@ -5685,21 +5688,20 @@ begin
   PCefBrowser(FData)^.send_focus_event(PCefBrowser(FData), setFocus);
 end;
 
-procedure TCefBrowserRef.SendKeyEvent(typ: TCefKeyType; key, modifiers,
-  sysChar, imeChar: Integer);
+procedure TCefBrowserRef.SendKeyEvent(typ: TCefKeyType; key, modifiers: Integer; sysChar, imeChar: Boolean);
 begin
-  PCefBrowser(FData)^.send_key_event(PCefBrowser(FData), typ, key, modifiers, sysChar, imeChar);
+  PCefBrowser(FData)^.send_key_event(PCefBrowser(FData), typ, key, modifiers, Ord(sysChar), Ord(imeChar));
 end;
 
 procedure TCefBrowserRef.SendMouseClickEvent(x, y: Integer;
-  typ: TCefMouseButtonType; mouseUp, clickCount: Integer);
+  typ: TCefMouseButtonType; mouseUp: Boolean; clickCount: Integer);
 begin
-  PCefBrowser(FData)^.send_mouse_click_event(PCefBrowser(FData), x, y, typ, mouseUp, clickCount);
+  PCefBrowser(FData)^.send_mouse_click_event(PCefBrowser(FData), x, y, typ, Ord(mouseUp), clickCount);
 end;
 
-procedure TCefBrowserRef.SendMouseMoveEvent(x, y, mouseLeave: Integer);
+procedure TCefBrowserRef.SendMouseMoveEvent(x, y: Integer; mouseLeave: Boolean);
 begin
-  PCefBrowser(FData)^.send_mouse_move_event(PCefBrowser(FData), x, y, mouseLeave);
+  PCefBrowser(FData)^.send_mouse_move_event(PCefBrowser(FData), x, y, ord(mouseLeave));
 end;
 
 procedure TCefBrowserRef.SendMouseWheelEvent(x, y, delta: Integer);
@@ -9425,7 +9427,17 @@ end;
 
 constructor TCefRenderHandlerOwn.Create;
 begin
-
+  inherited CreateData(SizeOf(TCefRenderHandler));
+  with PCefRenderHandler(FData)^ do
+  begin
+    get_view_rect := cef_render_handler_get_view_rect;
+    get_screen_rect := cef_render_handler_get_screen_rect;
+    get_screen_point := cef_render_handler_get_screen_point;
+    on_popup_show := cef_render_handler_on_popup_show;
+    on_popup_size := cef_render_handler_on_popup_size;
+    on_paint := cef_render_handler_on_paint;
+    on_cursor_change := cef_render_handler_on_cursor_change;
+  end;
 end;
 
 function TCefRenderHandlerOwn.GetScreenPoint(const browser: ICefBrowser; viewX,
