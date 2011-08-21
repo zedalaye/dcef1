@@ -26,6 +26,7 @@ type
       cursor: HICON);
   private
     { Déclarations privées }
+    FResizing: Boolean;
   public
     { Déclarations publiques }
   end;
@@ -64,19 +65,26 @@ procedure TMainform.chrmosrPaint(Sender: TObject; const browser: ICefBrowser;
 var
   src, dst: PByte;
   offset, i, w: Integer;
+  vw, vh: Integer;
 begin
-  w := PaintBox.buffer.Width * 4;
-  offset := ((dirtyRect.y * PaintBox.buffer.Width) + dirtyRect.x) * 4;
-  src := @PByte(buffer)[offset];
-  dst := @PByte(PaintBox.buffer.Bits)[offset];
-  offset := dirtyRect.width * 4;
-  for i := 0 to dirtyRect.height - 1 do
-  begin
-    Move(src^, dst^, offset);
-    Inc(dst, w);
-    Inc(src, w);
-  end;
-  PaintBox.Flush(Rect(dirtyRect.x, dirtyRect.y, dirtyRect.x + dirtyRect.width,  dirtyRect.y + dirtyRect.height));
+  chrmosr.Browser.GetSize(PET_VIEW, vw, vh);
+  with PaintBox.Buffer do
+    if (vw = Width) and (vh = Height) then
+    begin
+      w := Width * 4;
+      offset := ((dirtyRect.y * Width) + dirtyRect.x) * 4;
+      src := @PByte(buffer)[offset];
+      dst := @PByte(Bits)[offset];
+      offset := dirtyRect.width * 4;
+      for i := 0 to dirtyRect.height - 1 do
+      begin
+        Move(src^, dst^, offset);
+        Inc(dst, w);
+        Inc(src, w);
+      end;
+      PaintBox.Flush(Rect(dirtyRect.x, dirtyRect.y,
+        dirtyRect.x + dirtyRect.width,  dirtyRect.y + dirtyRect.height));
+    end;
 end;
 
 procedure TMainform.PaintBoxMouseDown(Sender: TObject; Button: TMouseButton;
@@ -108,7 +116,8 @@ end;
 procedure TMainform.PaintBoxResize(Sender: TObject);
 begin
   PaintBox.Buffer.SetSize(PaintBox.Width, PaintBox.Height);
-  chrmosr.browser.SetSize(PET_VIEW, PaintBox.Buffer.Width, PaintBox.Buffer.Height);
+  chrmosr.browser.SetSize(PET_VIEW, PaintBox.Width, PaintBox.Height);
+  Application.ProcessMessages;
 end;
 
 end.
