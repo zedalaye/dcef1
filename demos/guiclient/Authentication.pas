@@ -1,4 +1,4 @@
-﻿unit Authentication;
+unit Authentication;
 
 interface
 

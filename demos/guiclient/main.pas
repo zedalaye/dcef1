@@ -73,24 +73,24 @@ type
     procedure actDomExecute(Sender: TObject);
     procedure actNextUpdate(Sender: TObject);
     procedure actPrevUpdate(Sender: TObject);
-    procedure crmAddressChange(Sender: TCustomChromium;
+    procedure crmAddressChange(Sender: TObject;
       const browser: ICefBrowser; const frame: ICefFrame; const url: ustring;
       out Result: Boolean);
-    procedure crmAuthCredentials(Sender: TCustomChromium;
+    procedure crmAuthCredentials(Sender: TObject;
       const browser: ICefBrowser; isProxy: Boolean; const host, realm,
       scheme: ustring; var username, password: ustring; out Result: Boolean);
-    procedure crmGetDownloadHandler(Sender: TCustomChromium;
+    procedure crmGetDownloadHandler(Sender: TObject;
       const browser: ICefBrowser; const mimeType, fileName: ustring;
       contentLength: Int64; var handler: ICefDownloadHandler;
       out Result: Boolean);
-    procedure crmLoadEnd(Sender: TCustomChromium; const browser: ICefBrowser;
+    procedure crmLoadEnd(Sender: TObject; const browser: ICefBrowser;
       const frame: ICefFrame; httpStatusCode: Integer; out Result: Boolean);
-    procedure crmLoadStart(Sender: TCustomChromium; const browser: ICefBrowser;
+    procedure crmLoadStart(Sender: TObject; const browser: ICefBrowser;
       const frame: ICefFrame);
-    procedure crmStatusMessage(Sender: TCustomChromium;
+    procedure crmStatusMessage(Sender: TObject;
       const browser: ICefBrowser; const value: ustring;
       StatusType: TCefHandlerStatusType; out Result: Boolean);
-    procedure crmTitleChange(Sender: TCustomChromium;
+    procedure crmTitleChange(Sender: TObject;
       const browser: ICefBrowser; const title: ustring; out Result: Boolean);
   private
     { Déclarations privées }
@@ -288,7 +288,7 @@ begin
     crm.Browser.ZoomLevel := 0;
 end;
 
-procedure TMainForm.crmAddressChange(Sender: TCustomChromium;
+procedure TMainForm.crmAddressChange(Sender: TObject;
   const browser: ICefBrowser; const frame: ICefFrame; const url: ustring;
   out Result: Boolean);
 begin
@@ -296,13 +296,16 @@ begin
     edAddress.Text := url;
 end;
 
-procedure TMainForm.crmAuthCredentials(Sender: TCustomChromium;
+procedure TMainForm.crmAuthCredentials(Sender: TObject;
   const browser: ICefBrowser; isProxy: Boolean; const host, realm,
   scheme: ustring; var username, password: ustring; out Result: Boolean);
+{$IFDEF DELPHI12_UP}
 var
   u, p: ustring;
   r: Boolean;
+{$ENDIF}
 begin
+{$IFDEF DELPHI12_UP}
   TThread.Synchronize(nil, procedure begin
     with TPasswordDlg.Create(nil) do
     try
@@ -324,9 +327,10 @@ begin
     username := u;
     password := p;
   end;
+{$ENDIF}
 end;
 
-procedure TMainForm.crmGetDownloadHandler(Sender: TCustomChromium;
+procedure TMainForm.crmGetDownloadHandler(Sender: TObject;
   const browser: ICefBrowser; const mimeType, fileName: ustring;
   contentLength: Int64; var handler: ICefDownloadHandler; out Result: Boolean);
 begin
@@ -337,7 +341,7 @@ begin
   Result := True;
 end;
 
-procedure TMainForm.crmLoadEnd(Sender: TCustomChromium;
+procedure TMainForm.crmLoadEnd(Sender: TObject;
   const browser: ICefBrowser; const frame: ICefFrame; httpStatusCode: Integer;
   out Result: Boolean);
 begin
@@ -345,14 +349,14 @@ begin
     FLoading := False;
 end;
 
-procedure TMainForm.crmLoadStart(Sender: TCustomChromium;
+procedure TMainForm.crmLoadStart(Sender: TObject;
   const browser: ICefBrowser; const frame: ICefFrame);
 begin
   if (browser <> nil) and (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
     FLoading := True;
 end;
 
-procedure TMainForm.crmStatusMessage(Sender: TCustomChromium;
+procedure TMainForm.crmStatusMessage(Sender: TObject;
   const browser: ICefBrowser; const value: ustring;
   StatusType: TCefHandlerStatusType; out Result: Boolean);
 begin
@@ -360,7 +364,7 @@ begin
     StatusBar.SimpleText := value
 end;
 
-procedure TMainForm.crmTitleChange(Sender: TCustomChromium;
+procedure TMainForm.crmTitleChange(Sender: TObject;
   const browser: ICefBrowser; const title: ustring; out Result: Boolean);
 begin
   if browser.GetWindowHandle = crm.BrowserHandle then
