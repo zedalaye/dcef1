@@ -1008,9 +1008,8 @@ type
 procedure Register;
 
 implementation
-uses Forms;
 
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 var
   CefInstances: Integer = 0;
   CefTimer: UINT = 0;
@@ -1047,7 +1046,6 @@ begin
   if not (csDesigning in ComponentState) then
   begin
     FillChar(info, SizeOf(info), 0);
-    info.WndParent := Application.Handle;
     info.m_bWindowRenderingDisabled := True;
     FillChar(settings, SizeOf(TCefBrowserSettings), 0);
     settings.size := SizeOf(TCefBrowserSettings);
