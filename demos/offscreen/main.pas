@@ -61,8 +61,20 @@ end;
 
 procedure TMainform.chrmosrPaint(Sender: TObject; const browser: ICefBrowser;
   kind: TCefPaintElementType; const dirtyRect: PCefRect; const buffer: Pointer);
+var
+  src, dst: PByte;
+  offset, i, w: Integer;
 begin
-  Move(buffer^, PaintBox.buffer.Bits^, 4 * PaintBox.buffer.Width * PaintBox.buffer.Height);
+  w := PaintBox.buffer.Width * 4;
+  offset := (dirtyRect.y * w) + dirtyRect.x;
+  src := @PByte(buffer)[offset];
+  dst := @PByte(PaintBox.buffer.Bits)[offset];
+  for i := 0 to dirtyRect.height - 1 do
+  begin
+    Move(src^, dst^, w);
+    Inc(dst, w);
+    Inc(src, w);
+  end;
   PaintBox.Flush(Rect(dirtyRect.x, dirtyRect.y, dirtyRect.x + dirtyRect.width,  dirtyRect.y + dirtyRect.height));
 end;
 
