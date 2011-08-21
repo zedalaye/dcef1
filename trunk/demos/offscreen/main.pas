@@ -66,12 +66,13 @@ var
   offset, i, w: Integer;
 begin
   w := PaintBox.buffer.Width * 4;
-  offset := (dirtyRect.y * w) + dirtyRect.x;
+  offset := ((dirtyRect.y * PaintBox.buffer.Width) + dirtyRect.x) * 4;
   src := @PByte(buffer)[offset];
   dst := @PByte(PaintBox.buffer.Bits)[offset];
+  offset := dirtyRect.width * 4;
   for i := 0 to dirtyRect.height - 1 do
   begin
-    Move(src^, dst^, w);
+    Move(src^, dst^, offset);
     Inc(dst, w);
     Inc(src, w);
   end;
