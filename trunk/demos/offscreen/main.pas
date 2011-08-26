@@ -44,10 +44,15 @@ begin
     WM_CHAR: chrmosr.Browser.SendKeyEvent(KT_CHAR, Msg.wParam, Msg.lParam, False, False);
     WM_KEYDOWN: chrmosr.Browser.SendKeyEvent(KT_KEYDOWN, Msg.wParam, Msg.lParam, False, False);
     WM_KEYUP: chrmosr.Browser.SendKeyEvent(KT_KEYUP, Msg.wParam, Msg.lParam, False, False);
+
+    WM_SYSCHAR: chrmosr.Browser.SendKeyEvent(KT_CHAR, Msg.wParam, Msg.lParam, True, False);
     WM_SYSKEYDOWN: chrmosr.Browser.SendKeyEvent(KT_KEYDOWN, Msg.wParam, Msg.lParam, True, False);
     WM_SYSKEYUP: chrmosr.Browser.SendKeyEvent(KT_KEYUP, Msg.wParam, Msg.lParam, True, False);
+
+    WM_IME_CHAR: chrmosr.Browser.SendKeyEvent(KT_CHAR, Msg.wParam, Msg.lParam, False, True);
     WM_IME_KEYDOWN: chrmosr.Browser.SendKeyEvent(KT_KEYDOWN, Msg.wParam, Msg.lParam, False, True);
     WM_IME_KEYUP: chrmosr.Browser.SendKeyEvent(KT_KEYUP, Msg.wParam, Msg.lParam, False, True);
+
     WM_MOUSEWHEEL:
       with TWMMouseWheel(Pointer(@Msg.message)^) do
         chrmosr.Browser.SendMouseWheelEvent(XPos, YPos, WheelDelta);
@@ -124,6 +129,7 @@ procedure TMainform.PaintBoxResize(Sender: TObject);
 begin
   PaintBox.Buffer.SetSize(PaintBox.Width, PaintBox.Height);
   chrmosr.browser.SetSize(PET_VIEW, PaintBox.Width, PaintBox.Height);
+  chrmosr.Browser.SendFocusEvent(True);
   Application.ProcessMessages;
 end;
 
