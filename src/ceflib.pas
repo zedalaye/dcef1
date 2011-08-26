@@ -2627,7 +2627,7 @@ type
       mouseUp: Boolean; clickCount: Integer);
     procedure SendMouseMoveEvent(x, y: Integer; mouseLeave: Boolean);
     procedure SendMouseWheelEvent(x, y, delta: Integer);
-    procedure SendFocusEvent(setFocus: Integer);
+    procedure SendFocusEvent(setFocus: Boolean);
     procedure SendCaptureLostEvent;
     property MainFrame: ICefFrame read GetMainFrame;
     property Frame[const name: ustring]: ICefFrame read GetFrame;
@@ -3099,7 +3099,7 @@ type
       mouseUp: Boolean; clickCount: Integer);
     procedure SendMouseMoveEvent(x, y: Integer; mouseLeave: Boolean);
     procedure SendMouseWheelEvent(x, y, delta: Integer);
-    procedure SendFocusEvent(setFocus: Integer);
+    procedure SendFocusEvent(setFocus: Boolean);
     procedure SendCaptureLostEvent;
   public
     class function UnWrap(data: Pointer): ICefBrowser;
@@ -5683,9 +5683,9 @@ begin
   PCefBrowser(FData)^.send_capture_lost_event(PCefBrowser(FData));
 end;
 
-procedure TCefBrowserRef.SendFocusEvent(setFocus: Integer);
+procedure TCefBrowserRef.SendFocusEvent(setFocus: Boolean);
 begin
-  PCefBrowser(FData)^.send_focus_event(PCefBrowser(FData), setFocus);
+  PCefBrowser(FData)^.send_focus_event(PCefBrowser(FData), Ord(setFocus));
 end;
 
 procedure TCefBrowserRef.SendKeyEvent(typ: TCefKeyType; key, modifiers: Integer; sysChar, imeChar: Boolean);
