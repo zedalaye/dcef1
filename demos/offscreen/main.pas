@@ -71,19 +71,26 @@ begin
   with PaintBox.Buffer do
     if (vw = Width) and (vh = Height) then
     begin
-      w := Width * 4;
-      offset := ((dirtyRect.y * Width) + dirtyRect.x) * 4;
-      src := @PByte(buffer)[offset];
-      dst := @PByte(Bits)[offset];
-      offset := dirtyRect.width * 4;
-      for i := 0 to dirtyRect.height - 1 do
-      begin
-        Move(src^, dst^, offset);
-        Inc(dst, w);
-        Inc(src, w);
+      PaintBox.Canvas.Lock;
+      Lock;
+      try
+        w := Width * 4;
+        offset := ((dirtyRect.y * Width) + dirtyRect.x) * 4;
+        src := @PByte(buffer)[offset];
+        dst := @PByte(Bits)[offset];
+        offset := dirtyRect.width * 4;
+        for i := 0 to dirtyRect.height - 1 do
+        begin
+          Move(src^, dst^, offset);
+          Inc(dst, w);
+          Inc(src, w);
+        end;
+        PaintBox.Flush(Rect(dirtyRect.x, dirtyRect.y,
+          dirtyRect.x + dirtyRect.width,  dirtyRect.y + dirtyRect.height));
+      finally
+        Unlock;
+        PaintBox.Canvas.Unlock;
       end;
-      PaintBox.Flush(Rect(dirtyRect.x, dirtyRect.y,
-        dirtyRect.x + dirtyRect.width,  dirtyRect.y + dirtyRect.height));
     end;
 end;
 

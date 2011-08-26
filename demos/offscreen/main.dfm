@@ -19,16 +19,13 @@ object Mainform: TMainform
     Width = 753
     Height = 493
     Align = alClient
+    Options = [pboWantArrowKeys, pboAutoFocus]
     RepaintMode = rmOptimizer
     TabOrder = 0
     OnMouseDown = PaintBoxMouseDown
     OnMouseMove = PaintBoxMouseMove
     OnMouseUp = PaintBoxMouseUp
     OnResize = PaintBoxResize
-    ExplicitLeft = 120
-    ExplicitTop = 56
-    ExplicitWidth = 625
-    ExplicitHeight = 417
   end
   object chrmosr: TChromiumOSR
     DefaultUrl = 'http://www.google.com'
