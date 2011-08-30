@@ -18,14 +18,17 @@ unit cef;
 {$I cef.inc}
 interface
 uses
+{$IFDEF FMX}
+  SysUtils, System.UITypes, Classes, Messages, Windows, FMX.Types, FMX.Platform,
+   System.Types, ceflib;
+{$ELSE}
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   AppEvnts,
 {$ENDIF}
   SysUtils,  Classes, Controls, Messages, Windows, ceflib;
+{$ENDIF}
 
 type
-  TCustomChromium = class;
-
   TOnBeforePopup = procedure(Sender: TObject; const parentBrowser: ICefBrowser;
     var popupFeatures: TCefPopupFeatures; var windowInfo: TCefWindowInfo;
     var url: ustring; var client: ICefBase; out Result: Boolean) of object;
@@ -242,11 +245,13 @@ type
   end;
 
 
-  TCustomChromium = class(TWinControl, IChromiumEvents)
+  TCustomChromium = class({$IFDEF FMX}TControl{$ELSE}TWinControl{$ENDIF},IChromiumEvents)
   private
     FHandler: ICefBase;
     FBrowser: ICefBrowser;
+{$IFNDEF FMX}
     FBrowserHandle: HWND;
+{$ENDIF}
     FDefaultUrl: ustring;
 
     FOnBeforePopup: TOnBeforePopup;
@@ -297,12 +302,26 @@ type
     FDefaultEncoding: ustring;
     FFontOptions: TChromiumFontOptions;
 
+{$IFDEF FMX}
+    FBuffer: TBitmap;
+{$ENDIF}
     procedure GetSettings(var settings: TCefBrowserSettings);
     procedure CreateBrowser;
   protected
+{$IFDEF FMX}
+    class function ShiftStateToInt(Shift: TShiftState): Integer;
+    procedure Paint; override;
+    procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Single); override;
+    procedure MouseMove(Shift: TShiftState; X, Y: Single); override;
+    procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Single); override;
+    procedure MouseWheel(Shift: TShiftState; WheelDelta: Integer; var Handled: Boolean); override;
+    procedure KeyDown(var Key: Word; var KeyChar: WideChar; Shift: TShiftState); override;
+    procedure KeyUp(var Key: Word; var KeyChar: WideChar; Shift: TShiftState); override;
+{$ELSE}
     procedure WndProc(var Message: TMessage); override;
-    procedure Loaded; override;
     procedure CreateWindowHandle(const Params: TCreateParams); override;
+{$ENDIF}
+    procedure Loaded; override;
     procedure Resize; override;
 
     function doOnBeforePopup(const parentBrowser: ICefBrowser;
@@ -381,7 +400,6 @@ type
       selectionRect: PCefRect; identifier, activeMatchOrdinal,
       finalUpdate: Boolean): Boolean; virtual;
 
-    // unusued
     function doOnGetViewRect(const browser: ICefBrowser; rect: PCefRect): Boolean;
     function doOnGetScreenRect(const browser: ICefBrowser; rect: PCefRect): Boolean;
     function doOnGetScreenPoint(const browser: ICefBrowser; viewX, viewY: Integer;
@@ -441,7 +459,9 @@ type
     property FontOptions: TChromiumFontOptions read FFontOptions;
     property DefaultEncoding: ustring read FDefaultEncoding write FDefaultEncoding;
     property UserStyleSheetLocation: ustring read FUserStyleSheetLocation write FUserStyleSheetLocation;
+{$IFNDEF FMX}
     property BrowserHandle: HWND read FBrowserHandle;
+{$ENDIF}
     property Browser: ICefBrowser read FBrowser;
   public
     constructor Create(AOwner: TComponent); override;
@@ -454,7 +474,6 @@ type
   private
     FHandler: ICefBase;
     FBrowser: ICefBrowser;
-    FBrowserHandle: HWND;
     FDefaultUrl: ustring;
 
     FOnBeforePopup: TOnBeforePopup;
@@ -660,7 +679,6 @@ type
     property FontOptions: TChromiumFontOptions read FFontOptions;
     property DefaultEncoding: ustring read FDefaultEncoding write FDefaultEncoding;
     property UserStyleSheetLocation: ustring read FUserStyleSheetLocation write FUserStyleSheetLocation;
-    property BrowserHandle: HWND read FBrowserHandle;
     property Browser: ICefBrowser read FBrowser;
   public
     constructor Create(AOwner: TComponent); override;
@@ -669,19 +687,22 @@ type
     procedure ReCreateBrowser(const url: string);
   end;
 
-
   TChromium = class(TCustomChromium)
   public
+{$IFNDEF FMX}
     property BrowserHandle;
+{$ENDIF}
     property Browser;
   published
+{$IFNDEF FMX}
     property Color;
+    property Constraints;
+    property TabStop;
+{$ENDIF}
     property Align;
     property Anchors;
-    property Constraints;
     property DefaultUrl;
     property TabOrder;
-    property TabStop;
     property Visible;
 
     property OnBeforePopup;
@@ -732,9 +753,8 @@ type
     property UserStyleSheetLocation;
   end;
 
-  TChromiumOSR = class(TCustomChromiumOSR)
+  TChromiumOSR = class(TCustomChromiumOSR)
   public
-    property BrowserHandle;
     property Browser;
   published
     property DefaultUrl;
@@ -1034,7 +1054,6 @@ begin
   FUserStyleSheetLocation := '';
   FDefaultEncoding := '';
 
-  FBrowserHandle := INVALID_HANDLE_VALUE;
   FBrowser := nil;
 end;
 
@@ -1054,7 +1073,6 @@ begin
     CefBrowserCreate(@info, FHandler.Wrap, FDefaultUrl, @settings);
 {$ELSE}
     FBrowser := CefBrowserCreateSync(@info, FHandler.Wrap, '', @settings);
-    FBrowserHandle := FBrowser.GetWindowHandle;
 {$ENDIF}
   end;
 end;
@@ -1475,12 +1493,9 @@ end;
 
 procedure TCustomChromiumOSR.ReCreateBrowser(const url: string);
 begin
-  if (FBrowser <> nil) and (FBrowserHandle <> 0) then
+  if (FBrowser <> nil) then
   begin
     FBrowser.ParentWindowWillClose;
-    SendMessage(FBrowserHandle, WM_CLOSE, 0, 0);
-    SendMessage(FBrowserHandle, WM_DESTROY, 0, 0);
-    FBrowserHandle := 0;
     FBrowser := nil;
 
     CreateBrowser;
@@ -1493,28 +1508,40 @@ end;
 constructor TCustomChromium.Create(AOwner: TComponent);
 begin
   inherited;
+
   if not (csDesigning in ComponentState) then
     FHandler := TCustomClientHandler.Create(Self) as ICefBase;
+
+{$IFDEF FMX}
+  FBuffer := nil;
+  CanFocus := True;
+{$ENDIF}
 
   FOptions := [];
   FFontOptions := TChromiumFontOptions.Create;
 
   FUserStyleSheetLocation := '';
   FDefaultEncoding := '';
-
+{$IFNDEF FMX}
   FBrowserHandle := INVALID_HANDLE_VALUE;
+{$ENDIF}
   FBrowser := nil;
 end;
 
 procedure TCustomChromium.CreateBrowser;
 var
   info: TCefWindowInfo;
-  rect: TRect;
   settings: TCefBrowserSettings;
+{$IFNDEF FMX}
+  rect: TRect;
+{$ENDIF}
 begin
   if not (csDesigning in ComponentState) then
   begin
     FillChar(info, SizeOf(info), 0);
+{$IFDEF FMX}
+    info.m_bWindowRenderingDisabled := True;
+{$ELSE}
     rect := GetClientRect;
     info.Style := WS_CHILD or WS_VISIBLE or WS_CLIPCHILDREN or WS_CLIPSIBLINGS or WS_TABSTOP;
     info.WndParent := Handle;
@@ -1523,6 +1550,7 @@ begin
     info.Width := rect.right - rect.left;
     info.Height := rect.bottom - rect.top;
     info.ExStyle := 0;
+{$ENDIF}
     FillChar(settings, SizeOf(TCefBrowserSettings), 0);
     settings.size := SizeOf(TCefBrowserSettings);
     GetSettings(settings);
@@ -1530,16 +1558,20 @@ begin
     CefBrowserCreate(@info, FHandler.Wrap, FDefaultUrl, @settings);
 {$ELSE}
     FBrowser := CefBrowserCreateSync(@info, FHandler.Wrap, '', @settings);
+{$IFNDEF FMX}
     FBrowserHandle := FBrowser.GetWindowHandle;
+{$ENDIF}
 {$ENDIF}
   end;
 end;
 
+{$IFNDEF FMX}
 procedure TCustomChromium.CreateWindowHandle(const Params: TCreateParams);
 begin
   inherited;
   CreateBrowser;
 end;
+{$ENDIF}
 
 destructor TCustomChromium.Destroy;
 begin
@@ -1550,6 +1582,12 @@ begin
   FHandler := nil;
   FBrowser := nil;
   FFontOptions.Free;
+
+{$IFDEF FMX}
+  if FBuffer <> nil then
+    FBuffer.Free;
+{$ENDIF}
+
   inherited;
 end;
 
@@ -1563,6 +1601,10 @@ end;
 
 procedure TCustomChromium.doOnAfterCreated(const browser: ICefBrowser);
 begin
+{$IFDEF FMX}
+  if (browser <> nil) and not browser.IsPopup then
+    browser.SendFocusEvent(True);
+{$ENDIF}
 {$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   if (browser <> nil) and not browser.IsPopup then
   begin
@@ -1767,13 +1809,44 @@ end;
 procedure TCustomChromium.doOnCursorChange(const browser: ICefBrowser;
   cursor: TCefCursorHandle);
 begin
-
+{$IFDEF FMX}
+  SetCursor(cursor);
+{$ENDIF}
 end;
 
 procedure TCustomChromium.doOnPaint(const browser: ICefBrowser;
   kind: TCefPaintElementType; const dirtyRect: PCefRect; const buffer: Pointer);
+{$IFDEF FMX}
+var
+  src, dst: PByte;
+  offset, i, j, w: Integer;
+  vw, vh: Integer;
+{$ENDIF}
 begin
-
+{$IFDEF FMX}
+  FBrowser.GetSize(PET_VIEW, vw, vh);
+  if FBuffer = nil then
+    FBuffer := TBitmap.Create(vw, vh);
+  with FBuffer do
+    if (vw = Width) and (vh = Height) then
+    begin
+      w := Width * 4;
+      offset := ((dirtyRect.y * Width) + dirtyRect.x) * 4;
+      src := @PByte(buffer)[offset];
+      dst := @PByte(StartLine)[offset];
+      offset := dirtyRect.width * 4;
+      for i := 0 to dirtyRect.height - 1 do
+      begin
+        for j := 0 to offset div 4 do
+          PAlphaColorArray(dst)[j] := PAlphaColorArray(src)[j] or $FF000000;
+        Inc(dst, w);
+        Inc(src, w);
+      end;
+      //InvalidateRect(ClipRect);
+      InvalidateRect(RectF(dirtyRect.x, dirtyRect.y,
+          dirtyRect.x + dirtyRect.width,  dirtyRect.y + dirtyRect.height));
+    end;
+{$ENDIF}
 end;
 
 procedure TCustomChromium.doOnPopupShow(const browser: ICefBrowser;
@@ -1930,7 +2003,9 @@ procedure TCustomChromium.Load(const url: ustring);
 var
   frm: ICefFrame;
 begin
+{$IFNDEF FMX}
   HandleNeeded;
+{$ENDIF}
   if FBrowser <> nil then
   begin
     frm := FBrowser.MainFrame;
@@ -1942,17 +2017,103 @@ end;
 procedure TCustomChromium.Loaded;
 begin
   inherited;
+{$IFDEF FMX}
+  CreateBrowser;
+  Resize;
+{$ENDIF}
   Load(FDefaultUrl);
 end;
 
+{$IFDEF FMX}
+procedure TCustomChromium.Paint;
+var
+  r: TRectF;
+  i: Integer;
+begin
+ if FBuffer <> nil then
+   for i := 0 to Scene.GetUpdateRectsCount - 1 do
+   begin
+     r := Scene.GetUpdateRect(i);
+     r.TopLeft := AbsoluteToLocal(r.TopLeft);
+     r.BottomRight := AbsoluteToLocal(r.BottomRight);
+     Canvas.DrawBitmap(FBuffer, r, r, 1, False);
+   end;
+end;
+
+procedure TCustomChromium.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Single);
+const
+  BT: array[TMouseButton] of TCefMouseButtonType = (MBT_LEFT, MBT_RIGHT, MBT_MIDDLE);
+begin
+ inherited;
+ if FBrowser <> nil then
+   FBrowser.SendMouseClickEvent(Round(X), Round(Y), BT[Button], False, 1);
+end;
+
+procedure TCustomChromium.MouseMove(Shift: TShiftState; X, Y: Single);
+begin
+ inherited;
+ if FBrowser <> nil then
+   FBrowser.SendMouseMoveEvent(Round(X), Round(Y), False);
+end;
+
+procedure TCustomChromium.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Single);
+const
+  BT: array[TMouseButton] of TCefMouseButtonType = (MBT_LEFT, MBT_RIGHT, MBT_MIDDLE);
+begin
+ inherited;
+ if FBrowser <> nil then
+   FBrowser.SendMouseClickEvent(Round(X), Round(Y), BT[Button], True, 1);
+end;
+
+procedure TCustomChromium.MouseWheel(Shift: TShiftState; WheelDelta: Integer; var Handled: Boolean);
+begin
+  inherited;
+  if FBrowser <> nil then
+    with AbsoluteToLocal(Platform.GetMousePos) do
+      FBrowser.SendMouseWheelEvent(Trunc(x), Trunc(y), WheelDelta);
+end;
+
+class function TCustomChromium.ShiftStateToInt(Shift: TShiftState): Integer;
+begin
+  Result := 0;
+  if ssShift in Shift then
+    Result := Result or VK_SHIFT;
+  if ssCtrl in Shift then
+    Result := Result or VK_CONTROL;
+  if ssAlt in Shift then
+    Result := Result or $20000000;
+end;
+
+procedure TCustomChromium.KeyDown(var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
+begin
+ if FBrowser <> nil then
+   if (key = 0) then
+   begin
+     if KeyChar = #9 then
+       FBrowser.SendKeyEvent(KT_KEYDOWN, Ord(KeyChar), 0, False, False) else
+       FBrowser.SendKeyEvent(KT_CHAR, Ord(KeyChar), ShiftStateToInt(Shift), False, False);
+   end else
+     FBrowser.SendKeyEvent(KT_KEYDOWN, Key, ShiftStateToInt(Shift), False, False) else
+end;
+
+procedure TCustomChromium.KeyUp(var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
+begin
+ if FBrowser <> nil then
+   if (key <> 0) then
+     FBrowser.SendKeyEvent(KT_KEYUP, Key, ShiftStateToInt(Shift), False, False) else
+end;
+{$ENDIF}
+
 procedure TCustomChromium.ReCreateBrowser(const url: string);
 begin
-  if (FBrowser <> nil) and (FBrowserHandle <> 0) then
+  if (FBrowser <> nil) {$IFNDEF FMX}and (FBrowserHandle <> 0){$ENDIF} then
   begin
     FBrowser.ParentWindowWillClose;
+{$IFNDEF FMX}
     SendMessage(FBrowserHandle, WM_CLOSE, 0, 0);
     SendMessage(FBrowserHandle, WM_DESTROY, 0, 0);
     FBrowserHandle := 0;
+{$ENDIF}
     FBrowser := nil;
 
     CreateBrowser;
@@ -1963,13 +2124,24 @@ end;
 procedure TCustomChromium.Resize;
 var
   brws: ICefBrowser;
+{$IFNDEF FMX}
   rect: TRect;
   hdwp: THandle;
+{$ENDIF}
 begin
   inherited;
   if not (csDesigning in ComponentState) then
   begin
     brws := FBrowser;
+{$IFDEF FMX}
+    if (brws <> nil) then
+    begin
+      brws.SetSize(PET_VIEW, Trunc(Width), Trunc(Height));
+      if FBuffer <> nil then
+        FBuffer.Free;
+      FBuffer := TBitmap.Create(Trunc(Width), Trunc(Height));
+    end;
+{$ELSE}
     if (brws <> nil) and (brws.GetWindowHandle <> INVALID_HANDLE_VALUE) then
     begin
       rect := GetClientRect;
@@ -1982,9 +2154,11 @@ begin
         EndDeferWindowPos(hdwp);
       end;
     end;
+{$ENDIF}
   end;
 end;
 
+{$IFNDEF FMX}
 procedure TCustomChromium.WndProc(var Message: TMessage);
 begin
   case Message.Msg of
@@ -2007,7 +2181,7 @@ begin
     inherited WndProc(Message);
   end;
 end;
-
+{$ENDIF}
 
 { TChromiumFontOptions }
 
@@ -2485,7 +2659,7 @@ begin
 end;
 
 
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}{$IFNDEF FMX}
 type
   TCefApplicationEvents = class(TApplicationEvents)
   public
@@ -2521,7 +2695,8 @@ initialization
 
 finalization
   AppEvent.Free;
-{$ENDIF}
+{$ENDIF}{$ENDIF}
+
 
 end.
 
