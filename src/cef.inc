@@ -1,3 +1,5 @@
+{.$DEFINE FMX}
+
 {.$define CEF_STRING_TYPE_UTF8}
 {$define CEF_STRING_TYPE_UTF16}
 {.$define CEF_STRING_TYPE_WIDE}

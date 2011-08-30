@@ -25,8 +25,13 @@ package cefcomponent;
 {$IMPLICITBUILD ON}
 
 requires
-  rtl,
-  vcl;
+  rtl
+{$IFDEF FMX}
+  ,fmx
+{$ELSE}
+  ,vcl
+{$ENDIF}
+  ;
 
 contains
   cef in 'cef.pas',
