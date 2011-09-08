@@ -481,6 +481,7 @@ var
 {$ENDIF}
   wndClass : TWndClass;
 begin
+  CefCache := 'cache';
   CefLoadLibDefault;
 
   CefRegisterCustomScheme('client', True, False, False);

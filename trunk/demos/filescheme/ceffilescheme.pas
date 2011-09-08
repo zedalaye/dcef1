@@ -285,7 +285,9 @@ begin
     try
       reg.RootKey := HKEY_CLASSES_ROOT;
       if reg.OpenKey(ExtractFileExt(FPath), False) then
-        response.MimeType := reg.ReadString('Content Type');
+        response.MimeType := reg.ReadString('Content Type') else
+        if LowerCase(ExtractFileExt(FPath)) = '.pdf' then
+          response.MimeType := 'application/pdf';
     finally
       reg.Free;
     end;
@@ -354,4 +356,3 @@ begin
 end;
 
 end.
-
