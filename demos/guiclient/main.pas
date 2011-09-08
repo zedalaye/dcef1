@@ -390,6 +390,7 @@ end;
 
 procedure TMainForm.FormCreate(Sender: TObject);
 begin
+  TCefRTTIExtension.Register('test', Self);
   FLoading := False;
 end;
 
@@ -423,6 +424,7 @@ end;
 
 
 initialization
+  CefCache := 'cache';
   CefRegisterCustomScheme('file', True, False, False);
   CefRegisterSchemeHandlerFactory('file', '', True, TFileScheme);
 
