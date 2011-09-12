@@ -1101,10 +1101,7 @@ procedure TCustomChromiumOSR.doOnAfterCreated(const browser: ICefBrowser);
 begin
 {$IFDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   if (browser <> nil) and not browser.IsPopup then
-  begin
     FBrowser := browser;
-    FBrowserHandle := browser.GetWindowHandle;
-  end;
 {$ENDIF}
   if Assigned(FOnAfterCreated) then
     FOnAfterCreated(Self, browser);
