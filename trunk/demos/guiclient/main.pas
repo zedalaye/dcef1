@@ -76,9 +76,6 @@ type
     procedure crmAddressChange(Sender: TObject;
       const browser: ICefBrowser; const frame: ICefFrame; const url: ustring;
       out Result: Boolean);
-    procedure crmAuthCredentials(Sender: TObject;
-      const browser: ICefBrowser; isProxy: Boolean; const host, realm,
-      scheme: ustring; var username, password: ustring; out Result: Boolean);
     procedure crmGetDownloadHandler(Sender: TObject;
       const browser: ICefBrowser; const mimeType, fileName: ustring;
       contentLength: Int64; var handler: ICefDownloadHandler;
@@ -92,6 +89,9 @@ type
       StatusType: TCefHandlerStatusType; out Result: Boolean);
     procedure crmTitleChange(Sender: TObject;
       const browser: ICefBrowser; const title: ustring; out Result: Boolean);
+    procedure crmAuthCredentials(Sender: TObject; const browser: ICefBrowser;
+      isProxy: Boolean; Port: Integer; const host, realm, scheme: ustring;
+      var username, password: ustring; out Result: Boolean);
   private
     { Déclarations privées }
     FLoading: Boolean;
@@ -297,8 +297,8 @@ begin
 end;
 
 procedure TMainForm.crmAuthCredentials(Sender: TObject;
-  const browser: ICefBrowser; isProxy: Boolean; const host, realm,
-  scheme: ustring; var username, password: ustring; out Result: Boolean);
+  const browser: ICefBrowser; isProxy: Boolean; Port: Integer; const host,
+  realm, scheme: ustring; var username, password: ustring; out Result: Boolean);
 {$IFDEF DELPHI12_UP}
 var
   u, p: ustring;

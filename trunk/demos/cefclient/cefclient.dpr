@@ -54,9 +54,10 @@ type
     procedure Output(const str: ustring);
   protected
     function ProcessRequest(const Request: ICefRequest; var redirectUrl: ustring;
-      const response: ICefresponse; var ResponseLength: Integer): Boolean; override;
+      const callback: ICefSchemeHandlerCallback): Boolean; override;
+    procedure GetResponseHeaders(const response: ICefResponse; var responseLength: Int64); override;
     function ReadResponse(DataOut: Pointer; BytesToRead: Integer;
-      var BytesRead: Integer): Boolean; override;
+      var BytesRead: Integer; const callback: ICefSchemeHandlerCallback): Boolean; override;
   public
     constructor Create(SyncMainThread: Boolean;
       const scheme: ustring; const request: ICefRequest); override;
@@ -362,34 +363,38 @@ begin
 end;
 
 function TScheme.ProcessRequest(const Request: ICefRequest; var redirectUrl: ustring;
-  const response: ICefresponse; var ResponseLength: Integer): Boolean;
+  const callback: ICefSchemeHandlerCallback): Boolean;
 begin
-  Lock;
-  try
-    OutPut('<html>');
-    OutPut('  <body>ClientV8ExtensionHandler says:<br><pre>');
-    OutPut('<script language="javascript">');
-    OutPut('  cef.test.test_param =''Assign and retrieve a value succeeded the first time.'';');
-    OutPut('  document.writeln(cef.test.test_param);');
-    OutPut('  cef.test.test_param = ''Assign and retrieve a value succeeded the second time.'';');
-    OutPut('  document.writeln(cef.test.test_param);');
-    OutPut('  var obj = cef.test.test_object();');
-    OutPut('  document.writeln(obj.param);');
-    OutPut('  document.writeln(obj.GetMessage());');
-    OutPut('</script>');
-    OutPut('</pre></body>');
-    OutPut('</html>');
-    FResponse.Seek(0, soFromBeginning);
-    response.MimeType := 'text/html';
-    ResponseLength := FResponse.Size;
-    Result := True;
-  finally
-    Unlock;
-  end;
+  OutPut('<html>');
+  OutPut('  <body>ClientV8ExtensionHandler says:<br><pre>');
+  OutPut('<script language="javascript">');
+  OutPut('  cef.test.test_param =''Assign and retrieve a value succeeded the first time.'';');
+  OutPut('  document.writeln(cef.test.test_param);');
+  OutPut('  cef.test.test_param = ''Assign and retrieve a value succeeded the second time.'';');
+  OutPut('  document.writeln(cef.test.test_param);');
+  OutPut('  var obj = cef.test.test_object();');
+  OutPut('  document.writeln(obj.param);');
+  OutPut('  document.writeln(obj.GetMessage());');
+  OutPut('</script>');
+  OutPut('</pre></body>');
+  OutPut('</html>');
+  FResponse.Seek(0, soFromBeginning);
+  callback.HeadersAvailable;
+  callback.BytesAvailable;
+  Result := True;
+end;
+
+procedure TScheme.GetResponseHeaders(const response: ICefResponse;
+  var responseLength: Int64);
+begin
+  response.Status := 200;
+  response.StatusText := 'OK';
+  response.MimeType := 'text/html';
+  ResponseLength := FResponse.Size;
 end;
 
 function TScheme.ReadResponse(DataOut: Pointer; BytesToRead: Integer;
-  var BytesRead: Integer): Boolean;
+      var BytesRead: Integer; const callback: ICefSchemeHandlerCallback): Boolean;
 begin
   BytesRead := FResponse.Read(DataOut^, BytesToRead);
   Result := True;
@@ -492,7 +497,7 @@ begin
 
   CefRegisterExtension('v8/test', code, TExtension.Create as ICefV8Handler);
   //navigateto := 'client://test/';
-  //navigateto := 'file://c:\';
+  navigateto := 'file://c:\';
   try
     wndClass.style          := CS_HREDRAW or CS_VREDRAW;
     wndClass.lpfnWndProc    := @CefWndProc;

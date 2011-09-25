@@ -42,7 +42,7 @@ type
     const frame: ICefFrame; errorCode: TCefHandlerErrorcode;
     const failedUrl: ustring; var errorText: ustring; out Result: Boolean) of object;
 
-  TOnAuthCredentials = procedure(Sender: TObject; const browser: ICefBrowser; isProxy: Boolean;
+  TOnAuthCredentials = procedure(Sender: TObject; const browser: ICefBrowser; isProxy: Boolean; Port: Integer;
     const host, realm, scheme: ustring; var username, password: ustring; out Result: Boolean) of object;
   TOnGetDownloadHandler = procedure(Sender: TObject; const browser: ICefBrowser; const mimeType, fileName: ustring;
     contentLength: int64; var handler: ICefDownloadHandler; out Result: Boolean) of object;
@@ -112,6 +112,8 @@ type
         const dirtyRect: PCefRect; const buffer: Pointer) of object;
   TOnCursorChange = procedure(Sender: TObject; const browser: ICefBrowser; cursor: TCefCursorHandle) of object;
 
+  TOnDragEvent = procedure(Sender: TObject; const browser: ICefBrowser; const dragData: ICefDragData; mask: Integer; out Result: Boolean) of object;
+
   TChromiumOption = (coDragDropDisabled, coEncodingDetectorEnabled, coJavascriptDisabled, coJavascriptOpenWindowsDisallowed,
     coJavascriptCloseWindowsDisallowed, coJavascriptAccessClipboardDisallowed, coDomPasteDisabled,
     coCaretBrowsingEnabled, coJavaDisabled, coPluginsDisabled, coUniversalAccessFromFileUrlsAllowed,
@@ -119,7 +121,7 @@ type
     coShrinkStandaloneImagesToFit, coSiteSpecificQuirksDisabled, coTextAreaResizeDisabled,
     coPageCacheDisabled, coTabToLinksDisabled, coHyperlinkAuditingDisabled, coUserStyleSheetEnabled,
     coAuthorAndUserStylesDisabled, coLocalStorageDisabled, coDatabasesDisabled,
-    coApplicationCacheDisabled, coWebglDisabled, coAcceleratedCompositingDisabled,
+    coApplicationCacheDisabled, coWebglDisabled, coAcceleratedCompositingEnabled,
     coAcceleratedLayersDisabled, coAccelerated2dCanvasDisabled, coDeveloperToolsDisabled);
 
   TChromiumOptions = set of TChromiumOption;
@@ -171,7 +173,7 @@ type
       const frame: ICefFrame; errorCode: TCefHandlerErrorcode;
       const failedUrl: ustring; var errorText: ustring): Boolean;
 
-    function doOnAuthCredentials(const browser: ICefBrowser; isProxy: Boolean;
+    function doOnAuthCredentials(const browser: ICefBrowser; isProxy: Boolean; Port: Integer;
       const host, realm, scheme: ustring; var username, password: ustring): Boolean;
     function doOnGetDownloadHandler(const browser: ICefBrowser; const mimeType, fileName: ustring;
       contentLength: int64; var handler: ICefDownloadHandler): Boolean;
@@ -242,8 +244,12 @@ type
     procedure doOnPaint(const browser: ICefBrowser; kind: TCefPaintElementType;
         const dirtyRect: PCefRect; const buffer: Pointer);
     procedure doOnCursorChange(const browser: ICefBrowser; cursor: TCefCursorHandle);
-  end;
 
+    function doOnDragStart(const browser: ICefBrowser;
+      const dragData: ICefDragData; mask: Integer): Boolean;
+    function doOnDragEnter(const browser: ICefBrowser;
+      const dragData: ICefDragData; mask: Integer): Boolean;
+  end;
 
   TCustomChromium = class({$IFDEF FMX}TControl{$ELSE}TWinControl{$ENDIF},IChromiumEvents)
   private
@@ -297,6 +303,9 @@ type
     FOnJsPrompt: TOnJsPrompt;
     FOnJsBinding: TOnJsBinding;
 
+    FOnDragStart: TOnDragEvent;
+    FOnDragEnter: TOnDragEvent;
+
     FOptions: TChromiumOptions;
     FUserStyleSheetLocation: ustring;
     FDefaultEncoding: ustring;
@@ -338,7 +347,7 @@ type
       const frame: ICefFrame; errorCode: TCefHandlerErrorcode;
       const failedUrl: ustring; var errorText: ustring): Boolean; virtual;
 
-    function doOnAuthCredentials(const browser: ICefBrowser; isProxy: Boolean;
+    function doOnAuthCredentials(const browser: ICefBrowser; isProxy: Boolean; Port: Integer;
       const host, realm, scheme: ustring; var username, password: ustring): Boolean; virtual;
     function doOnGetDownloadHandler(const browser: ICefBrowser; const mimeType, fileName: ustring;
       contentLength: int64; var handler: ICefDownloadHandler): Boolean; virtual;
@@ -410,6 +419,10 @@ type
         const dirtyRect: PCefRect; const buffer: Pointer);
     procedure doOnCursorChange(const browser: ICefBrowser; cursor: TCefCursorHandle);
 
+    function doOnDragStart(const browser: ICefBrowser;
+      const dragData: ICefDragData; mask: Integer): Boolean;
+    function doOnDragEnter(const browser: ICefBrowser;
+      const dragData: ICefDragData; mask: Integer): Boolean;
 
     property DefaultUrl: ustring read FDefaultUrl write FDefaultUrl;
 
@@ -454,6 +467,9 @@ type
     property OnJsPrompt: TOnJsPrompt read FOnJsPrompt write FOnJsPrompt;
     property OnJsBinding: TOnJsBinding read FOnJsBinding write FOnJsBinding;
     property OnFindResult: TOnFindResult read FOnFindResult write FOnFindResult;
+
+    property OnDragStart: TOnDragEvent read FOnDragStart write FOnDragStart;
+    property OnDragEnter: TOnDragEvent read FOnDragEnter write FOnDragEnter;
 
     property Options: TChromiumOptions read FOptions write FOptions default [];
     property FontOptions: TChromiumFontOptions read FFontOptions;
@@ -527,6 +543,9 @@ type
     FOnPaint: TOnPaint;
     FOnCursorChange: TOnCursorChange;
 
+    FOnDragStart: TOnDragEvent;
+    FOnDragEnter: TOnDragEvent;
+
     FOptions: TChromiumOptions;
     FUserStyleSheetLocation: ustring;
     FDefaultEncoding: ustring;
@@ -550,7 +569,7 @@ type
       const frame: ICefFrame; errorCode: TCefHandlerErrorcode;
       const failedUrl: ustring; var errorText: ustring): Boolean; virtual;
 
-    function doOnAuthCredentials(const browser: ICefBrowser; isProxy: Boolean;
+    function doOnAuthCredentials(const browser: ICefBrowser; isProxy: Boolean; Port: Integer;
       const host, realm, scheme: ustring; var username, password: ustring): Boolean; virtual;
     function doOnGetDownloadHandler(const browser: ICefBrowser; const mimeType, fileName: ustring;
       contentLength: int64; var handler: ICefDownloadHandler): Boolean; virtual;
@@ -622,6 +641,10 @@ type
         const dirtyRect: PCefRect; const buffer: Pointer); virtual;
     procedure doOnCursorChange(const browser: ICefBrowser; cursor: TCefCursorHandle); virtual;
 
+    function doOnDragStart(const browser: ICefBrowser;
+      const dragData: ICefDragData; mask: Integer): Boolean;
+    function doOnDragEnter(const browser: ICefBrowser;
+      const dragData: ICefDragData; mask: Integer): Boolean;
 
     property DefaultUrl: ustring read FDefaultUrl write FDefaultUrl;
 
@@ -674,6 +697,9 @@ type
     property OnPopupSize: TOnPopupSize read FOnPopupSize write FOnPopupSize;
     property OnPaint: TOnPaint read FOnPaint write FOnPaint;
     property OnCursorChange: TOnCursorChange read FOnCursorChange write FOnCursorChange;
+
+    property OnDragStart: TOnDragEvent read FOnDragStart write FOnDragStart;
+    property OnDragEnter: TOnDragEvent read FOnDragEnter write FOnDragEnter;
 
     property Options: TChromiumOptions read FOptions write FOptions default [];
     property FontOptions: TChromiumFontOptions read FFontOptions;
@@ -747,6 +773,9 @@ type
     property OnJsBinding;
     property OnFindResult;
 
+    property OnDragStart;
+    property OnDragEnter;
+
     property Options;
     property FontOptions;
     property DefaultEncoding;
@@ -809,6 +838,9 @@ type
     property OnPaint;
     property OnCursorChange;
 
+    property OnDragStart;
+    property OnDragEnter;
+
     property Options;
     property FontOptions;
     property DefaultEncoding;
@@ -834,6 +866,7 @@ type
     FJsdialogHandler: ICefBase;
     FJsbindingHandler: ICefBase;
     FRenderHandler: ICefBase;
+    FDragHandler: ICefBase;
   protected
     function GetLifeSpanHandler: ICefBase; override;
     function GetLoadHandler: ICefBase; override;
@@ -847,6 +880,7 @@ type
     function GetJsdialogHandler: ICefBase; override;
     function GetJsbindingHandler: ICefBase; override;
     function GetRenderHandler: ICefBase; override;
+    function GetDragHandler: ICefBase; override;
     procedure Disconnect;
   public
     constructor Create(const crm: IChromiumEvents); reintroduce;
@@ -899,7 +933,7 @@ type
       const mimeType, fileName: ustring; contentLength: int64;
         var handler: ICefDownloadHandler): Boolean; override;
     function GetAuthCredentials(const browser: ICefBrowser;
-      isProxy: Boolean; const host, realm, scheme: ustring;
+      isProxy: Boolean; Port: Integer; const host, realm, scheme: ustring;
       var username, password: ustring): Boolean; override;
   public
     constructor Create(const crm: IChromiumEvents); reintroduce;
@@ -1025,6 +1059,18 @@ type
     constructor Create(const crm: IChromiumEvents); reintroduce;
   end;
 
+  TCustomDragHandler = class(TCefDragHandlerOwn)
+  private
+    FCrm: IChromiumEvents;
+  protected
+    function OnDragStart(const browser: ICefBrowser;
+      const dragData: ICefDragData; mask: Integer): Boolean; override;
+    function OnDragEnter(const browser: ICefBrowser;
+      const dragData: ICefDragData; mask: Integer): Boolean; override;
+  public
+    constructor Create(const crm: IChromiumEvents); reintroduce;
+  end;
+
 procedure Register;
 
 implementation
@@ -1108,12 +1154,12 @@ begin
 end;
 
 function TCustomChromiumOSR.doOnAuthCredentials(const browser: ICefBrowser;
-  isProxy: Boolean; const host, realm, scheme: ustring; var username,
+  isProxy: Boolean; Port: Integer; const host, realm, scheme: ustring; var username,
   password: ustring): Boolean;
 begin
   Result := False;
   if Assigned(FOnAuthCredentials) then
-    FOnAuthCredentials(Self, browser, isProxy, host, realm, scheme, username, password, Result);
+    FOnAuthCredentials(Self, browser, isProxy, Port, host, realm, scheme, username, password, Result);
 end;
 
 function TCustomChromiumOSR.doOnBeforeBrowse(const browser: ICefBrowser;
@@ -1310,6 +1356,22 @@ begin
     FOnCursorChange(Self, browser, cursor);
 end;
 
+function TCustomChromiumOSR.doOnDragEnter(const browser: ICefBrowser;
+  const dragData: ICefDragData; mask: Integer): Boolean;
+begin
+  Result := False;
+  if Assigned(FOnDragEnter) then
+    FOnDragEnter(Self, browser, dragData, mask, Result);
+end;
+
+function TCustomChromiumOSR.doOnDragStart(const browser: ICefBrowser;
+  const dragData: ICefDragData; mask: Integer): Boolean;
+begin
+  Result := False;
+  if Assigned(FOnDragStart) then
+    FOnDragStart(Self, browser, dragData, mask, Result);
+end;
+
 procedure TCustomChromiumOSR.doOnPaint(const browser: ICefBrowser;
   kind: TCefPaintElementType; const dirtyRect: PCefRect; const buffer: Pointer);
 begin
@@ -1463,7 +1525,7 @@ begin
   settings.databases_disabled := coDatabasesDisabled in FOptions;
   settings.application_cache_disabled := coApplicationCacheDisabled in FOptions;
   settings.webgl_disabled := coWebglDisabled in FOptions;
-  settings.accelerated_compositing_disabled := coAcceleratedCompositingDisabled in FOptions;
+  settings.accelerated_compositing_enabled := coAcceleratedCompositingEnabled in FOptions;
   settings.accelerated_layers_disabled := coAcceleratedLayersDisabled in FOptions;
   settings.accelerated_2d_canvas_disabled := coAccelerated2dCanvasDisabled in FOptions;
   settings.developer_tools_disabled := coDeveloperToolsDisabled in FOptions;
@@ -1614,12 +1676,12 @@ begin
 end;
 
 function TCustomChromium.doOnAuthCredentials(const browser: ICefBrowser;
-  isProxy: Boolean; const host, realm, scheme: ustring; var username,
+  isProxy: Boolean; Port: Integer; const host, realm, scheme: ustring; var username,
   password: ustring): Boolean;
 begin
   Result := False;
   if Assigned(FOnAuthCredentials) then
-    FOnAuthCredentials(Self, browser, isProxy, host, realm, scheme, username, password, Result);
+    FOnAuthCredentials(Self, browser, isProxy, port, host, realm, scheme, username, password, Result);
 end;
 
 function TCustomChromium.doOnBeforeBrowse(const browser: ICefBrowser;
@@ -1811,6 +1873,22 @@ begin
 {$ENDIF}
 end;
 
+function TCustomChromium.doOnDragEnter(const browser: ICefBrowser;
+  const dragData: ICefDragData; mask: Integer): Boolean;
+begin
+  Result := False;
+  if Assigned(FOnDragEnter) then
+    FOnDragEnter(Self, browser, dragData, mask, Result);
+end;
+
+function TCustomChromium.doOnDragStart(const browser: ICefBrowser;
+  const dragData: ICefDragData; mask: Integer): Boolean;
+begin
+  Result := False;
+  if Assigned(FOnDragStart) then
+    FOnDragStart(Self, browser, dragData, mask, Result);
+end;
+
 procedure TCustomChromium.doOnPaint(const browser: ICefBrowser;
   kind: TCefPaintElementType; const dirtyRect: PCefRect; const buffer: Pointer);
 {$IFDEF FMX}
@@ -1990,7 +2068,7 @@ begin
   settings.databases_disabled := coDatabasesDisabled in FOptions;
   settings.application_cache_disabled := coApplicationCacheDisabled in FOptions;
   settings.webgl_disabled := coWebglDisabled in FOptions;
-  settings.accelerated_compositing_disabled := coAcceleratedCompositingDisabled in FOptions;
+  settings.accelerated_compositing_enabled := coAcceleratedCompositingEnabled in FOptions;
   settings.accelerated_layers_disabled := coAcceleratedLayersDisabled in FOptions;
   settings.accelerated_2d_canvas_disabled := coAccelerated2dCanvasDisabled in FOptions;
   settings.developer_tools_disabled := coDeveloperToolsDisabled in FOptions;
@@ -2214,6 +2292,7 @@ begin
   FJsdialogHandler := TCustomJsDialogHandler.Create(crm);
   FJsbindingHandler := TCustomJsBindingHandler.Create(crm);
   FRenderHandler := TCustomRenderHandler.Create(crm);
+  FDragHandler := TCustomDragHandler.Create(crm);
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   if CefInstances = 0 then
     CefTimer := SetTimer(0, 0, 10, nil);
@@ -2245,11 +2324,17 @@ begin
   FJsdialogHandler := nil;
   FJsbindingHandler := nil;
   FRenderHandler := nil;
+  FDragHandler := nil;
 end;
 
 function TCustomClientHandler.GetDisplayHandler: ICefBase;
 begin
   Result := FDisplayHandler;
+end;
+
+function TCustomClientHandler.GetDragHandler: ICefBase;
+begin
+  Result := FDragHandler;
 end;
 
 function TCustomClientHandler.GetFindHandler: ICefBase;
@@ -2380,10 +2465,10 @@ begin
 end;
 
 function TCustomRequestHandler.GetAuthCredentials(const browser: ICefBrowser;
-  isProxy: Boolean; const host, realm, scheme: ustring; var username,
+  isProxy: Boolean; Port: Integer; const host, realm, scheme: ustring; var username,
   password: ustring): Boolean;
 begin
-  Result := FCrm.doOnAuthCredentials(browser, isProxy, host, realm, scheme, username, password);
+  Result := FCrm.doOnAuthCredentials(browser, isProxy, Port, host, realm, scheme, username, password);
 end;
 
 function TCustomRequestHandler.GetDownloadHandler(const browser: ICefBrowser;
@@ -2655,6 +2740,25 @@ begin
   FCrm.doOnPopupSize(browser, rect);
 end;
 
+{ TCustomDragHandler }
+
+constructor TCustomDragHandler.Create(const crm: IChromiumEvents);
+begin
+  inherited Create;
+  FCrm := crm;
+end;
+
+function TCustomDragHandler.OnDragEnter(const browser: ICefBrowser;
+  const dragData: ICefDragData; mask: Integer): Boolean;
+begin
+  Result := FCrm.doOnDragEnter(browser, dragData, mask);
+end;
+
+function TCustomDragHandler.OnDragStart(const browser: ICefBrowser;
+  const dragData: ICefDragData; mask: Integer): Boolean;
+begin
+  Result := FCrm.doOnDragStart(browser, dragData, mask);
+end;
 
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}{$IFNDEF FMX}
 type
