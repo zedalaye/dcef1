@@ -30,11 +30,16 @@ type
   private
     FPath: string;
     FDataStream: TStream;
+    FStatus: Integer;
+    FStatusText: string;
+    FMimeType: string;
   protected
     function ProcessRequest(const Request: ICefRequest; var redirectUrl: ustring;
-      const response: ICefresponse; var ResponseLength: Integer): Boolean; override;
+      const callback: ICefSchemeHandlerCallback): Boolean; override;
+    procedure GetResponseHeaders(const response: ICefResponse; var responseLength: Int64); override;
     function ReadResponse(DataOut: Pointer; BytesToRead: Integer;
-      var BytesRead: Integer): Boolean; override;
+      var BytesRead: Integer; const callback: ICefSchemeHandlerCallback): Boolean; override;
+    procedure Cancel; override;
   public
     constructor Create(SyncMainThread: Boolean; const scheme: ustring; const request: ICefRequest); override;
     destructor Destroy; override;
@@ -221,6 +226,12 @@ end;
 
 { TFileScheme }
 
+procedure TFileScheme.Cancel;
+begin
+  inherited;
+
+end;
+
 constructor TFileScheme.Create(SyncMainThread: Boolean; const scheme: ustring; const request: ICefRequest);
 begin
   inherited;
@@ -234,9 +245,17 @@ begin
   inherited;
 end;
 
+procedure TFileScheme.GetResponseHeaders(const response: ICefResponse;
+  var responseLength: Int64);
+begin
+  response.Status := FStatus;
+  response.StatusText := FStatusText;
+  response.MimeType := FMimeType;
+  responseLength := FDataStream.Size;
+end;
+
 function TFileScheme.ProcessRequest(const Request: ICefRequest;
-  var redirectUrl: ustring; const response: ICefresponse;
-  var ResponseLength: Integer): Boolean;
+  var redirectUrl: ustring; const callback: ICefSchemeHandlerCallback): Boolean;
 var
   rec: TSearchRec;
   reg: TRegistry;
@@ -276,29 +295,28 @@ begin
   FPath := ParseFileUrl(Request.Url);
   if FindFirst(FPath, 0, rec) = 0 then
   begin
-    response.Status := 200;
-    response.StatusText := 'OK';
-    ResponseLength := rec.Size;
+    FStatus := 200;
+    FStatusText := 'OK';
     FindClose(rec);
 
     reg := TRegistry.Create;
     try
       reg.RootKey := HKEY_CLASSES_ROOT;
       if reg.OpenKey(ExtractFileExt(FPath), False) then
-        response.MimeType := reg.ReadString('Content Type') else
+        FMimeType := reg.ReadString('Content Type') else
         if LowerCase(ExtractFileExt(FPath)) = '.pdf' then
-          response.MimeType := 'application/pdf';
+          FMimeType := 'application/pdf';
     finally
       reg.Free;
     end;
-    if response.MimeType = '' then
-      response.MimeType := 'application/octet-stream';
+    if FMimeType = '' then
+      FMimeType := 'application/octet-stream';
     FDataStream := TFileStream.Create(FPath, fmOpenRead or fmShareDenyNone);
   end else
   if DirectoryExists(FPath) then
   begin
-    response.Status := 200;
-    response.StatusText := 'OK';
+    FStatus := 200;
+    FStatusText := 'OK';
     Items := TObjectList.Create(True);
     try
       FPath := IncludeTrailingPathDelimiter(FPath);
@@ -326,30 +344,30 @@ begin
         OutPut(TFileInfo(Items[i]).Display);
 
       FDataStream.Seek(0, soFromBeginning);
-      response.MimeType := 'text/html';
-      ResponseLength := FDataStream.Size;
+      FMimeType := 'text/html';
     finally
       Items.Free;
     end;
-    Exit;
   end else
   begin
-    response.Status := 404;
-    response.StatusText := 'Not found';
+    FStatus := 404;
+    FStatusText := 'Not found';
 
     // error
     FDataStream := TMemoryStream.Create;
 
     OutputUTF8('<html><head><meta http-equiv="content-type" content="text/html; '+
       'charset=UTF-8"/></head><body><h1>'+ FPath+'</h1><h2>not found</h2></body></html>');
-    ResponseLength := FDataStream.Size;
-    response.MimeType := 'text/html';
+    FMimeType := 'text/html';
     FDataStream.Seek(0, soFromBeginning);
   end;
+
+  callback.HeadersAvailable;
+  callback.BytesAvailable;
 end;
 
 function TFileScheme.ReadResponse(DataOut: Pointer; BytesToRead: Integer;
-  var BytesRead: Integer): Boolean;
+      var BytesRead: Integer; const callback: ICefSchemeHandlerCallback): Boolean;
 begin
   BytesRead := FDataStream.Read(DataOut^, BytesToRead);
   Result := True;

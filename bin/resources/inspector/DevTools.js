@@ -3,6 +3,8 @@
 
 
 
+function setupPrototypeUtilities() {
+
 Function.prototype.bind = function(thisObject)
 {
 var func = this;
@@ -128,7 +130,7 @@ return { container: this, offset: 0 };
 return { container: node, offset: offset };
 }
 
-Element.prototype.removeStyleClass = function(className) 
+Element.prototype.removeStyleClass = function(className)
 {
 this.classList.remove(className);
 }
@@ -140,12 +142,12 @@ if (regex.test(this.className))
 this.className = this.className.replace(regex, " ");
 }
 
-Element.prototype.addStyleClass = function(className) 
+Element.prototype.addStyleClass = function(className)
 {
 this.classList.add(className);
 }
 
-Element.prototype.hasStyleClass = function(className) 
+Element.prototype.hasStyleClass = function(className)
 {
 return this.classList.contains(className);
 }
@@ -202,7 +204,7 @@ return null;
 return this.parentNode.enclosingNodeOrSelfWithClass(className);
 }
 
-Element.prototype.query = function(query) 
+Element.prototype.query = function(query)
 {
 return this.ownerDocument.evaluate(query, this, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
 }
@@ -224,7 +226,7 @@ return selectionRange.startContainer === this || selectionRange.startContainer.i
 
 Element.prototype.createChild = function(elementName, className)
 {
-var element = document.createElement(elementName);
+var element = this.ownerDocument.createElement(elementName);
 if (className)
 element.className = className;
 this.appendChild(element);
@@ -233,21 +235,21 @@ return element;
 
 DocumentFragment.prototype.createChild = Element.prototype.createChild;
 
-Element.prototype.__defineGetter__("totalOffsetLeft", function()
+Element.prototype.totalOffsetLeft = function()
 {
 var total = 0;
 for (var element = this; element; element = element.offsetParent)
 total += element.offsetLeft + (this !== element ? element.clientLeft : 0);
 return total;
-});
+}
 
-Element.prototype.__defineGetter__("totalOffsetTop", function()
+Element.prototype.totalOffsetTop = function()
 {
 var total = 0;
 for (var element = this; element; element = element.offsetParent)
 total += element.offsetTop + (this !== element ? element.clientTop : 0);
 return total;
-});
+}
 
 Element.prototype.offsetRelativeToWindow = function(targetWindow)
 {
@@ -255,8 +257,8 @@ var elementOffset = {x: 0, y: 0};
 var curElement = this;
 var curWindow = this.ownerDocument.defaultView;
 while (curWindow && curElement) {
-elementOffset.x += curElement.totalOffsetLeft;
-elementOffset.y += curElement.totalOffsetTop;
+elementOffset.x += curElement.totalOffsetLeft();
+elementOffset.y += curElement.totalOffsetTop();
 if (curWindow === targetWindow)
 break;
 
@@ -300,9 +302,9 @@ end = end || this.textContent.length;
 if (start < 0)
 start = end + start;
 
-var selection = window.getSelection();
+var selection = this.ownerDocument.defaultView.getSelection();
 selection.removeAllRanges();
-var range = document.createRange();
+var range = this.ownerDocument.createRange();
 range.setStart(this, start);
 range.setEnd(this, end);
 selection.addRange(range);
@@ -329,16 +331,6 @@ node = node.parentNode;
 
 return leftOffset;
 });
-
-Node.prototype.isWhitespace = isNodeWhitespace;
-Node.prototype.displayName = nodeDisplayName;
-Node.prototype.isAncestor = function(node)
-{
-return isAncestorNode(this, node);
-};
-Node.prototype.isDescendant = isDescendantNode;
-Node.prototype.traverseNextNode = traverseNextNode;
-Node.prototype.traversePreviousNode = traversePreviousNode;
 
 String.prototype.hasSubstring = function(string, caseInsensitive)
 {
@@ -417,7 +409,7 @@ return this.escapeCharacters("^[]{}()\\.$*+?|");
 
 String.prototype.escapeHTML = function()
 {
-return this.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+return this.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); 
 }
 
 String.prototype.collapseWhitespace = function()
@@ -450,113 +442,27 @@ fragmentIndex = this.length;
 return this.substring(0, fragmentIndex);
 }
 
-function isNodeWhitespace()
+Node.prototype.isAncestor = function(node)
 {
-if (!this || this.nodeType !== Node.TEXT_NODE)
-return false;
-if (!this.nodeValue.length)
-return true;
-return this.nodeValue.match(/^[\s\xA0]+$/);
-}
-
-function nodeDisplayName()
-{
-if (!this)
-return "";
-
-switch (this.nodeType) {
-case Node.DOCUMENT_NODE:
-return "Document";
-
-case Node.ELEMENT_NODE:
-var name = "<" + this.nodeName.toLowerCase();
-
-if (this.hasAttributes()) {
-var value = this.getAttribute("id");
-if (value)
-name += " id=\"" + value + "\"";
-value = this.getAttribute("class");
-if (value)
-name += " class=\"" + value + "\"";
-if (this.nodeName.toLowerCase() === "a") {
-value = this.getAttribute("name");
-if (value)
-name += " name=\"" + value + "\"";
-value = this.getAttribute("href");
-if (value)
-name += " href=\"" + value + "\"";
-} else if (this.nodeName.toLowerCase() === "img") {
-value = this.getAttribute("src");
-if (value)
-name += " src=\"" + value + "\"";
-} else if (this.nodeName.toLowerCase() === "iframe") {
-value = this.getAttribute("src");
-if (value)
-name += " src=\"" + value + "\"";
-} else if (this.nodeName.toLowerCase() === "input") {
-value = this.getAttribute("name");
-if (value)
-name += " name=\"" + value + "\"";
-value = this.getAttribute("type");
-if (value)
-name += " type=\"" + value + "\"";
-} else if (this.nodeName.toLowerCase() === "form") {
-value = this.getAttribute("action");
-if (value)
-name += " action=\"" + value + "\"";
-}
-}
-
-return name + ">";
-
-case Node.TEXT_NODE:
-if (isNodeWhitespace.call(this))
-return "(whitespace)";
-return "\"" + this.nodeValue + "\"";
-
-case Node.COMMENT_NODE:
-return "<!--" + this.nodeValue + "-->";
-
-case Node.DOCUMENT_TYPE_NODE:
-var docType = "<!DOCTYPE " + this.nodeName;
-if (this.publicId) {
-docType += " PUBLIC \"" + this.publicId + "\"";
-if (this.systemId)
-docType += " \"" + this.systemId + "\"";
-} else if (this.systemId)
-docType += " SYSTEM \"" + this.systemId + "\"";
-if (this.internalSubset)
-docType += " [" + this.internalSubset + "]";
-return docType + ">";
-}
-
-return this.nodeName.toLowerCase().collapseWhitespace();
-}
-
-function isAncestorNode(ancestor, node)
-{
-if (!node || !ancestor)
+if (!node)
 return false;
 
 var currentNode = node.parentNode;
 while (currentNode) {
-if (ancestor === currentNode)
+if (this === currentNode)
 return true;
 currentNode = currentNode.parentNode;
 }
 return false;
 }
 
-function isDescendantNode(descendant)
+Node.prototype.isDescendant = function(descendant)
 {
-return isAncestorNode(descendant, this);
+return !!descendant && descendant.isAncestor(this);
 }
 
-function traverseNextNode(stayWithin)
+Node.prototype.traverseNextNode = function(stayWithin)
 {
-if (!this)
-return;
-
 var node = this.firstChild;
 if (node)
 return node;
@@ -577,10 +483,8 @@ return null;
 return node.nextSibling;
 }
 
-function traversePreviousNode(stayWithin)
+Node.prototype.traversePreviousNode = function(stayWithin)
 {
-if (!this)
-return;
 if (stayWithin && this === stayWithin)
 return null;
 var node = this.previousSibling;
@@ -591,66 +495,9 @@ return node;
 return this.parentNode;
 }
 
-function getDocumentForNode(node)
-{
-return node.nodeType == Node.DOCUMENT_NODE ? node : node.ownerDocument;
-}
-
-function parentNode(node)
+window.parentNode = function(node)
 {
 return node.parentNode;
-}
-
-Number.millisToString = function(ms, higherResolution)
-{
-return Number.secondsToString(ms / 1000, higherResolution);
-}
-
-Number.secondsToString = function(seconds, higherResolution)
-{
-if (seconds === 0)
-return "0";
-
-var ms = seconds * 1000;
-if (higherResolution && ms < 1000)
-return WebInspector.UIString("%.3fms", ms);
-else if (ms < 1000)
-return WebInspector.UIString("%.0fms", ms);
-
-if (seconds < 60)
-return WebInspector.UIString("%.2fs", seconds);
-
-var minutes = seconds / 60;
-if (minutes < 60)
-return WebInspector.UIString("%.1fmin", minutes);
-
-var hours = minutes / 60;
-if (hours < 24)
-return WebInspector.UIString("%.1fhrs", hours);
-
-var days = hours / 24;
-return WebInspector.UIString("%.1f days", days);
-}
-
-Number.bytesToString = function(bytes, higherResolution)
-{
-if (typeof higherResolution === "undefined")
-higherResolution = true;
-
-if (bytes < 1024)
-return WebInspector.UIString("%.0fB", bytes);
-
-var kilobytes = bytes / 1024;
-if (higherResolution && kilobytes < 1024)
-return WebInspector.UIString("%.2fKB", kilobytes);
-else if (kilobytes < 1024)
-return WebInspector.UIString("%.0fKB", kilobytes);
-
-var megabytes = kilobytes / 1024;
-if (higherResolution)
-return WebInspector.UIString("%.2fMB", megabytes);
-else
-return WebInspector.UIString("%.0fMB", megabytes);
 }
 
 Number.constrain = function(num, min, max)
@@ -662,13 +509,30 @@ num = max;
 return num;
 }
 
+Date.prototype.toISO8601Compact = function()
+{
+function leadZero(x)
+{
+return x > 9 ? x : '0' + x
+}
+return this.getFullYear() +
+leadZero(this.getMonth() + 1) +
+leadZero(this.getDate()) + 'T' +
+leadZero(this.getHours()) +
+leadZero(this.getMinutes()) +
+leadZero(this.getSeconds());
+}
+
 HTMLTextAreaElement.prototype.moveCursorToEnd = function()
 {
 var length = this.value.length;
 this.setSelectionRange(length, length);
 }
 
-Object.defineProperty(Array.prototype, "remove", { value: function(value, onlyFirst)
+Object.defineProperty(Array.prototype, "remove",
+{
+
+value: function(value, onlyFirst)
 {
 if (onlyFirst) {
 var index = this.indexOf(value);
@@ -682,17 +546,25 @@ for (var i = 0; i < length; ++i) {
 if (this[i] === value)
 this.splice(i, 1);
 }
-}});
+}
+});
 
-Object.defineProperty(Array.prototype, "keySet", { value: function()
+Object.defineProperty(Array.prototype, "keySet",
+{
+
+value: function()
 {
 var keys = {};
 for (var i = 0; i < this.length; ++i)
 keys[this[i]] = true;
 return keys;
-}});
+}
+});
 
-Object.defineProperty(Array.prototype, "upperBound", { value: function(value)
+Object.defineProperty(Array.prototype, "upperBound",
+{
+
+value: function(value)
 {
 var first = 0;
 var count = this.length;
@@ -706,7 +578,8 @@ count -= step + 1;
 count = step;
 }
 return first;
-}});
+}
+});
 
 Array.diff = function(left, right)
 {
@@ -743,7 +616,7 @@ o[n[i].row + 1] = { text: o[n[i].row + 1], row: i + 1 };
 }
 
 for (var i = n.length - 1; i > 0; i--) {
-if (n[i].text != null && n[i - 1].text == null && n[i].row > 0 && o[n[i].row - 1].text == null && 
+if (n[i].text != null && n[i - 1].text == null && n[i].row > 0 && o[n[i].row - 1].text == null &&
 n[i - 1] == o[n[i].row - 1]) {
 n[i - 1] = { text: n[i - 1], row: n[i].row - 1 };
 o[n[i].row - 1] = { text: o[n[i].row - 1], row: i - 1 };
@@ -792,7 +665,7 @@ continue;
 
 if (!isNaN(format[index])) {
 
-var number = parseInt(format.substring(index));
+var number = parseInt(format.substring(index), 10);
 while (!isNaN(format[index]))
 ++index;
 
@@ -808,7 +681,7 @@ if (format[index] === ".") {
 
 
 ++index;
-precision = parseInt(format.substring(index));
+precision = parseInt(format.substring(index), 10);
 if (isNaN(precision))
 precision = 0;
 while (!isNaN(format[index]))
@@ -829,17 +702,11 @@ return tokens;
 String.standardFormatters = {
 d: function(substitution)
 {
-if (typeof substitution == "object" && WebInspector.RemoteObject.type(substitution) === "number")
-substitution = substitution.description;
-substitution = parseInt(substitution);
 return !isNaN(substitution) ? substitution : 0;
 },
 
 f: function(substitution, token)
 {
-if (typeof substitution == "object" && WebInspector.RemoteObject.type(substitution) === "number")
-substitution = substitution.description;
-substitution = parseFloat(substitution);
 if (substitution && token.precision > -1)
 substitution = substitution.toFixed(token.precision);
 return !isNaN(substitution) ? substitution : (token.precision > -1 ? Number(0).toFixed(token.precision) : 0);
@@ -847,11 +714,9 @@ return !isNaN(substitution) ? substitution : (token.precision > -1 ? Number(0).t
 
 s: function(substitution)
 {
-if (typeof substitution == "object" && WebInspector.RemoteObject.type(substitution) !== "null")
-substitution = substitution.description;
 return substitution;
-},
-};
+}
+}
 
 String.vsprintf = function(format, substitutions)
 {
@@ -925,23 +790,29 @@ unusedSubstitutions.push(substitutions[i]);
 return { formattedResult: result, unusedSubstitutions: unusedSubstitutions };
 }
 
+} 
+
+setupPrototypeUtilities();
+
 function isEnterKey(event) {
 
 return event.keyCode !== 229 && event.keyIdentifier === "Enter";
 }
 
-function highlightSearchResult(element, offset, length)
+function highlightSearchResult(element, offset, length, domChanges)
 {
-var result = highlightSearchResults(element, [{offset: offset, length: length }]);
+var result = highlightSearchResults(element, [{offset: offset, length: length }], domChanges);
 return result.length ? result[0] : null;
 }
+
 
 function highlightSearchResults(element, resultRanges, changes)
 {
 changes = changes || [];
 var highlightNodes = [];
 var lineText = element.textContent;
-var textNodeSnapshot = document.evaluate(".//text()", element, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+var ownerDocument = element.ownerDocument;
+var textNodeSnapshot = ownerDocument.evaluate(".//text()", element, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
 
 var snapshotLength = textNodeSnapshot.snapshotLength;
 var snapshotNodeOffset = 0;
@@ -973,7 +844,7 @@ textNode = element;
 textNodeOffset = 0;
 }
 
-var highlightNode = document.createElement("span");
+var highlightNode = ownerDocument.createElement("span");
 highlightNode.className = "webkit-search-result";
 highlightNode.textContent = lineText.substring(startOffset, endOffset);
 
@@ -986,7 +857,7 @@ changes.push({ node: textNode, type: "changed", oldText: text, newText: textNode
 textNode.parentElement.insertBefore(highlightNode, textNode);
 changes.push({ node: highlightNode, type: "added", nextSibling: textNode, parent: textNode.parentElement });
 
-var prefixNode = document.createTextNode(text.substring(0, textNodeOffset));
+var prefixNode = ownerDocument.createTextNode(text.substring(0, textNodeOffset));
 textNode.parentElement.insertBefore(prefixNode, highlightNode);
 changes.push({ node: prefixNode, type: "added", nextSibling: highlightNode, parent: textNode.parentElement });
 highlightNodes.push(highlightNode);
@@ -1003,7 +874,7 @@ changes.push({ node: textNode, type: "changed", oldText: text, newText: textNode
 while (currentSnapshotItem < snapshotLength) {
 textNode = textNodeSnapshot.snapshotItem(currentSnapshotItem++);
 snapshotNodeOffset += textNode.nodeValue.length;
-var text = textNode.textContent;
+text = textNode.textContent;
 if (length < text.length) {
 textNode.textContent = text.substring(length);
 changes.push({ node: textNode, type: "changed", oldText: text, newText: textNode.textContent });
@@ -1023,16 +894,47 @@ highlightNodes.push(highlightNode);
 return highlightNodes;
 }
 
+function applyDomChanges(domChanges)
+{
+for (var i = 0, size = domChanges.length; i < size; ++i) {
+var entry = domChanges[i];
+switch (entry.type) {
+case "added":
+entry.parent.insertBefore(entry.node, entry.nextSibling);
+break;
+case "changed":
+entry.node.textContent = entry.newText;
+break;
+}
+}
+}
+
+function revertDomChanges(domChanges)
+{
+for (var i = 0, size = domChanges.length; i < size; ++i) {
+var entry = domChanges[i];
+switch (entry.type) {
+case "added":
+if (entry.node.parentElement)
+entry.node.parentElement.removeChild(entry.node);
+break;
+case "changed":
+entry.node.textContent = entry.oldText;
+break;
+}
+}
+}
+
 function createSearchRegex(query, extraFlags)
 {
 
-regexSpecialCharacters = "[](){}+-*.,?\\^$|";
+var regexSpecialCharacters = "[](){}+-*.,?\\^$|";
 var regex = "";
 for (var i = 0; i < query.length; ++i) {
-var char = query.charAt(i);
-if (regexSpecialCharacters.indexOf(char) != -1)
+var c = query.charAt(i);
+if (regexSpecialCharacters.indexOf(c) != -1)
 regex += "\\";
-regex += char;
+regex += c;
 }
 return new RegExp(regex, "i" + (extraFlags || ""));
 }
@@ -1090,9 +992,10 @@ else {
 
 while (index > 0 && aFunction(anObject, aList[index - 1]) === 0)
 index--;
-return index;        
+return index;
 }
 }
+
 
 
 
@@ -1100,6 +1003,7 @@ return index;
 
 function TreeOutline(listNode)
 {
+
 this.children = [];
 this.selectedTreeElement = null;
 this._childrenListNode = listNode;
@@ -1119,7 +1023,7 @@ this._childrenListNode.addEventListener("keydown", this._treeKeyDown.bind(this),
 
 TreeOutline._knownTreeElementNextIdentifier = 1;
 
-TreeOutline._appendChild = function(child)
+TreeOutline.prototype.appendChild = function(child)
 {
 if (!child)
 throw("child can't be undefined or null");
@@ -1160,7 +1064,7 @@ this._childrenListNode.addStyleClass("hidden");
 child._attach();
 }
 
-TreeOutline._insertChild = function(child, index)
+TreeOutline.prototype.insertChild = function(child, index)
 {
 if (!child)
 throw("child can't be undefined or null");
@@ -1208,7 +1112,7 @@ this._childrenListNode.addStyleClass("hidden");
 child._attach();
 }
 
-TreeOutline._removeChildAtIndex = function(childIndex)
+TreeOutline.prototype.removeChildAtIndex = function(childIndex)
 {
 if (childIndex < 0 || childIndex >= this.children.length)
 throw("childIndex out of range");
@@ -1243,7 +1147,7 @@ child.nextSibling = null;
 child.previousSibling = null;
 }
 
-TreeOutline._removeChild = function(child)
+TreeOutline.prototype.removeChild = function(child)
 {
 if (!child)
 throw("child can't be undefined or null");
@@ -1252,10 +1156,10 @@ var childIndex = this.children.indexOf(child);
 if (childIndex === -1)
 throw("child not found in this node's children");
 
-TreeOutline._removeChildAtIndex.call(this, childIndex);
+this.removeChildAtIndex.call(this, childIndex);
 }
 
-TreeOutline._removeChildren = function()
+TreeOutline.prototype.removeChildren = function()
 {
 for (var i = 0; i < this.children.length; ++i) {
 var child = this.children[i];
@@ -1276,7 +1180,7 @@ child.previousSibling = null;
 this.children = [];
 }
 
-TreeOutline._removeChildrenRecursive = function()
+TreeOutline.prototype.removeChildrenRecursive = function()
 {
 var childrenToRemove = this.children;
 
@@ -1288,7 +1192,7 @@ child = child.traverseNextTreeElement(false, this, true);
 }
 
 for (var i = 0; i < childrenToRemove.length; ++i) {
-var child = childrenToRemove[i];
+child = childrenToRemove[i];
 child.deselect();
 if (child.treeOutline)
 child.treeOutline._forgetTreeElement(child);
@@ -1394,8 +1298,8 @@ continue;
 
 
 item = this.findTreeElement(ancestors[i], isAncestor, getParent);
-if (item && item.onpopulate)
-item.onpopulate(item);
+if (item)
+item.onpopulate();
 }
 
 return this.getCachedTreeElement(representedObject);
@@ -1404,6 +1308,9 @@ return this.getCachedTreeElement(representedObject);
 TreeOutline.prototype.treeElementFromPoint = function(x, y)
 {
 var node = this._childrenListNode.ownerDocument.elementFromPoint(x, y);
+if (!node)
+return null;
+
 var listNode = node.enclosingNodeOrSelfWithNodeNameInArray(["ol", "li"]);
 if (listNode)
 return listNode.parentTreeElement || listNode.treeElement;
@@ -1461,7 +1368,7 @@ else
 this.selectedTreeElement.expand();
 }
 }
-} else if (event.keyCode === WebInspector.KeyboardShortcut.Keys.Backspace.code || event.keyCode === WebInspector.KeyboardShortcut.Keys.Delete.code) {
+} else if (event.keyCode === 8   || event.keyCode === 46  ) {
 if (this.selectedTreeElement.ondelete)
 handled = this.selectedTreeElement.ondelete();
 } else if (isEnterKey(event)) {
@@ -1505,12 +1412,11 @@ TreeOutline.prototype.select = function()
 
 }
 
-TreeOutline.prototype.appendChild = TreeOutline._appendChild;
-TreeOutline.prototype.insertChild = TreeOutline._insertChild;
-TreeOutline.prototype.removeChild = TreeOutline._removeChild;
-TreeOutline.prototype.removeChildAtIndex = TreeOutline._removeChildAtIndex;
-TreeOutline.prototype.removeChildren = TreeOutline._removeChildren;
-TreeOutline.prototype.removeChildrenRecursive = TreeOutline._removeChildrenRecursive;
+TreeOutline.prototype.revealAndSelect = function(omitFocus)
+{
+
+}
+
 
 function TreeElement(title, representedObject, hasChildren)
 {
@@ -1650,12 +1556,12 @@ this._listItemNode.appendChild(this._title);
 }
 }
 
-TreeElement.prototype.appendChild = TreeOutline._appendChild;
-TreeElement.prototype.insertChild = TreeOutline._insertChild;
-TreeElement.prototype.removeChild = TreeOutline._removeChild;
-TreeElement.prototype.removeChildAtIndex = TreeOutline._removeChildAtIndex;
-TreeElement.prototype.removeChildren = TreeOutline._removeChildren;
-TreeElement.prototype.removeChildrenRecursive = TreeOutline._removeChildrenRecursive;
+TreeElement.prototype.appendChild = TreeOutline.prototype.appendChild;
+TreeElement.prototype.insertChild = TreeOutline.prototype.insertChild;
+TreeElement.prototype.removeChild = TreeOutline.prototype.removeChild;
+TreeElement.prototype.removeChildAtIndex = TreeOutline.prototype.removeChildAtIndex;
+TreeElement.prototype.removeChildren = TreeOutline.prototype.removeChildren;
+TreeElement.prototype.removeChildrenRecursive = TreeOutline.prototype.removeChildrenRecursive;
 
 TreeElement.prototype._attach = function()
 {
@@ -1723,7 +1629,9 @@ var element = event.currentTarget;
 if (!element || !element.treeElement)
 return;
 
-if (!element.treeElement.isEventWithinDisclosureTriangle(event))
+var toggleOnClick = element.treeElement.toggleOnClick && !element.treeElement.selectable;
+var isInTriangle = element.treeElement.isEventWithinDisclosureTriangle(event);
+if (!toggleOnClick && !isInTriangle)
 return;
 
 if (element.treeElement.expanded) {
@@ -1793,8 +1701,7 @@ this._childrenListNode.addStyleClass("children");
 if (this.hidden)
 this._childrenListNode.addStyleClass("hidden");
 
-if (this.onpopulate)
-this.onpopulate(this);
+this.onpopulate();
 
 for (var i = 0; i < this.children.length; ++i)
 this.children[i]._attach();
@@ -1883,7 +1790,8 @@ TreeElement.prototype.selectOnMouseDown = function(event)
 this.select(false, true);
 }
 
-TreeElement.prototype.select = function(supressOnSelect, selectedByUser)
+
+TreeElement.prototype.select = function(omitFocus, selectedByUser)
 {
 if (!this.treeOutline || !this.selectable || this.selected)
 return;
@@ -1892,6 +1800,8 @@ if (this.treeOutline.selectedTreeElement)
 this.treeOutline.selectedTreeElement.deselect();
 
 this.selected = true;
+
+if(!omitFocus)
 this.treeOutline._childrenListNode.focus();
 
 
@@ -1901,9 +1811,16 @@ this.treeOutline.selectedTreeElement = this;
 if (this._listItemNode)
 this._listItemNode.addStyleClass("selected");
 
-if (this.onselect && !supressOnSelect)
+if (this.onselect)
 this.onselect(this, selectedByUser);
 }
+
+TreeElement.prototype.revealAndSelect = function(omitFocus)
+{
+this.reveal();
+this.select(omitFocus);
+}
+
 
 TreeElement.prototype.deselect = function(supressOnDeselect)
 {
@@ -1920,10 +1837,15 @@ this.ondeselect(this);
 return true;
 }
 
+TreeElement.prototype.onpopulate = function()
+{
+
+}
+
 TreeElement.prototype.traverseNextTreeElement = function(skipHidden, stayWithin, dontPopulate, info)
 {
-if (!dontPopulate && this.hasChildren && this.onpopulate)
-this.onpopulate(this);
+if (!dontPopulate && this.hasChildren)
+this.onpopulate();
 
 if (info)
 info.depthChange = 0;
@@ -1958,12 +1880,12 @@ return (skipHidden ? (element.revealed() ? element.nextSibling : null) : element
 TreeElement.prototype.traversePreviousTreeElement = function(skipHidden, dontPopulate)
 {
 var element = skipHidden ? (this.revealed() ? this.previousSibling : null) : this.previousSibling;
-if (!dontPopulate && element && element.hasChildren && element.onpopulate)
-element.onpopulate(element);
+if (!dontPopulate && element && element.hasChildren)
+element.onpopulate();
 
 while (element && (skipHidden ? (element.revealed() && element.expanded ? element.children[element.children.length - 1] : null) : element.children[element.children.length - 1])) {
-if (!dontPopulate && element.hasChildren && element.onpopulate)
-element.onpopulate(element);
+if (!dontPopulate && element.hasChildren)
+element.onpopulate();
 element = (skipHidden ? (element.revealed() && element.expanded ? element.children[element.children.length - 1] : null) : element.children[element.children.length - 1]);
 }
 
@@ -1978,7 +1900,7 @@ return this.parent;
 
 TreeElement.prototype.isEventWithinDisclosureTriangle = function(event)
 {
-var left = this._listItemNode.totalOffsetLeft;
+var left = this._listItemNode.totalOffsetLeft();
 return event.pageX >= left && event.pageX <= left + this.arrowToggleWidth && this.hasChildren;
 }
 
@@ -2076,18 +1998,12 @@ selection.addRange(selectionRange);
 this._previousFocusElement.blur();
 },
 
-resetFocusElement: function()
-{
-this.currentFocusElement = null;
-this._previousFocusElement = null;
-},
-
-get currentPanel()
+currentPanel: function()
 {
 return this._currentPanel;
 },
 
-set currentPanel(x)
+setCurrentPanel: function(x)
 {
 if (this._currentPanel === x)
 return;
@@ -2103,16 +2019,19 @@ WebInspector.searchController.activePanelChanged();
 }
 for (var panelName in WebInspector.panels) {
 if (WebInspector.panels[panelName] === x) {
-WebInspector.settings.lastActivePanel = panelName;
+WebInspector.settings.lastActivePanel.set(panelName);
 this._panelHistory.setPanel(panelName);
+WebInspector.userMetrics.panelShown(panelName);
 }
 }
+
+this._toggleConsoleButton.disabled = this._currentPanel === WebInspector.panels.console;
 },
 
 _createPanels: function()
 {
 if (WebInspector.WorkerManager.isWorkerFrontend()) {
-this.panels.scripts = new WebInspector.ScriptsPanel();
+this.panels.scripts = new WebInspector.ScriptsPanel(this.debuggerPresentationModel);
 this.panels.console = new WebInspector.ConsolePanel();
 return;
 }
@@ -2124,7 +2043,7 @@ this.panels.resources = new WebInspector.ResourcesPanel();
 if (hiddenPanels.indexOf("network") === -1)
 this.panels.network = new WebInspector.NetworkPanel();
 if (hiddenPanels.indexOf("scripts") === -1)
-this.panels.scripts = new WebInspector.ScriptsPanel();
+this.panels.scripts = new WebInspector.ScriptsPanel(this.debuggerPresentationModel);
 if (hiddenPanels.indexOf("timeline") === -1)
 this.panels.timeline = new WebInspector.TimelinePanel();
 if (hiddenPanels.indexOf("profiles") === -1)
@@ -2138,19 +2057,98 @@ this.panels.console = new WebInspector.ConsolePanel();
 _createGlobalStatusBarItems: function()
 {
 this._dockToggleButton = new WebInspector.StatusBarButton(this._dockButtonTitle(), "dock-status-bar-item");
-this._dockToggleButton.addEventListener("click", this.toggleAttach.bind(this), false);
+this._dockToggleButton.addEventListener("click", this._toggleAttach.bind(this), false);
 this._dockToggleButton.toggled = !this.attached;
+
+this._settingsButton = new WebInspector.StatusBarButton(WebInspector.UIString("Settings"), "settings-status-bar-item");
+this._settingsButton.addEventListener("click", this._toggleSettings.bind(this), false);
 
 var anchoredStatusBar = document.getElementById("anchored-status-bar-items");
 anchoredStatusBar.appendChild(this._dockToggleButton.element);
-anchoredStatusBar.appendChild(this.console.toggleConsoleButton.element);
+
+this._toggleConsoleButton = new WebInspector.StatusBarButton(WebInspector.UIString("Show console."), "console-status-bar-item");
+this._toggleConsoleButton.addEventListener("click", this._toggleConsoleButtonClicked.bind(this), false);
+anchoredStatusBar.appendChild(this._toggleConsoleButton.element);
+
 if (this.panels.elements)
 anchoredStatusBar.appendChild(this.panels.elements.nodeSearchButton.element);
+anchoredStatusBar.appendChild(this._settingsButton.element);
 },
 
 _dockButtonTitle: function()
 {
 return this.attached ? WebInspector.UIString("Undock into separate window.") : WebInspector.UIString("Dock to main window.");
+},
+
+_toggleAttach: function()
+{
+if (!this._attached) {
+InspectorFrontendHost.requestAttachWindow();
+WebInspector.userMetrics.WindowDocked.record();
+} else {
+InspectorFrontendHost.requestDetachWindow();
+WebInspector.userMetrics.WindowUndocked.record();
+}
+},
+
+_toggleConsoleButtonClicked: function()
+{
+if (this._toggleConsoleButton.disabled)
+return;
+
+this._toggleConsoleButton.toggled = !this._toggleConsoleButton.toggled;
+
+if (this._toggleConsoleButton.toggled) {
+this._toggleConsoleButton.title = WebInspector.UIString("Hide console.");
+this.drawer.show(this.consoleView);
+} else {
+this._toggleConsoleButton.title = WebInspector.UIString("Show console.");
+this.drawer.hide();
+}
+},
+
+_toggleSettings: function()
+{
+this._settingsButton.toggled = !this._settingsButton.toggled;
+if (this._settingsButton.toggled)
+this._showSettingsScreen();
+else
+this._hideSettingsScreen();
+},
+
+_showShortcutsScreen: function()
+{
+this._hideSettingsScreen();
+WebInspector.shortcutsScreen.show();
+},
+
+_hideShortcutsScreen: function()
+{
+WebInspector.shortcutsScreen.hide();
+},
+
+_showSettingsScreen: function()
+{
+this._hideShortcutsScreen();
+function onhide()
+{
+this._settingsButton.toggled = false;
+delete this._settingsScreen;
+}
+
+if (!this._settingsScreen) {
+this._settingsScreen = new WebInspector.SettingsScreen();
+this._settingsScreen.show(onhide.bind(this));
+}
+},
+
+_hideSettingsScreen: function()
+{
+if (this._settingsScreen) {
+this._settingsScreen.hide();
+this._settingsButton.toggled = false;
+delete this._settingsScreen;
+}
 },
 
 get attached()
@@ -2189,37 +2187,7 @@ if (WebInspector.searchController)
 WebInspector.searchController.updateSearchLabel();
 
 if (WebInspector.drawer)
-WebInspector.drawer.updateHeight();
-},
-
-get errors()
-{
-return this._errors || 0;
-},
-
-set errors(x)
-{
-x = Math.max(x, 0);
-
-if (this._errors === x)
-return;
-this._errors = x;
-this._updateErrorAndWarningCounts();
-},
-
-get warnings()
-{
-return this._warnings || 0;
-},
-
-set warnings(x)
-{
-x = Math.max(x, 0);
-
-if (this._warnings === x)
-return;
-this._warnings = x;
-this._updateErrorAndWarningCounts();
+WebInspector.drawer.resize();
 },
 
 _updateErrorAndWarningCounts: function()
@@ -2228,7 +2196,9 @@ var errorWarningElement = document.getElementById("error-warning-count");
 if (!errorWarningElement)
 return;
 
-if (!this.errors && !this.warnings) {
+var errors = WebInspector.console.errors;
+var warnings = WebInspector.console.warnings;
+if (!errors && !warnings) {
 errorWarningElement.addStyleClass("hidden");
 return;
 }
@@ -2237,41 +2207,60 @@ errorWarningElement.removeStyleClass("hidden");
 
 errorWarningElement.removeChildren();
 
-if (this.errors) {
+if (errors) {
 var errorElement = document.createElement("span");
 errorElement.id = "error-count";
-errorElement.textContent = this.errors;
+errorElement.textContent = errors;
 errorWarningElement.appendChild(errorElement);
 }
 
-if (this.warnings) {
+if (warnings) {
 var warningsElement = document.createElement("span");
 warningsElement.id = "warning-count";
-warningsElement.textContent = this.warnings;
+warningsElement.textContent = warnings;
 errorWarningElement.appendChild(warningsElement);
 }
 
-if (this.errors) {
-if (this.warnings) {
-if (this.errors == 1) {
-if (this.warnings == 1)
-errorWarningElement.title = WebInspector.UIString("%d error, %d warning", this.errors, this.warnings);
+if (errors) {
+if (warnings) {
+if (errors == 1) {
+if (warnings == 1)
+errorWarningElement.title = WebInspector.UIString("%d error, %d warning", errors, warnings);
 else
-errorWarningElement.title = WebInspector.UIString("%d error, %d warnings", this.errors, this.warnings);
-} else if (this.warnings == 1)
-errorWarningElement.title = WebInspector.UIString("%d errors, %d warning", this.errors, this.warnings);
+errorWarningElement.title = WebInspector.UIString("%d error, %d warnings", errors, warnings);
+} else if (warnings == 1)
+errorWarningElement.title = WebInspector.UIString("%d errors, %d warning", errors, warnings);
 else
-errorWarningElement.title = WebInspector.UIString("%d errors, %d warnings", this.errors, this.warnings);
-} else if (this.errors == 1)
-errorWarningElement.title = WebInspector.UIString("%d error", this.errors);
+errorWarningElement.title = WebInspector.UIString("%d errors, %d warnings", errors, warnings);
+} else if (errors == 1)
+errorWarningElement.title = WebInspector.UIString("%d error", errors);
 else
-errorWarningElement.title = WebInspector.UIString("%d errors", this.errors);
-} else if (this.warnings == 1)
-errorWarningElement.title = WebInspector.UIString("%d warning", this.warnings);
-else if (this.warnings)
-errorWarningElement.title = WebInspector.UIString("%d warnings", this.warnings);
+errorWarningElement.title = WebInspector.UIString("%d errors", errors);
+} else if (warnings == 1)
+errorWarningElement.title = WebInspector.UIString("%d warning", warnings);
+else if (warnings)
+errorWarningElement.title = WebInspector.UIString("%d warnings", warnings);
 else
 errorWarningElement.title = null;
+},
+
+buildHighlightConfig: function(mode)
+{
+mode = mode || "all";
+var highlightConfig = { showInfo: mode === "all" };
+if (mode === "all" || mode === "content")
+highlightConfig.contentColor = WebInspector.Color.PageHighlight.Content.toProtocolRGBA();
+
+if (mode === "all" || mode === "padding")
+highlightConfig.paddingColor = WebInspector.Color.PageHighlight.Padding.toProtocolRGBA();
+
+if (mode === "all" || mode === "border")
+highlightConfig.borderColor = WebInspector.Color.PageHighlight.Border.toProtocolRGBA();
+
+if (mode === "all" || mode === "margin")
+highlightConfig.marginColor = WebInspector.Color.PageHighlight.Margin.toProtocolRGBA();
+
+return highlightConfig;
 },
 
 highlightDOMNode: function(nodeId, mode)
@@ -2281,14 +2270,11 @@ clearTimeout(this._hideDOMNodeHighlightTimeout);
 delete this._hideDOMNodeHighlightTimeout;
 }
 
-if (this._highlightedDOMNodeId === nodeId)
-return;
-
 this._highlightedDOMNodeId = nodeId;
 if (nodeId)
-DOMAgent.highlightNode(nodeId, mode || "all");
+DOMAgent.highlightNode(nodeId, this.buildHighlightConfig(mode));
 else
-DOMAgent.hideNodeHighlight();
+DOMAgent.hideHighlight();
 },
 
 highlightDOMNodeForTwoSeconds: function(nodeId)
@@ -2306,13 +2292,8 @@ element.addEventListener("mouseout", this.highlightDOMNode.bind(this, 0), false)
 
 _updateFocusedNode: function(nodeId)
 {
-this.currentPanel = this.panels.elements;
+this.setCurrentPanel(this.panels.elements);
 this.panels.elements.updateFocusedNode(nodeId);
-},
-
-get networkResources()
-{
-return this.panels.network.resources;
 },
 
 networkResourceById: function(id)
@@ -2333,17 +2314,19 @@ return this.resourceTreeModel.resourceForURL(url);
 openLinkExternallyLabel: function()
 {
 return WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Open link in new tab" : "Open Link in New Tab");
+},
+
+copyLinkAddressLabel: function()
+{
+return WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Copy link address" : "Copy Link Address");
 }
 }
 
-WebInspector.PlatformFlavor = {
-WindowsVista: "windows-vista",
-MacTiger: "mac-tiger",
-MacLeopard: "mac-leopard",
-MacSnowLeopard: "mac-snowleopard"
-};
+WebInspector.Events = {
+InspectorClosing: "InspectorClosing"
+}
 
-(function parseQueryParameters()
+{(function parseQueryParameters()
 {
 WebInspector.queryParamsObject = {};
 var queryParams = window.location.search;
@@ -2354,7 +2337,7 @@ for (var i = 0; i < params.length; ++i) {
 var pair = params[i].split("=");
 WebInspector.queryParamsObject[pair[0]] = pair[1];
 }
-})();
+})();}
 
 WebInspector.loaded = function()
 {
@@ -2366,7 +2349,6 @@ WebInspector.socket.onmessage = function(message) { InspectorBackend.dispatch(me
 WebInspector.socket.onerror = function(error) { console.error(error); }
 WebInspector.socket.onopen = function() {
 InspectorFrontendHost.sendMessageToBackend = WebInspector.socket.send.bind(WebInspector.socket);
-InspectorFrontendHost.loaded = WebInspector.socket.send.bind(WebInspector.socket, "loaded");
 WebInspector.doLoadedDone();
 }
 return;
@@ -2379,6 +2361,8 @@ WebInspector.doLoadedDone = function()
 {
 InspectorFrontendHost.loaded();
 
+this.notifications = new WebInspector.Object();
+
 var platform = WebInspector.platform;
 document.body.addStyleClass("platform-" + platform);
 var flavor = WebInspector.platformFlavor;
@@ -2389,38 +2373,35 @@ document.body.addStyleClass("port-" + port);
 if (WebInspector.socket)
 document.body.addStyleClass("remote");
 
-WebInspector.settings = new WebInspector.Settings();
-
 this._registerShortcuts();
 
 
-WebInspector.shortcutsHelp.section(WebInspector.UIString("Console"));
-WebInspector.shortcutsHelp.section(WebInspector.UIString("Elements Panel"));
+WebInspector.shortcutsScreen.section(WebInspector.UIString("Console"));
+WebInspector.shortcutsScreen.section(WebInspector.UIString("Elements Panel"));
+
+this.console = new WebInspector.ConsoleModel();
+this.console.addEventListener(WebInspector.ConsoleModel.Events.ConsoleCleared, this._updateErrorAndWarningCounts, this);
+this.console.addEventListener(WebInspector.ConsoleModel.Events.MessageAdded, this._updateErrorAndWarningCounts, this);
+this.console.addEventListener(WebInspector.ConsoleModel.Events.RepeatCountUpdated, this._updateErrorAndWarningCounts, this);
 
 this.drawer = new WebInspector.Drawer();
-this.console = new WebInspector.ConsoleView(this.drawer);
-this.drawer.visibleView = this.console;
+this.consoleView = new WebInspector.ConsoleView();
+
 this.networkManager = new WebInspector.NetworkManager();
 this.resourceTreeModel = new WebInspector.ResourceTreeModel();
+this.networkLog = new WebInspector.NetworkLog();
 this.domAgent = new WebInspector.DOMAgent();
+new WebInspector.JavaScriptContextManager(this.resourceTreeModel, this.consoleView);
 
-InspectorBackend.registerDomainDispatcher("Inspector", this);
-
-this.resourceCategories = {
-documents: new WebInspector.ResourceCategory("documents", WebInspector.UIString("Documents"), "rgb(47,102,236)"),
-stylesheets: new WebInspector.ResourceCategory("stylesheets", WebInspector.UIString("Stylesheets"), "rgb(157,231,119)"),
-images: new WebInspector.ResourceCategory("images", WebInspector.UIString("Images"), "rgb(164,60,255)"),
-scripts: new WebInspector.ResourceCategory("scripts", WebInspector.UIString("Scripts"), "rgb(255,121,0)"),
-xhr: new WebInspector.ResourceCategory("xhr", WebInspector.UIString("XHR"), "rgb(231,231,10)"),
-fonts: new WebInspector.ResourceCategory("fonts", WebInspector.UIString("Fonts"), "rgb(255,82,62)"),
-websockets: new WebInspector.ResourceCategory("websockets", WebInspector.UIString("WebSockets"), "rgb(186,186,186)"), 
-other: new WebInspector.ResourceCategory("other", WebInspector.UIString("Other"), "rgb(186,186,186)")
-};
+InspectorBackend.registerInspectorDispatcher(this);
 
 this.cssModel = new WebInspector.CSSStyleModel();
 this.debuggerModel = new WebInspector.DebuggerModel();
+this.debuggerPresentationModel = new WebInspector.DebuggerPresentationModel();
 
 this.searchController = new WebInspector.SearchController();
+
+if (Preferences.nativeInstrumentationEnabled)
 this.domBreakpointsSidebarPane = new WebInspector.DOMBreakpointsSidebarPane();
 
 this.panels = {};
@@ -2435,23 +2416,9 @@ this.panelOrder = [];
 for (var panelName in this.panels)
 this.addPanel(this.panels[panelName]);
 
-this.Tips = {
-ResourceNotCompressed: {id: 0, message: WebInspector.UIString("You could save bandwidth by having your web server compress this transfer with gzip or zlib.")}
-};
-
-this.Warnings = {
-IncorrectMIMEType: {id: 0, message: WebInspector.UIString("Resource interpreted as %s but transferred with MIME type %s.")}
-};
-
 this.addMainEventListeners(document);
 
 window.addEventListener("resize", this.windowResize.bind(this), true);
-
-document.addEventListener("focus", this.focusChanged.bind(this), true);
-document.addEventListener("keydown", this.documentKeyDown.bind(this), false);
-document.addEventListener("beforecopy", this.documentCanCopy.bind(this), true);
-document.addEventListener("copy", this.documentCopy.bind(this), true);
-document.addEventListener("contextmenu", this.contextMenuEventFired.bind(this), true);
 
 var errorWarningCount = document.getElementById("error-warning-count");
 errorWarningCount.addEventListener("click", this.showConsole.bind(this), false);
@@ -2459,14 +2426,11 @@ this._updateErrorAndWarningCounts();
 
 this.extensionServer.initExtensions();
 
-if (WebInspector.settings.monitoringXHREnabled)
-ConsoleAgent.setMonitoringXHREnabled(true);
-ConsoleAgent.enable(this.console.setConsoleMessageExpiredCount.bind(this.console));
-
+this.console.enableAgent();
 DatabaseAgent.enable();
 DOMStorageAgent.enable();
 
-WebInspector.showPanel(WebInspector.settings.lastActivePanel);
+WebInspector.showPanel(WebInspector.settings.lastActivePanel.get());
 
 function propertyNamesCallback(error, names)
 {
@@ -2494,6 +2458,8 @@ localizedStringsScriptElement.src = localizedStringsURL;
 document.head.appendChild(localizedStringsScriptElement);
 } else
 WebInspector.loaded();
+
+WebInspector.setAttachedWindow(WebInspector.queryParamsObject.docked === "true");
 
 window.removeEventListener("DOMContentLoaded", windowLoaded, false);
 delete windowLoaded;
@@ -2527,8 +2493,8 @@ WebInspector.dispatch(messageObject);
 
 WebInspector.windowResize = function(event)
 {
-if (this.currentPanel)
-this.currentPanel.resize();
+if (this.currentPanel())
+this.currentPanel().doResize();
 this.drawer.resize();
 this.toolbar.resize();
 }
@@ -2566,6 +2532,7 @@ WebInspector.close = function(event)
 if (this._isClosing)
 return;
 this._isClosing = true;
+this.notifications.dispatchEventToListeners(WebInspector.Events.InspectorClosing);
 InspectorFrontendHost.closeWindow();
 }
 
@@ -2635,7 +2602,7 @@ PageAgent.open(resourceURL, true);
 WebInspector._registerShortcuts = function()
 {
 var shortcut = WebInspector.KeyboardShortcut;
-var section = WebInspector.shortcutsHelp.section(WebInspector.UIString("All Panels"));
+var section = WebInspector.shortcutsScreen.section(WebInspector.UIString("All Panels"));
 var keys = [
 shortcut.shortcutToString("]", shortcut.Modifiers.CtrlOrMeta),
 shortcut.shortcutToString("[", shortcut.Modifiers.CtrlOrMeta)
@@ -2663,7 +2630,7 @@ const helpKey = WebInspector.isMac() ? "U+003F" : "U+00BF";
 
 if (event.keyIdentifier === "F1" ||
 (event.keyIdentifier === helpKey && event.shiftKey && (!isInEditMode && !isInputElement || event.metaKey))) {
-WebInspector.shortcutsHelp.show();
+this._showShortcutsScreen();
 event.stopPropagation();
 event.preventDefault();
 return;
@@ -2677,8 +2644,8 @@ return;
 }
 }
 
-if (this.currentPanel) {
-this.currentPanel.handleShortcut(event);
+if (this.currentPanel()) {
+this.currentPanel().handleShortcut(event);
 if (event.handled) {
 event.preventDefault();
 return;
@@ -2714,10 +2681,7 @@ break;
 
 case "U+001B": 
 event.preventDefault();
-if (this.drawer.fullPanel)
-return;
-
-this.drawer.visible = !this.drawer.visible;
+this._toggleConsoleButtonClicked();
 break;
 
 
@@ -2729,7 +2693,7 @@ else
 var isRotateLeft = event.ctrlKey && !event.shiftKey && !event.metaKey && !event.altKey;
 
 if (isRotateLeft) {
-var index = this.panelOrder.indexOf(this.currentPanel);
+var index = this.panelOrder.indexOf(this.currentPanel());
 index = (index === 0) ? this.panelOrder.length - 1 : index - 1;
 this.panelOrder[index].toolbarItem.click();
 event.preventDefault();
@@ -2746,7 +2710,7 @@ else
 var isRotateRight = event.ctrlKey && !event.shiftKey && !event.metaKey && !event.altKey;
 
 if (isRotateRight) {
-var index = this.panelOrder.indexOf(this.currentPanel);
+var index = this.panelOrder.indexOf(this.currentPanel());
 index = (index + 1) % this.panelOrder.length;
 this.panelOrder[index].toolbarItem.click();
 event.preventDefault();
@@ -2761,22 +2725,24 @@ event.preventDefault();
 }
 break;
 case "F5":
-if (!isMac)
+if (!isMac) {
 PageAgent.reload(event.ctrlKey || event.shiftKey);
+event.preventDefault();
+}
 break;
 }
 }
 
 WebInspector.documentCanCopy = function(event)
 {
-if (this.currentPanel && this.currentPanel.handleCopyEvent)
+if (this.currentPanel() && this.currentPanel().handleCopyEvent)
 event.preventDefault();
 }
 
 WebInspector.documentCopy = function(event)
 {
-if (this.currentPanel && this.currentPanel.handleCopyEvent)
-this.currentPanel.handleCopyEvent(event);
+if (this.currentPanel() && this.currentPanel().handleCopyEvent)
+this.currentPanel().handleCopyEvent(event);
 }
 
 WebInspector.contextMenuEventFired = function(event)
@@ -2886,14 +2852,6 @@ forceComplete: forceComplete
 };
 }
 
-WebInspector.toggleAttach = function()
-{
-if (!this.attached)
-InspectorFrontendHost.requestAttachWindow();
-else
-InspectorFrontendHost.requestDetachWindow();
-}
-
 WebInspector.elementDragStart = function(element, dividerDrag, elementDragEnd, event, cursor)
 {
 if (this._elementDraggingEventListener || this._elementEndDraggingEventListener)
@@ -2902,20 +2860,22 @@ this.elementDragEnd(event);
 this._elementDraggingEventListener = dividerDrag;
 this._elementEndDraggingEventListener = elementDragEnd;
 
-document.addEventListener("mousemove", dividerDrag, true);
-document.addEventListener("mouseup", elementDragEnd, true);
+var targetDocument = event.target.ownerDocument;
+targetDocument.addEventListener("mousemove", dividerDrag, true);
+targetDocument.addEventListener("mouseup", elementDragEnd, true);
 
-document.body.style.cursor = cursor;
+targetDocument.body.style.cursor = cursor;
 
 event.preventDefault();
 }
 
 WebInspector.elementDragEnd = function(event)
 {
-document.removeEventListener("mousemove", this._elementDraggingEventListener, true);
-document.removeEventListener("mouseup", this._elementEndDraggingEventListener, true);
+var targetDocument = event.target.ownerDocument;
+targetDocument.removeEventListener("mousemove", this._elementDraggingEventListener, true);
+targetDocument.removeEventListener("mouseup", this._elementEndDraggingEventListener, true);
 
-document.body.style.removeProperty("cursor");
+targetDocument.body.style.removeProperty("cursor");
 
 delete this._elementDraggingEventListener;
 delete this._elementEndDraggingEventListener;
@@ -2933,19 +2893,24 @@ this.panels.elements.toggleSearchingForNode();
 
 WebInspector.showConsole = function()
 {
-this.drawer.showView(this.console);
+if (WebInspector._toggleConsoleButton && !WebInspector._toggleConsoleButton.toggled)
+WebInspector._toggleConsoleButtonClicked();
 }
 
 WebInspector.showPanel = function(panel)
 {
-if (!(panel in this.panels))
+if (!(panel in this.panels)) {
+if (WebInspector.WorkerManager.isWorkerFrontend())
+panel = "scripts";
+else
 panel = "elements";
-this.currentPanel = this.panels[panel];
+}
+this.setCurrentPanel(this.panels[panel]);
 }
 
 WebInspector.startUserInitiatedDebugging = function()
 {
-this.currentPanel = this.panels.scripts;
+this.setCurrentPanel(this.panels.scripts);
 WebInspector.debuggerModel.enableDebugger();
 }
 
@@ -2958,10 +2923,9 @@ if ("reset" in panel)
 panel.reset();
 }
 
-this.resources = {};
 this.highlightDOMNode(0);
 
-if (!WebInspector.settings.preserveConsoleLog)
+if (!WebInspector.settings.preserveConsoleLog.get())
 this.console.clearMessages();
 this.extensionServer.notifyInspectorReset();
 if (this.workerManager)
@@ -3035,7 +2999,7 @@ WebInspector.log.lastMessage = message;
 WebInspector.log.repeatCount = repeatCount;
 
 
-message = new WebInspector.RemoteObject.fromPrimitiveValue(message);
+message = WebInspector.RemoteObject.fromPrimitiveValue(message);
 
 
 var msg = new WebInspector.ConsoleMessage(
@@ -3072,50 +3036,20 @@ flushQueue();
 logMessage(message);
 }
 
-WebInspector.drawLoadingPieChart = function(canvas, percent) {
-var g = canvas.getContext("2d");
-var darkColor = "rgb(122, 168, 218)";
-var lightColor = "rgb(228, 241, 251)";
-var cx = 8;
-var cy = 8;
-var r = 7;
-
-g.beginPath();
-g.arc(cx, cy, r, 0, Math.PI * 2, false);
-g.closePath();
-
-g.lineWidth = 1;
-g.strokeStyle = darkColor;
-g.fillStyle = lightColor;
-g.fill();
-g.stroke();
-
-var startangle = -Math.PI / 2;
-var endangle = startangle + (percent * Math.PI * 2);
-
-g.beginPath();
-g.moveTo(cx, cy);
-g.arc(cx, cy, r, startangle, endangle, false);
-g.closePath();
-
-g.fillStyle = darkColor;
-g.fill();
-}
-
 WebInspector.inspect = function(payload, hints)
 {
 var object = WebInspector.RemoteObject.fromPayload(payload);
-if (object.type === "node") {
+if (object.subtype === "node") {
 
 object.pushNodeToFrontend(WebInspector.updateFocusedNode.bind(WebInspector), object.release.bind(object));
 return;
 }
 
 if (hints.databaseId) {
-WebInspector.currentPanel = WebInspector.panels.resources;
+WebInspector.setCurrentPanel(WebInspector.panels.resources);
 WebInspector.panels.resources.selectDatabase(hints.databaseId);
 } else if (hints.domStorageId) {
-WebInspector.currentPanel = WebInspector.panels.resources;
+WebInspector.setCurrentPanel(WebInspector.panels.resources);
 WebInspector.panels.resources.selectDOMStorage(hints.domStorageId);
 }
 
@@ -3172,10 +3106,10 @@ anchor.removeStyleClass("webkit-html-external-link");
 anchor.addStyleClass("webkit-html-resource-link");
 }
 
-this.currentPanel = panel;
+this.setCurrentPanel(panel);
 if (this.drawer)
 this.drawer.immediatelyFinishAnimation();
-this.currentPanel.showAnchorLocation(anchor);
+this.currentPanel().showAnchorLocation(anchor);
 return true;
 }
 
@@ -3256,19 +3190,21 @@ WebInspector.linkifyURL = function(url, linkText, classes, isExternal, tooltipTe
     return WebInspector.linkifyURLAsNode(url, linkText, classes, isExternal, tooltipText).outerHTML;
 }
 
-WebInspector.linkifyResourceAsNode = function(url, preferredPanel, oneBasedLineNumber, classes, tooltipText)
+WebInspector.formatLinkText = function(url, lineNumber)
 {
-    preferredPanel = preferredPanel || "scripts";
-    // FIXME(62725): stack trace line/column numbers are one-based.
-    var lineNumber = oneBasedLineNumber ? oneBasedLineNumber - 1 : undefined;
-    return this.panels[preferredPanel].createAnchor(url, lineNumber, 0, classes, tooltipText);
+    var text = WebInspector.displayNameForURL(url);
+    if (lineNumber !== undefined)
+        text += ":" + (lineNumber + 1);
+    return text;
 }
 
-WebInspector.linkifyCallFrameAsNode = function(callFrame, classes, tooltipText)
+WebInspector.linkifyResourceAsNode = function(url, lineNumber, classes, tooltipText)
 {
-    // FIXME(62725): stack trace line/column numbers are one-based.
-    var columnNumber = callFrame.columnNumber ? callFrame.columnNumber - 1 : 0;
-    return this.panels.scripts.createAnchor(callFrame.url, callFrame.lineNumber - 1, columnNumber, classes, tooltipText);
+    var linkText = this.formatLinkText(url, lineNumber);
+    var anchor = this.linkifyURLAsNode(url, linkText, classes, false, tooltipText);
+    anchor.setAttribute("preferred_panel", "resources");
+    anchor.setAttribute("line_number", lineNumber);
+    return anchor;
 }
 
 WebInspector.resourceURLForRelatedNode = function(node, url)
@@ -3296,6 +3232,24 @@ WebInspector.resourceURLForRelatedNode = function(node, url)
     }
     WebInspector.forAllResources(callback);
     return resourceURL;
+}
+
+WebInspector.populateHrefContextMenu = function(contextMenu, contextNode, event)
+{
+    var anchorElement = event.target.enclosingNodeOrSelfWithClass("webkit-html-resource-link") || event.target.enclosingNodeOrSelfWithClass("webkit-html-external-link");
+    if (!anchorElement)
+        return false;
+
+    var resourceURL = WebInspector.resourceURLForRelatedNode(contextNode, anchorElement.href);
+    if (!resourceURL)
+        return false;
+
+    // Add resource-related actions.
+    contextMenu.appendItem(WebInspector.openLinkExternallyLabel(), WebInspector.openResource.bind(WebInspector, resourceURL, false));
+    if (WebInspector.resourceForURL(resourceURL))
+        contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Open link in Resources panel" : "Open Link in Resources Panel"), WebInspector.openResource.bind(null, resourceURL, true));
+    contextMenu.appendItem(WebInspector.copyLinkAddressLabel(), InspectorFrontendHost.copyText.bind(InspectorFrontendHost, resourceURL));
+    return true;
 }
 
 WebInspector.completeURL = function(baseURL, href)
@@ -3336,6 +3290,12 @@ WebInspector.completeURL = function(baseURL, href)
 
 WebInspector.addMainEventListeners = function(doc)
 {
+    doc.addEventListener("focus", this.focusChanged.bind(this), true);
+    doc.addEventListener("keydown", this.documentKeyDown.bind(this), false);
+    doc.addEventListener("beforecopy", this.documentCanCopy.bind(this), true);
+    doc.addEventListener("copy", this.documentCopy.bind(this), true);
+    doc.addEventListener("contextmenu", this.contextMenuEventFired.bind(this), true);
+
     doc.defaultView.addEventListener("focus", this.windowFocused.bind(this), false);
     doc.defaultView.addEventListener("blur", this.windowBlurred.bind(this), false);
     doc.addEventListener("click", this.documentClick.bind(this), true);
@@ -3368,14 +3328,6 @@ WebInspector.UIString = function(string)
 WebInspector.formatLocalized = function(format, substitutions, formatters, initialValue, append)
 {
     return String.format(WebInspector.UIString(format), substitutions, formatters, initialValue, append);
-}
-
-WebInspector.isMac = function()
-{
-    if (!("_isMac" in this))
-        this._isMac = WebInspector.platform === "mac";
-
-    return this._isMac;
 }
 
 WebInspector.useLowerCaseMenuTitles = function()
@@ -3540,44 +3492,7 @@ WebInspector.startEditing = function(element, config)
 WebInspector._toolbarItemClicked = function(event)
 {
     var toolbarItem = event.currentTarget;
-    this.currentPanel = toolbarItem.panel;
-}
-
-// This table maps MIME types to the Resource.Types which are valid for them.
-// The following line:
-//    "text/html":                {0: 1},
-// means that text/html is a valid MIME type for resources that have type
-// WebInspector.Resource.Type.Document (which has a value of 0).
-WebInspector.MIMETypes = {
-    "text/html":                   {0: true},
-    "text/xml":                    {0: true},
-    "text/plain":                  {0: true},
-    "application/xhtml+xml":       {0: true},
-    "text/css":                    {1: true},
-    "text/xsl":                    {1: true},
-    "image/jpeg":                  {2: true},
-    "image/png":                   {2: true},
-    "image/gif":                   {2: true},
-    "image/bmp":                   {2: true},
-    "image/vnd.microsoft.icon":    {2: true},
-    "image/x-icon":                {2: true},
-    "image/x-xbitmap":             {2: true},
-    "font/ttf":                    {3: true},
-    "font/opentype":               {3: true},
-    "application/x-font-type1":    {3: true},
-    "application/x-font-ttf":      {3: true},
-    "application/x-font-woff":     {3: true},
-    "application/x-truetype-font": {3: true},
-    "text/javascript":             {4: true},
-    "text/ecmascript":             {4: true},
-    "application/javascript":      {4: true},
-    "application/ecmascript":      {4: true},
-    "application/x-javascript":    {4: true},
-    "text/javascript1.1":          {4: true},
-    "text/javascript1.2":          {4: true},
-    "text/javascript1.3":          {4: true},
-    "text/jscript":                {4: true},
-    "text/livescript":             {4: true},
+    this.setCurrentPanel(toolbarItem.panel);
 }
 
 WebInspector.PanelHistory = function()
@@ -3595,7 +3510,7 @@ WebInspector.PanelHistory.prototype = {
     goBack: function()
     {
         this._inHistory = true;
-        WebInspector.currentPanel = WebInspector.panels[this._history[--this._historyIterator]];
+        WebInspector.setCurrentPanel(WebInspector.panels[this._history[--this._historyIterator]]);
         delete this._inHistory;
     },
 
@@ -3607,7 +3522,7 @@ WebInspector.PanelHistory.prototype = {
     goForward: function()
     {
         this._inHistory = true;
-        WebInspector.currentPanel = WebInspector.panels[this._history[++this._historyIterator]];
+        WebInspector.setCurrentPanel(WebInspector.panels[this._history[++this._historyIterator]]);
         delete this._inHistory;
     },
 
@@ -3621,6 +3536,53 @@ WebInspector.PanelHistory.prototype = {
             this._history.push(panelName);
         this._historyIterator = this._history.length - 1;
     }
+}
+
+Number.secondsToString = function(seconds, higherResolution)
+{
+    if (seconds === 0)
+        return "0";
+
+    var ms = seconds * 1000;
+    if (higherResolution && ms < 1000)
+        return WebInspector.UIString("%.3fms", ms);
+    else if (ms < 1000)
+        return WebInspector.UIString("%.0fms", ms);
+
+    if (seconds < 60)
+        return WebInspector.UIString("%.2fs", seconds);
+
+    var minutes = seconds / 60;
+    if (minutes < 60)
+        return WebInspector.UIString("%.1fmin", minutes);
+
+    var hours = minutes / 60;
+    if (hours < 24)
+        return WebInspector.UIString("%.1fhrs", hours);
+
+    var days = hours / 24;
+    return WebInspector.UIString("%.1f days", days);
+}
+
+Number.bytesToString = function(bytes, higherResolution)
+{
+    if (typeof higherResolution === "undefined")
+        higherResolution = true;
+
+    if (bytes < 1024)
+        return WebInspector.UIString("%.0fB", bytes);
+
+    var kilobytes = bytes / 1024;
+    if (higherResolution && kilobytes < 1024)
+        return WebInspector.UIString("%.2fKB", kilobytes);
+    else if (kilobytes < 1024)
+        return WebInspector.UIString("%.0fKB", kilobytes);
+
+    var megabytes = kilobytes / 1024;
+    if (higherResolution)
+        return WebInspector.UIString("%.2fMB", megabytes);
+    else
+        return WebInspector.UIString("%.0fMB", megabytes);
 }
 
 /* InspectorBackendStub.js */
@@ -3637,6 +3599,8 @@ InspectorBackendStub = function()
     this._callbacks = {};
     this._domainDispatchers = {};
     this._eventArgs = {};
+    this._registerDelegate('{"method": "Page.enable", "id": 0}');
+    this._registerDelegate('{"method": "Page.disable", "id": 0}');
     this._registerDelegate('{"method": "Page.addScriptToEvaluateOnLoad", "params": {"scriptSource": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "Page.removeAllScriptsToEvaluateOnLoad", "id": 0}');
     this._registerDelegate('{"method": "Page.reload", "params": {"ignoreCache": {"optional": true , "type": "boolean"}}, "id": 0}');
@@ -3646,24 +3610,24 @@ InspectorBackendStub = function()
     this._registerDelegate('{"method": "Page.getResourceTree", "id": 0}');
     this._registerDelegate('{"method": "Page.getResourceContent", "params": {"frameId": {"optional": false, "type": "string"},"url": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "Page.searchInResources", "params": {"text": {"optional": false, "type": "string"},"caseSensitive": {"optional": true , "type": "boolean"},"isRegex": {"optional": true , "type": "boolean"}}, "id": 0}');
-    this._registerDelegate('{"method": "Runtime.evaluate", "params": {"expression": {"optional": false, "type": "string"},"objectGroup": {"optional": true , "type": "string"},"includeCommandLineAPI": {"optional": true , "type": "boolean"}}, "id": 0}');
-    this._registerDelegate('{"method": "Runtime.evaluateOn", "params": {"objectId": {"optional": false, "type": "string"},"expression": {"optional": false, "type": "string"}}, "id": 0}');
-    this._registerDelegate('{"method": "Runtime.getProperties", "params": {"objectId": {"optional": false, "type": "string"},"ignoreHasOwnProperty": {"optional": false, "type": "boolean"}}, "id": 0}');
-    this._registerDelegate('{"method": "Runtime.setPropertyValue", "params": {"objectId": {"optional": false, "type": "string"},"propertyName": {"optional": false, "type": "string"},"expression": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Runtime.evaluate", "params": {"expression": {"optional": false, "type": "string"},"objectGroup": {"optional": true , "type": "string"},"includeCommandLineAPI": {"optional": true , "type": "boolean"},"doNotPauseOnExceptions": {"optional": true , "type": "boolean"},"frameId": {"optional": true , "type": "string"},"returnByValue": {"optional": true , "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "Runtime.callFunctionOn", "params": {"objectId": {"optional": false, "type": "string"},"functionDeclaration": {"optional": false, "type": "string"},"arguments": {"optional": true , "type": "object"},"returnByValue": {"optional": true , "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "Runtime.getProperties", "params": {"objectId": {"optional": false, "type": "string"},"ownProperties": {"optional": true , "type": "boolean"}}, "id": 0}');
     this._registerDelegate('{"method": "Runtime.releaseObject", "params": {"objectId": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "Runtime.releaseObjectGroup", "params": {"objectGroup": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "Console.enable", "id": 0}');
     this._registerDelegate('{"method": "Console.disable", "id": 0}');
-    this._registerDelegate('{"method": "Console.clearConsoleMessages", "id": 0}');
+    this._registerDelegate('{"method": "Console.clearMessages", "id": 0}');
     this._registerDelegate('{"method": "Console.setMonitoringXHREnabled", "params": {"enabled": {"optional": false, "type": "boolean"}}, "id": 0}');
     this._registerDelegate('{"method": "Console.addInspectedNode", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
     this._registerDelegate('{"method": "Network.enable", "id": 0}');
     this._registerDelegate('{"method": "Network.disable", "id": 0}');
     this._registerDelegate('{"method": "Network.setUserAgentOverride", "params": {"userAgent": {"optional": false, "type": "string"}}, "id": 0}');
-    this._registerDelegate('{"method": "Network.setExtraHeaders", "params": {"headers": {"optional": false, "type": "object"}}, "id": 0}');
-    this._registerDelegate('{"method": "Network.setBackgroundEventsCollectionEnabled", "params": {"enabled": {"optional": false, "type": "boolean"}}, "id": 0}');
-    this._registerDelegate('{"method": "Network.isBackgroundEventsCollectionEnabled", "id": 0}');
-    this._registerDelegate('{"method": "Network.getResourceContent", "params": {"identifier": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "Network.setExtraHTTPHeaders", "params": {"headers": {"optional": false, "type": "object"}}, "id": 0}');
+    this._registerDelegate('{"method": "Network.getResponseBody", "params": {"requestId": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Network.clearBrowserCache", "id": 0}');
+    this._registerDelegate('{"method": "Network.clearBrowserCookies", "id": 0}');
+    this._registerDelegate('{"method": "Network.setCacheDisabled", "params": {"cacheDisabled": {"optional": false, "type": "boolean"}}, "id": 0}');
     this._registerDelegate('{"method": "Database.enable", "id": 0}');
     this._registerDelegate('{"method": "Database.disable", "id": 0}');
     this._registerDelegate('{"method": "Database.getDatabaseTableNames", "params": {"databaseId": {"optional": false, "type": "number"}}, "id": 0}');
@@ -3675,14 +3639,14 @@ InspectorBackendStub = function()
     this._registerDelegate('{"method": "DOMStorage.removeDOMStorageItem", "params": {"storageId": {"optional": false, "type": "number"},"key": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "ApplicationCache.getApplicationCaches", "id": 0}');
     this._registerDelegate('{"method": "DOM.getDocument", "id": 0}');
-    this._registerDelegate('{"method": "DOM.getChildNodes", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
-    this._registerDelegate('{"method": "DOM.querySelector", "params": {"nodeId": {"optional": false, "type": "number"},"selectors": {"optional": false, "type": "string"}}, "id": 0}');
-    this._registerDelegate('{"method": "DOM.querySelectorAll", "params": {"nodeId": {"optional": false, "type": "number"},"selectors": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.requestChildNodes", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.querySelector", "params": {"nodeId": {"optional": false, "type": "number"},"selector": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.querySelectorAll", "params": {"nodeId": {"optional": false, "type": "number"},"selector": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "DOM.setNodeName", "params": {"nodeId": {"optional": false, "type": "number"},"name": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "DOM.setNodeValue", "params": {"nodeId": {"optional": false, "type": "number"},"value": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "DOM.removeNode", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
     this._registerDelegate('{"method": "DOM.setAttributeValue", "params": {"nodeId": {"optional": false, "type": "number"},"name": {"optional": false, "type": "string"},"value": {"optional": false, "type": "string"}}, "id": 0}');
-    this._registerDelegate('{"method": "DOM.setAttributesText", "params": {"nodeId": {"optional": false, "type": "number"},"name": {"optional": true , "type": "string"},"text": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.setAttributesAsText", "params": {"nodeId": {"optional": false, "type": "number"},"text": {"optional": false, "type": "string"},"name": {"optional": true , "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "DOM.removeAttribute", "params": {"nodeId": {"optional": false, "type": "number"},"name": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "DOM.getEventListenersForNode", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
     this._registerDelegate('{"method": "DOM.copyNode", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
@@ -3690,15 +3654,16 @@ InspectorBackendStub = function()
     this._registerDelegate('{"method": "DOM.setOuterHTML", "params": {"nodeId": {"optional": false, "type": "number"},"outerHTML": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "DOM.performSearch", "params": {"query": {"optional": false, "type": "string"},"runSynchronously": {"optional": true , "type": "boolean"}}, "id": 0}');
     this._registerDelegate('{"method": "DOM.cancelSearch", "id": 0}');
-    this._registerDelegate('{"method": "DOM.pushNodeToFrontend", "params": {"objectId": {"optional": false, "type": "string"}}, "id": 0}');
-    this._registerDelegate('{"method": "DOM.setInspectModeEnabled", "params": {"enabled": {"optional": false, "type": "boolean"}}, "id": 0}');
-    this._registerDelegate('{"method": "DOM.highlightNode", "params": {"nodeId": {"optional": false, "type": "number"},"mode": {"optional": true , "type": "string"}}, "id": 0}');
-    this._registerDelegate('{"method": "DOM.hideNodeHighlight", "id": 0}');
-    this._registerDelegate('{"method": "DOM.highlightFrame", "params": {"frameId": {"optional": false, "type": "string"}}, "id": 0}');
-    this._registerDelegate('{"method": "DOM.hideFrameHighlight", "id": 0}');
+    this._registerDelegate('{"method": "DOM.requestNode", "params": {"objectId": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.setInspectModeEnabled", "params": {"enabled": {"optional": false, "type": "boolean"},"highlightConfig": {"optional": true , "type": "object"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.highlightRect", "params": {"x": {"optional": false, "type": "number"},"y": {"optional": false, "type": "number"},"width": {"optional": false, "type": "number"},"height": {"optional": false, "type": "number"},"color": {"optional": true , "type": "object"},"outlineColor": {"optional": true , "type": "object"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.highlightNode", "params": {"nodeId": {"optional": false, "type": "number"},"highlightConfig": {"optional": false, "type": "object"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.hideHighlight", "id": 0}');
+    this._registerDelegate('{"method": "DOM.highlightFrame", "params": {"frameId": {"optional": false, "type": "string"},"contentColor": {"optional": true , "type": "object"},"contentOutlineColor": {"optional": true , "type": "object"}}, "id": 0}');
     this._registerDelegate('{"method": "DOM.pushNodeByPathToFrontend", "params": {"path": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "DOM.resolveNode", "params": {"nodeId": {"optional": false, "type": "number"},"objectGroup": {"optional": true , "type": "string"}}, "id": 0}');
-    this._registerDelegate('{"method": "DOM.getAttributes", "params": {"nodeIds": {"optional": false, "type": "object"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.getAttributes", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOM.moveTo", "params": {"nodeId": {"optional": false, "type": "number"},"targetNodeId": {"optional": false, "type": "number"},"insertBeforeNodeId": {"optional": true , "type": "number"}}, "id": 0}');
     this._registerDelegate('{"method": "CSS.getStylesForNode", "params": {"nodeId": {"optional": false, "type": "number"},"forcedPseudoClasses": {"optional": true , "type": "object"}}, "id": 0}');
     this._registerDelegate('{"method": "CSS.getComputedStyleForNode", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
     this._registerDelegate('{"method": "CSS.getInlineStyleForNode", "params": {"nodeId": {"optional": false, "type": "number"}}, "id": 0}');
@@ -3711,12 +3676,12 @@ InspectorBackendStub = function()
     this._registerDelegate('{"method": "CSS.setRuleSelector", "params": {"ruleId": {"optional": false, "type": "object"},"selector": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "CSS.addRule", "params": {"contextNodeId": {"optional": false, "type": "number"},"selector": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "CSS.getSupportedCSSProperties", "id": 0}');
-    this._registerDelegate('{"method": "Timeline.start", "id": 0}');
+    this._registerDelegate('{"method": "Timeline.start", "params": {"maxCallStackDepth": {"optional": true , "type": "number"}}, "id": 0}');
     this._registerDelegate('{"method": "Timeline.stop", "id": 0}');
     this._registerDelegate('{"method": "Debugger.enable", "id": 0}');
     this._registerDelegate('{"method": "Debugger.disable", "id": 0}');
     this._registerDelegate('{"method": "Debugger.setBreakpointsActive", "params": {"active": {"optional": false, "type": "boolean"}}, "id": 0}');
-    this._registerDelegate('{"method": "Debugger.setBreakpointByUrl", "params": {"url": {"optional": false, "type": "string"},"lineNumber": {"optional": false, "type": "number"},"columnNumber": {"optional": true , "type": "number"},"condition": {"optional": true , "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Debugger.setBreakpointByUrl", "params": {"lineNumber": {"optional": false, "type": "number"},"url": {"optional": true , "type": "string"},"urlRegex": {"optional": true , "type": "string"},"columnNumber": {"optional": true , "type": "number"},"condition": {"optional": true , "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "Debugger.setBreakpoint", "params": {"location": {"optional": false, "type": "object"},"condition": {"optional": true , "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "Debugger.removeBreakpoint", "params": {"breakpointId": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "Debugger.continueToLocation", "params": {"location": {"optional": false, "type": "object"}}, "id": 0}');
@@ -3725,12 +3690,12 @@ InspectorBackendStub = function()
     this._registerDelegate('{"method": "Debugger.stepOut", "id": 0}');
     this._registerDelegate('{"method": "Debugger.pause", "id": 0}');
     this._registerDelegate('{"method": "Debugger.resume", "id": 0}');
-    this._registerDelegate('{"method": "Debugger.setScriptSource", "params": {"sourceId": {"optional": false, "type": "string"},"scriptSource": {"optional": false, "type": "string"},"preview": {"optional": true , "type": "boolean"}}, "id": 0}');
-    this._registerDelegate('{"method": "Debugger.getScriptSource", "params": {"sourceId": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "Debugger.setScriptSource", "params": {"scriptId": {"optional": false, "type": "string"},"scriptSource": {"optional": false, "type": "string"},"preview": {"optional": true , "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "Debugger.getScriptSource", "params": {"scriptId": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "Debugger.setPauseOnExceptions", "params": {"state": {"optional": false, "type": "string"}}, "id": 0}');
-    this._registerDelegate('{"method": "Debugger.evaluateOnCallFrame", "params": {"callFrameId": {"optional": false, "type": "string"},"expression": {"optional": false, "type": "string"},"objectGroup": {"optional": true , "type": "string"},"includeCommandLineAPI": {"optional": true , "type": "boolean"}}, "id": 0}');
-    this._registerDelegate('{"method": "DOMDebugger.setDOMBreakpoint", "params": {"nodeId": {"optional": false, "type": "number"},"type": {"optional": false, "type": "number"}}, "id": 0}');
-    this._registerDelegate('{"method": "DOMDebugger.removeDOMBreakpoint", "params": {"nodeId": {"optional": false, "type": "number"},"type": {"optional": false, "type": "number"}}, "id": 0}');
+    this._registerDelegate('{"method": "Debugger.evaluateOnCallFrame", "params": {"callFrameId": {"optional": false, "type": "string"},"expression": {"optional": false, "type": "string"},"objectGroup": {"optional": true , "type": "string"},"includeCommandLineAPI": {"optional": true , "type": "boolean"},"returnByValue": {"optional": true , "type": "boolean"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOMDebugger.setDOMBreakpoint", "params": {"nodeId": {"optional": false, "type": "number"},"type": {"optional": false, "type": "string"}}, "id": 0}');
+    this._registerDelegate('{"method": "DOMDebugger.removeDOMBreakpoint", "params": {"nodeId": {"optional": false, "type": "number"},"type": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "DOMDebugger.setEventListenerBreakpoint", "params": {"eventName": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "DOMDebugger.removeEventListenerBreakpoint", "params": {"eventName": {"optional": false, "type": "string"}}, "id": 0}');
     this._registerDelegate('{"method": "DOMDebugger.setXHRBreakpoint", "params": {"url": {"optional": false, "type": "string"}}, "id": 0}');
@@ -3765,21 +3730,20 @@ InspectorBackendStub = function()
     this._eventArgs["Page.loadEventFired"] = ["timestamp"];
     this._eventArgs["Page.frameNavigated"] = ["frame","loaderId"];
     this._eventArgs["Page.frameDetached"] = ["frameId"];
-    this._eventArgs["Console.messageAdded"] = ["messageObj"];
+    this._eventArgs["Console.messageAdded"] = ["message"];
     this._eventArgs["Console.messageRepeatCountUpdated"] = ["count"];
     this._eventArgs["Console.messagesCleared"] = [];
-    this._eventArgs["Network.requestWillBeSent"] = ["identifier","frameId","loaderId","documentURL","request","timestamp","stackTrace","redirectResponse"];
-    this._eventArgs["Network.resourceMarkedAsCached"] = ["identifier"];
-    this._eventArgs["Network.responseReceived"] = ["identifier","timestamp","type","response"];
-    this._eventArgs["Network.dataReceived"] = ["identifier","timestamp","dataLength","encodedDataLength"];
-    this._eventArgs["Network.loadingFinished"] = ["identifier","timestamp"];
-    this._eventArgs["Network.loadingFailed"] = ["identifier","timestamp","errorText","canceled"];
-    this._eventArgs["Network.resourceLoadedFromMemoryCache"] = ["frameId","loaderId","documentURL","timestamp","resource"];
-    this._eventArgs["Network.initialContentSet"] = ["identifier","content","type"];
-    this._eventArgs["Network.webSocketWillSendHandshakeRequest"] = ["identifier","timestamp","request"];
-    this._eventArgs["Network.webSocketHandshakeResponseReceived"] = ["identifier","timestamp","response"];
-    this._eventArgs["Network.webSocketCreated"] = ["identifier","url"];
-    this._eventArgs["Network.webSocketClosed"] = ["identifier","timestamp"];
+    this._eventArgs["Network.requestWillBeSent"] = ["requestId","frameId","loaderId","documentURL","request","timestamp","initiator","stackTrace","redirectResponse"];
+    this._eventArgs["Network.requestServedFromCache"] = ["requestId"];
+    this._eventArgs["Network.responseReceived"] = ["requestId","timestamp","type","response"];
+    this._eventArgs["Network.dataReceived"] = ["requestId","timestamp","dataLength","encodedDataLength"];
+    this._eventArgs["Network.loadingFinished"] = ["requestId","timestamp"];
+    this._eventArgs["Network.loadingFailed"] = ["requestId","timestamp","errorText","canceled"];
+    this._eventArgs["Network.requestServedFromMemoryCache"] = ["requestId","frameId","loaderId","documentURL","timestamp","initiator","resource"];
+    this._eventArgs["Network.webSocketWillSendHandshakeRequest"] = ["requestId","timestamp","request"];
+    this._eventArgs["Network.webSocketHandshakeResponseReceived"] = ["requestId","timestamp","response"];
+    this._eventArgs["Network.webSocketCreated"] = ["requestId","url"];
+    this._eventArgs["Network.webSocketClosed"] = ["requestId","timestamp"];
     this._eventArgs["Database.addDatabase"] = ["database"];
     this._eventArgs["Database.sqlTransactionSucceeded"] = ["transactionId","columnNames","values"];
     this._eventArgs["Database.sqlTransactionFailed"] = ["transactionId","sqlError"];
@@ -3791,20 +3755,20 @@ InspectorBackendStub = function()
     this._eventArgs["DOM.setChildNodes"] = ["parentId","nodes"];
     this._eventArgs["DOM.attributesUpdated"] = ["nodeId"];
     this._eventArgs["DOM.inlineStyleInvalidated"] = ["nodeIds"];
-    this._eventArgs["DOM.characterDataModified"] = ["id","newValue"];
-    this._eventArgs["DOM.childNodeCountUpdated"] = ["id","newValue"];
-    this._eventArgs["DOM.childNodeInserted"] = ["parentId","prevId","node"];
-    this._eventArgs["DOM.childNodeRemoved"] = ["parentId","id"];
+    this._eventArgs["DOM.characterDataModified"] = ["nodeId","characterData"];
+    this._eventArgs["DOM.childNodeCountUpdated"] = ["nodeId","childNodeCount"];
+    this._eventArgs["DOM.childNodeInserted"] = ["parentNodeId","previousNodeId","node"];
+    this._eventArgs["DOM.childNodeRemoved"] = ["parentNodeId","nodeId"];
     this._eventArgs["DOM.searchResults"] = ["nodeIds"];
     this._eventArgs["Timeline.started"] = [];
     this._eventArgs["Timeline.stopped"] = [];
     this._eventArgs["Timeline.eventRecorded"] = ["record"];
     this._eventArgs["Debugger.debuggerWasEnabled"] = [];
     this._eventArgs["Debugger.debuggerWasDisabled"] = [];
-    this._eventArgs["Debugger.scriptParsed"] = ["sourceId","url","startLine","startColumn","endLine","endColumn","isContentScript"];
-    this._eventArgs["Debugger.scriptFailedToParse"] = ["url","data","firstLine","errorLine","errorMessage"];
+    this._eventArgs["Debugger.scriptParsed"] = ["scriptId","url","startLine","startColumn","endLine","endColumn","isContentScript"];
+    this._eventArgs["Debugger.scriptFailedToParse"] = ["url","scriptSource","startLine","errorLine","errorMessage"];
     this._eventArgs["Debugger.breakpointResolved"] = ["breakpointId","location"];
-    this._eventArgs["Debugger.paused"] = ["details"];
+    this._eventArgs["Debugger.paused"] = ["callFrames","reason","data"];
     this._eventArgs["Debugger.resumed"] = [];
     this._eventArgs["Profiler.profilerWasEnabled"] = [];
     this._eventArgs["Profiler.profilerWasDisabled"] = [];
@@ -3817,6 +3781,18 @@ InspectorBackendStub = function()
     this._eventArgs["Worker.workerCreated"] = ["workerId","url","inspectorConnected"];
     this._eventArgs["Worker.workerTerminated"] = ["workerId"];
     this._eventArgs["Worker.dispatchMessageFromWorker"] = ["workerId","message"];
+    this.registerInspectorDispatcher = this._registerDomainDispatcher.bind(this, "Inspector");
+    this.registerPageDispatcher = this._registerDomainDispatcher.bind(this, "Page");
+    this.registerConsoleDispatcher = this._registerDomainDispatcher.bind(this, "Console");
+    this.registerNetworkDispatcher = this._registerDomainDispatcher.bind(this, "Network");
+    this.registerDatabaseDispatcher = this._registerDomainDispatcher.bind(this, "Database");
+    this.registerDOMStorageDispatcher = this._registerDomainDispatcher.bind(this, "DOMStorage");
+    this.registerApplicationCacheDispatcher = this._registerDomainDispatcher.bind(this, "ApplicationCache");
+    this.registerDOMDispatcher = this._registerDomainDispatcher.bind(this, "DOM");
+    this.registerTimelineDispatcher = this._registerDomainDispatcher.bind(this, "Timeline");
+    this.registerDebuggerDispatcher = this._registerDomainDispatcher.bind(this, "Debugger");
+    this.registerProfilerDispatcher = this._registerDomainDispatcher.bind(this, "Profiler");
+    this.registerWorkerDispatcher = this._registerDomainDispatcher.bind(this, "Worker");
 }
 
 InspectorBackendStub.prototype = {
@@ -3833,10 +3809,18 @@ InspectorBackendStub.prototype = {
         var agentName = domainAndFunction[0] + "Agent";
         if (!window[agentName])
             window[agentName] = {};
-        window[agentName][domainAndFunction[1]] = this.sendMessageToBackend.bind(this, requestString);
+        window[agentName][domainAndFunction[1]] = this._sendMessageToBackend.bind(this, requestString);
+        window[agentName][domainAndFunction[1]]["invoke"] = this._invoke.bind(this, requestString)
     },
 
-    sendMessageToBackend: function()
+    _invoke: function(requestString, args, callback)
+    {
+        var request = JSON.parse(requestString);
+        request.params = args;
+        this._wrapCallbackAndSendMessageObject(request, callback);
+    },
+
+    _sendMessageToBackend: function()
     {
         var args = Array.prototype.slice.call(arguments);
         var request = JSON.parse(args.shift());
@@ -3844,13 +3828,14 @@ InspectorBackendStub.prototype = {
         var domainAndMethod = request.method.split(".");
         var agentMethod = domainAndMethod[0] + "Agent." + domainAndMethod[1];
 
+        var hasParams = false;
         if (request.params) {
             for (var key in request.params) {
                 var typeName = request.params[key].type;
                 var optionalFlag = request.params[key].optional;
 
                 if (args.length === 0 && !optionalFlag) {
-                    console.error("Protocol Error: Invalid number of arguments for method '" + agentMethod + "' call. It should have the next arguments '" + JSON.stringify(request.params) + "'.");
+                    console.error("Protocol Error: Invalid number of arguments for method '" + agentMethod + "' call. It must have the next arguments '" + JSON.stringify(request.params) + "'.");
                     return;
                 }
 
@@ -3861,36 +3846,46 @@ InspectorBackendStub.prototype = {
                 }
 
                 if (typeof value !== typeName) {
-                    console.error("Protocol Error: Invalid type of argument '" + key + "' for method '" + agentMethod + "' call. It should be '" + typeName + "' but it is '" + typeof value + "'.");
+                    console.error("Protocol Error: Invalid type of argument '" + key + "' for method '" + agentMethod + "' call. It must be '" + typeName + "' but it is '" + typeof value + "'.");
                     return;
                 }
 
                 request.params[key] = value;
+                hasParams = true;
             }
+            if (!hasParams)
+                delete request.params;
         }
 
         if (args.length === 1 && !callback) {
             if (typeof args[0] !== "undefined") {
-                console.error("Protocol Error: Optional callback argument for method '" + agentMethod + "' call should be a function but its type is '" + typeof args[0] + "'.");
+                console.error("Protocol Error: Optional callback argument for method '" + agentMethod + "' call must be a function but its type is '" + typeof args[0] + "'.");
                 return;
             }
         }
-        request.id = this._wrap(callback || function() {});
+
+        this._wrapCallbackAndSendMessageObject(request, callback);
+    },
+
+    _wrapCallbackAndSendMessageObject: function(messageObject, callback)
+    {
+        messageObject.id = this._wrap(callback || function() {});
 
         if (window.dumpInspectorProtocolMessages)
-            console.log("frontend: " + JSON.stringify(request));
+            console.log("frontend: " + JSON.stringify(messageObject));
 
         ++this._pendingResponsesCount;
-        this.sendMessageObjectToBackend(request);
+        this.sendMessageObjectToBackend(messageObject);
     },
 
     sendMessageObjectToBackend: function(messageObject)
     {
+        console.timeStamp(messageObject.method);
         var message = JSON.stringify(messageObject);
         InspectorFrontendHost.sendMessageToBackend(message);
     },
 
-    registerDomainDispatcher: function(domain, dispatcher)
+    _registerDomainDispatcher: function(domain, dispatcher)
     {
         this._domainDispatchers[domain] = dispatcher;
     },
@@ -3983,10 +3978,7 @@ InspectorBackendStub.prototype = {
 
     reportProtocolError: function(messageObject)
     {
-        var error = messageObject.error;
-        console.error(error.message + "(" + error.code + "): request with id = " + messageObject.id + " failed.");
-        for (var i = 0; i < error.data.length; ++i)
-            console.error("    " + error.data[i]);
+        console.error("Request with id = " + messageObject.id + " failed. " + messageObject.error);
     },
 
     runAfterPendingDispatches: function(script)
@@ -4039,8 +4031,26 @@ InspectorBackend = new InspectorBackendStub();
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+WebInspector.PlatformFlavor = {
+    WindowsVista: "windows-vista",
+    MacTiger: "mac-tiger",
+    MacLeopard: "mac-leopard",
+    MacSnowLeopard: "mac-snowleopard"
+}
+
+WebInspector.isMac = function()
+{
+    if (typeof WebInspector._isMac === "undefined")
+        WebInspector._isMac = WebInspector.platform === "mac";
+
+    return WebInspector._isMac;
+}
+
 if (!window.InspectorFrontendHost) {
 
+/**
+ * @constructor
+ */
 WebInspector.InspectorFrontendHostStub = function()
 {
     this._attachedWindowHeight = 0;
@@ -4131,7 +4141,7 @@ WebInspector.InspectorFrontendHostStub.prototype = {
         var builder = new WebKitBlobBuilder();
         builder.append(content);
         var blob = builder.getBlob("application/octet-stream");
-    
+
         var fr = new FileReader();
         fr.onload = function(e) {
             // Force download
@@ -4149,16 +4159,20 @@ WebInspector.InspectorFrontendHostStub.prototype = {
     {
     },
 
-    saveSessionSetting: function(key, value)
+    recordActionTaken: function(actionCode)
     {
     },
 
-    loadSessionSetting: function(key)
+    recordPanelShown: function(panelCode)
+    {
+    },
+
+    recordSettingChanged: function(settingCode)
     {
     }
 }
 
-InspectorFrontendHost = new WebInspector.InspectorFrontendHostStub();
+var InspectorFrontendHost = new WebInspector.InspectorFrontendHostStub();
 
 }
 
@@ -4237,22 +4251,25 @@ InspectorExtensionRegistry = new WebInspector.InspectorExtensionRegistryStub();
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/**
+ * @constructor
+ */
 WebInspector.Object = function() {
 }
 
 WebInspector.Object.prototype = {
     addEventListener: function(eventType, listener, thisObject)
     {
-        if (!("_listeners" in this))
+        if (!this._listeners)
             this._listeners = {};
-        if (!(eventType in this._listeners))
+        if (!this._listeners[eventType])
             this._listeners[eventType] = [];
         this._listeners[eventType].push({ thisObject: thisObject, listener: listener });
     },
 
     removeEventListener: function(eventType, listener, thisObject)
     {
-        if (!("_listeners" in this) || !(eventType in this._listeners))
+        if (!this._listeners || !this._listeners[eventType])
             return;
         var listeners = this._listeners[eventType];
         for (var i = 0; i < listeners.length; ++i) {
@@ -4273,14 +4290,14 @@ WebInspector.Object.prototype = {
 
     hasEventListeners: function(eventType)
     {
-        if (!("_listeners" in this) || !(eventType in this._listeners))
+        if (!this._listeners || !this._listeners[eventType])
             return false;
         return true;
     },
 
     dispatchEventToListeners: function(eventType, eventData)
     {
-        if (!("_listeners" in this) || !(eventType in this._listeners))
+        if (!this._listeners || !this._listeners[eventType])
             return;
 
         var stoppedPropagation = false;
@@ -4367,32 +4384,41 @@ var Preferences = {
     saveAsAvailable: false,
     useLowerCaseMenuTitlesOnWindows: false,
     canInspectWorkers: false,
+    canClearCacheAndCookies: false,
+    canDisableCache: false,
+    showNetworkPanelInitiatorColumn: false
 }
 
+/**
+ * @constructor
+ */
 WebInspector.Settings = function()
 {
-    this.installApplicationSetting("colorFormat", "hex");
-    this.installApplicationSetting("consoleHistory", []);
-    this.installApplicationSetting("debuggerEnabled", false);
-    this.installApplicationSetting("domWordWrap", true);
-    this.installApplicationSetting("profilerEnabled", false);
-    this.installApplicationSetting("eventListenersFilter", "all");
-    this.installApplicationSetting("lastActivePanel", "elements");
-    this.installApplicationSetting("lastViewedScriptFile", "application");
-    this.installApplicationSetting("monitoringXHREnabled", false);
-    this.installApplicationSetting("preserveConsoleLog", false);
-    this.installApplicationSetting("pauseOnExceptionStateString", WebInspector.ScriptsPanel.PauseOnExceptionsState.DontPauseOnExceptions);
-    this.installApplicationSetting("resourcesLargeRows", true);
-    this.installApplicationSetting("resourcesSortOptions", {timeOption: "responseTime", sizeOption: "transferSize"});
-    this.installApplicationSetting("resourceViewTab", "preview");
-    this.installApplicationSetting("showInheritedComputedStyleProperties", false);
-    this.installApplicationSetting("showUserAgentStyles", true);
-    this.installApplicationSetting("watchExpressions", []);
-    this.installApplicationSetting("breakpoints", []);
-    this.installApplicationSetting("eventListenerBreakpoints", []);
-    this.installApplicationSetting("domBreakpoints", []);
-    this.installApplicationSetting("xhrBreakpoints", []);
-    this.installApplicationSetting("workerInspectionEnabled", []);
+    this._eventSupport = new WebInspector.Object();
+
+    this.colorFormat = this.createSetting("colorFormat", "hex");
+    this.consoleHistory = this.createSetting("consoleHistory", []);
+    this.debuggerEnabled = this.createSetting("debuggerEnabled", false);
+    this.domWordWrap = this.createSetting("domWordWrap", true);
+    this.profilerEnabled = this.createSetting("profilerEnabled", false);
+    this.eventListenersFilter = this.createSetting("eventListenersFilter", "all");
+    this.lastActivePanel = this.createSetting("lastActivePanel", "elements");
+    this.lastViewedScriptFile = this.createSetting("lastViewedScriptFile", "application");
+    this.monitoringXHREnabled = this.createSetting("monitoringXHREnabled", false);
+    this.preserveConsoleLog = this.createSetting("preserveConsoleLog", false);
+    this.resourcesLargeRows = this.createSetting("resourcesLargeRows", true);
+    this.resourcesSortOptions = this.createSetting("resourcesSortOptions", {timeOption: "responseTime", sizeOption: "transferSize"});
+    this.resourceViewTab = this.createSetting("resourceViewTab", "preview");
+    this.showInheritedComputedStyleProperties = this.createSetting("showInheritedComputedStyleProperties", false);
+    this.showUserAgentStyles = this.createSetting("showUserAgentStyles", true);
+    this.watchExpressions = this.createSetting("watchExpressions", []);
+    this.breakpoints = this.createSetting("breakpoints", []);
+    this.eventListenerBreakpoints = this.createSetting("eventListenerBreakpoints", []);
+    this.domBreakpoints = this.createSetting("domBreakpoints", []);
+    this.xhrBreakpoints = this.createSetting("xhrBreakpoints", []);
+    this.workerInspectionEnabled = this.createSetting("workerInspectionEnabled", []);
+    this.cacheDisabled = this.createSetting("cacheDisabled", false);
+    this.showScriptFolders = this.createSetting("showScriptFolders", true);
 
     // If there are too many breakpoints in a storage, it is likely due to a recent bug that caused
     // periodical breakpoints duplication leading to inspector slowness.
@@ -4401,35 +4427,68 @@ WebInspector.Settings = function()
 }
 
 WebInspector.Settings.prototype = {
-    installApplicationSetting: function(key, defaultValue)
+    /**
+     * @return {WebInspector.Setting}
+     */
+    createSetting: function(key, defaultValue)
     {
-        if (key in this)
-            return;
-
-        this.__defineGetter__(key, this._get.bind(this, key, defaultValue));
-        this.__defineSetter__(key, this._set.bind(this, key));
-    },
-
-    _get: function(key, defaultValue)
-    {
-        if (window.localStorage != null && key in window.localStorage) {
-            try {
-                return JSON.parse(window.localStorage[key]);
-            } catch(e) {
-                window.localStorage.removeItem(key);
-            }
-        }
-        return defaultValue;
-    },
-
-    _set: function(key, value)
-    {
-        if (window.localStorage != null)
-            window.localStorage[key] = JSON.stringify(value);
+        return new WebInspector.Setting(key, defaultValue, this._eventSupport);
     }
 }
 
-WebInspector.Settings.prototype.__proto__ = WebInspector.Object.prototype;
+/**
+ * @constructor
+ */
+WebInspector.Setting = function(name, defaultValue, eventSupport)
+{
+    this._name = name;
+    this._defaultValue = defaultValue;
+    this._eventSupport = eventSupport;
+}
+
+WebInspector.Setting.prototype = {
+    addChangeListener: function(listener, thisObject)
+    {
+        this._eventSupport.addEventListener(this._name, listener, thisObject);
+    },
+
+    removeChangeListener: function(listener, thisObject)
+    {
+        this._eventSupport.removeEventListener(this._name, listener, thisObject);
+    },
+
+    get name()
+    {
+        return this._name;
+    },
+
+    get: function()
+    {
+        var value = this._defaultValue;
+        if (window.localStorage != null && this._name in window.localStorage) {
+            try {
+                value = JSON.parse(window.localStorage[this._name]);
+            } catch(e) {
+                window.localStorage.removeItem(this._name);
+            }
+        }
+        return value;
+    },
+
+    set: function(value)
+    {
+        if (window.localStorage != null) {
+            try {
+                window.localStorage[this._name] = JSON.stringify(value);
+            } catch(e) {
+                console.error("Error saving setting with name:" + this._name);
+            }
+        }
+        this._eventSupport.dispatchEventToListeners(this._name, value);
+    }
+}
+
+WebInspector.settings = new WebInspector.Settings();
 
 /* Checkbox.js */
 
@@ -4458,6 +4517,9 @@ WebInspector.Settings.prototype.__proto__ = WebInspector.Object.prototype;
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/**
+ * @constructor
+ */
 WebInspector.Checkbox = function(label, className, tooltip)
 {
     this.element = document.createElement('label');
@@ -4529,6 +4591,9 @@ WebInspector.Checkbox.prototype = {
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/**
+ * @constructor
+ */
 WebInspector.ContextMenu = function() {
     this._items = [];
     this._handlers = {};
@@ -4590,6 +4655,216 @@ WebInspector.contextMenuCleared = function()
     // FIXME: Unfortunately, contextMenuCleared is invoked between show and item selected
     // so we can't delete last menu object from WebInspector. Fix the contract.
 }
+
+
+
+
+
+if (!InspectorFrontendHost.showContextMenu) {
+
+
+WebInspector.SoftContextMenu = function(items)
+{
+this._items = items;
+}
+
+WebInspector.SoftContextMenu.prototype = {
+show: function(event)
+{
+this._x = event.x;
+this._y = event.y;
+this._time = new Date().getTime();
+
+
+var absoluteX = event.pageX;
+var absoluteY = event.pageY;
+var targetElement = event.target;
+while (targetElement && window !== targetElement.ownerDocument.defaultView) {
+var frameElement = targetElement.ownerDocument.defaultView.frameElement;
+absoluteY += frameElement.totalOffsetTop();
+absoluteX += frameElement.totalOffsetLeft();
+targetElement = frameElement;
+}
+
+
+this._glassPaneElement = document.createElement("div");
+this._glassPaneElement.className = "soft-context-menu-glass-pane";
+this._glassPaneElement.tabIndex = 0;
+this._glassPaneElement.addEventListener("mouseup", this._glassPaneMouseUp.bind(this), false);
+
+
+this._contextMenuElement = document.createElement("div");
+this._contextMenuElement.className = "soft-context-menu";
+this._contextMenuElement.tabIndex = 0;
+this._contextMenuElement.style.top = absoluteY + "px";
+this._contextMenuElement.style.left = absoluteX + "px";
+
+this._contextMenuElement.addEventListener("mousedown", this._discardMenu.bind(this), false);
+this._contextMenuElement.addEventListener("keydown", this._menuKeyDown.bind(this), false);
+this._contextMenuElement.addEventListener("blur", this._discardMenu.bind(this), false);
+
+for (var i = 0; i < this._items.length; ++i)
+this._contextMenuElement.appendChild(this._createMenuItem(this._items[i]));
+
+this._glassPaneElement.appendChild(this._contextMenuElement);
+document.body.appendChild(this._glassPaneElement);
+this._contextMenuElement.focus();
+
+
+if (document.body.offsetWidth <  this._contextMenuElement.offsetLeft + this._contextMenuElement.offsetWidth)
+this._contextMenuElement.style.left = (absoluteX - this._contextMenuElement.offsetWidth) + "px";
+if (document.body.offsetHeight < this._contextMenuElement.offsetTop + this._contextMenuElement.offsetHeight)
+this._contextMenuElement.style.top = (document.body.offsetHeight - this._contextMenuElement.offsetHeight) + "px";
+
+event.stopPropagation();
+event.preventDefault();
+},
+
+_createMenuItem: function(item)
+{
+if (item.type === "separator")
+return this._createSeparator();
+
+var menuItemElement = document.createElement("div");
+menuItemElement.className = "soft-context-menu-item";
+
+var checkMarkElement = document.createElement("span");
+checkMarkElement.textContent = "\u2713 "; 
+checkMarkElement.style.pointerEvents = "none";
+if (!item.checked)
+checkMarkElement.style.opacity = "0";
+
+menuItemElement.appendChild(checkMarkElement);
+menuItemElement.appendChild(document.createTextNode(item.label));
+
+menuItemElement.addEventListener("mousedown", this._menuItemMouseDown.bind(this), false);
+menuItemElement.addEventListener("mouseup", this._menuItemMouseUp.bind(this), false);
+
+
+menuItemElement.addEventListener("mouseover", this._menuItemMouseOver.bind(this), false);
+menuItemElement.addEventListener("mouseout", this._menuItemMouseOut.bind(this), false);
+
+menuItemElement._actionId = item.id;
+return menuItemElement;
+},
+
+_createSeparator: function()
+{
+var separatorElement = document.createElement("div");
+separatorElement.className = "soft-context-menu-separator";
+separatorElement._isSeparator = true;
+return separatorElement;
+},
+
+_menuItemMouseDown: function(event)
+{
+
+event.stopPropagation();
+event.preventDefault();
+},
+
+_menuItemMouseUp: function(event)
+{
+this._triggerAction(event.target, event);
+},
+
+_triggerAction: function(menuItemElement, event)
+{
+this._discardMenu(event);
+if (typeof menuItemElement._actionId !== "undefined") {
+WebInspector.contextMenuItemSelected(menuItemElement._actionId);
+delete menuItemElement._actionId;
+}
+},
+
+_menuItemMouseOver: function(event)
+{
+this._highlightMenuItem(event.target);
+},
+
+_menuItemMouseOut: function(event)
+{
+this._highlightMenuItem(null);
+},
+
+_highlightMenuItem: function(menuItemElement)
+{
+if (this._highlightedMenuItemElement)
+this._highlightedMenuItemElement.removeStyleClass("soft-context-menu-item-mouse-over");
+this._highlightedMenuItemElement = menuItemElement;
+if (this._highlightedMenuItemElement)
+this._highlightedMenuItemElement.addStyleClass("soft-context-menu-item-mouse-over");
+},
+
+_highlightPrevious: function()
+{
+var menuItemElement = this._highlightedMenuItemElement ? this._highlightedMenuItemElement.previousSibling : this._contextMenuElement.lastChild;
+while (menuItemElement && menuItemElement._isSeparator)
+menuItemElement = menuItemElement.previousSibling;
+if (menuItemElement)
+this._highlightMenuItem(menuItemElement);
+},
+
+_highlightNext: function()
+{
+var menuItemElement = this._highlightedMenuItemElement ? this._highlightedMenuItemElement.nextSibling : this._contextMenuElement.firstChild;
+while (menuItemElement && menuItemElement._isSeparator)
+menuItemElement = menuItemElement.nextSibling;
+if (menuItemElement)
+this._highlightMenuItem(menuItemElement);
+},
+
+_menuKeyDown: function(event)
+{
+switch (event.keyIdentifier) {
+case "Up":
+this._highlightPrevious(); break;
+case "Down":
+this._highlightNext(); break;
+case "U+001B": 
+this._discardMenu(event); break;
+case "Enter":
+if (!isEnterKey(event))
+break;
+
+case "U+0020": 
+if (this._highlightedMenuItemElement)
+this._triggerAction(this._highlightedMenuItemElement, event);
+break;
+}
+event.stopPropagation();
+event.preventDefault();
+},
+
+_glassPaneMouseUp: function(event)
+{
+
+if (event.x === this._x && event.y === this._y && new Date().getTime() - this._time < 300)
+return;
+this._discardMenu(event);
+},
+
+_discardMenu: function(event)
+{
+if (this._glassPaneElement) {
+var glassPane = this._glassPaneElement;
+delete this._glassPaneElement;
+
+document.body.removeChild(glassPane);
+
+event.stopPropagation();
+event.preventDefault();
+}
+}
+}
+
+InspectorFrontendHost.showContextMenu = function(event, items)
+{
+new WebInspector.SoftContextMenu(items).show(event);
+}
+
+}
+
 
 
 
@@ -4727,6 +5002,7 @@ res += isMac ? cmdKey : "<Win> + ";
 
 return res;
 };
+
 
 
 
@@ -5179,7 +5455,8 @@ this.element.scrollIntoView();
 
 
 
-WebInspector.Popover = function(contentElement)
+
+WebInspector.Popover = function(popoverHelper)
 {
 this.element = document.createElement("div");
 this.element.className = "popover";
@@ -5188,15 +5465,19 @@ this._popupArrowElement = document.createElement("div");
 this._popupArrowElement.className = "arrow";
 this.element.appendChild(this._popupArrowElement);
 
-this.contentElement = contentElement;
 this._contentDiv = document.createElement("div");
 this._contentDiv.className = "content";
 this._visible = false;
+this._popoverHelper = popoverHelper;
 }
 
 WebInspector.Popover.prototype = {
-show: function(anchor, preferredWidth, preferredHeight)
+show: function(contentElement, anchor, preferredWidth, preferredHeight)
 {
+if (this._disposed)
+return;
+this.contentElement = contentElement;
+
 
 if (WebInspector.Popover._popoverElement)
 document.body.removeChild(WebInspector.Popover._popoverElement);
@@ -5205,14 +5486,16 @@ WebInspector.Popover._popoverElement = this.element;
 
 this.contentElement.positionAt(0, 0);
 document.body.appendChild(this.contentElement);
-var preferredWidth = preferredWidth || this.contentElement.offsetWidth;
-var preferredHeight = preferredHeight || this.contentElement.offsetHeight;
+preferredWidth = preferredWidth || this.contentElement.offsetWidth;
+preferredHeight = preferredHeight || this.contentElement.offsetHeight;
 
 this._contentDiv.appendChild(this.contentElement);
 this.element.appendChild(this._contentDiv);
 document.body.appendChild(this.element);
 this._positionElement(anchor, preferredWidth, preferredHeight);
 this._visible = true;
+if (this._popoverHelper)
+contentElement.addEventListener("mousemove", this._popoverHelper._killHidePopoverTimer.bind(this._popoverHelper), true);
 },
 
 hide: function()
@@ -5229,6 +5512,18 @@ get visible()
 return this._visible;
 },
 
+get disposed()
+{
+return this._disposed;
+},
+
+dispose: function()
+{
+if (this.visible)
+this.hide();
+this._disposed = true;
+},
+
 _positionElement: function(anchorElement, preferredWidth, preferredHeight)
 {
 const borderWidth = 25;
@@ -5242,8 +5537,10 @@ preferredWidth = Math.max(preferredWidth, 50);
 const totalWidth = window.innerWidth;
 const totalHeight = window.innerHeight;
 
-var anchorBox = {x: anchorElement.totalOffsetLeft, y: anchorElement.totalOffsetTop, width: anchorElement.offsetWidth, height: anchorElement.offsetHeight};
-while (anchorElement !== document.body) {
+var anchorBox = anchorElement.offsetRelativeToWindow(window);
+anchorBox.width = anchorElement.offsetWidth;
+anchorBox.height = anchorElement.offsetHeight;
+while (anchorElement && anchorElement !== anchorElement.ownerDocument.body) {
 if (anchorElement.scrollLeft)
 anchorBox.x -= anchorElement.scrollLeft;
 if (anchorElement.scrollTop)
@@ -5305,13 +5602,14 @@ this.element.style.height = newElementPosition.height + borderWidth * 2 + "px";
 }
 }
 
-WebInspector.PopoverHelper = function(panelElement, getAnchor, showPopup, showOnClick, onHide)
+
+WebInspector.PopoverHelper = function(panelElement, getAnchor, showPopover, onHide, disableOnClick)
 {
 this._panelElement = panelElement;
 this._getAnchor = getAnchor;
-this._showPopup = showPopup;
-this._showOnClick = showOnClick;
+this._showPopover = showPopover;
 this._onHide = onHide;
+this._disableOnClick = !!disableOnClick;
 panelElement.addEventListener("mousedown", this._mouseDown.bind(this), false);
 panelElement.addEventListener("mousemove", this._mouseMove.bind(this), false);
 this.setTimeout(1000);
@@ -5325,8 +5623,12 @@ this._timeout = timeout;
 
 _mouseDown: function(event)
 {
-this._killHidePopupTimer();
+if (this._disableOnClick)
+this.hidePopover();
+else {
+this._killHidePopoverTimer();
 this._handleMouseAction(event, true);
+}
 },
 
 _mouseMove: function(event)
@@ -5336,14 +5638,14 @@ if (this._hoverElement === event.target || (this._hoverElement && this._hoverEle
 return;
 
 
-if (this._popup && !this._hidePopupTimer) {
+if (this._popover && !this._hidePopoverTimer) {
 var self = this;
 function doHide()
 {
-self._hidePopup();
-delete self._hidePopupTimer;
+self._hidePopover();
+delete self._hidePopoverTimer;
 }
-this._hidePopupTimer = setTimeout(doHide, this._timeout / 2);
+this._hidePopoverTimer = setTimeout(doHide, this._timeout / 2);
 }
 
 this._handleMouseAction(event);
@@ -5352,11 +5654,11 @@ this._handleMouseAction(event);
 _handleMouseAction: function(event, isMouseDown)
 {
 this._resetHoverTimer();
-
+if (event.which && this._disableOnClick)
+return;
 this._hoverElement = this._getAnchor(event.target);
 if (!this._hoverElement)
 return;
-
 const toolTipDelay = isMouseDown ? 0 : (this._popup ? this._timeout * 0.6 : this._timeout);
 this._hoverTimer = setTimeout(this._mouseHover.bind(this, this._hoverElement), toolTipDelay);
 },
@@ -5369,38 +5671,38 @@ delete this._hoverTimer;
 }
 },
 
-hidePopup: function()
+hidePopover: function()
 {
 this._resetHoverTimer();
-this._hidePopup();
+this._hidePopover();
 },
 
-_hidePopup: function()
+_hidePopover: function()
 {
-if (!this._popup)
+if (!this._popover)
 return;
 
 if (this._onHide)
 this._onHide();
 
-this._popup.hide();
-delete this._popup;
+this._popover.dispose();
+delete this._popover;
 },
 
 _mouseHover: function(element)
 {
 delete this._hoverTimer;
 
-this._popup = this._showPopup(element);
-if (this._popup)
-this._popup.contentElement.addEventListener("mousemove", this._killHidePopupTimer.bind(this), true);
+this._hidePopover();
+this._popover = new WebInspector.Popover(this);
+this._showPopover(element, this._popover);
 },
 
-_killHidePopupTimer: function()
+_killHidePopoverTimer: function()
 {
-if (this._hidePopupTimer) {
-clearTimeout(this._hidePopupTimer);
-delete this._hidePopupTimer;
+if (this._hidePopoverTimer) {
+clearTimeout(this._hidePopoverTimer);
+delete this._hidePopoverTimer;
 
 
 
@@ -5409,64 +5711,6 @@ this._resetHoverTimer();
 }
 }
 
-
-
-
-
-WebInspector.TabbedPane = function(element)
-{
-this.element = element || document.createElement("div");
-this.element.addStyleClass("tabbed-pane");
-this._tabsElement = this.element.createChild("div", "tabbed-pane-header");
-this._contentElement = this.element.createChild("div", "tabbed-pane-content");
-this._tabs = {};
-}
-
-WebInspector.TabbedPane.prototype = {
-appendTab: function(id, tabTitle, view)
-{
-var tabElement = document.createElement("li");
-tabElement.textContent = tabTitle;
-tabElement.addEventListener("click", this.selectTab.bind(this, id, true), false);
-
-this._tabsElement.appendChild(tabElement);
-this._contentElement.appendChild(view.element);
-
-this._tabs[id] = { tabElement: tabElement, view: view };
-},
-
-selectTab: function(id, userGesture)
-{
-if (!(id in this._tabs))
-return false;
-
-if (this._currentTab) {
-this._hideTab(this._currentTab)
-delete this._currentTab;
-}
-
-var tab = this._tabs[id];
-this._showTab(tab);
-this._currentTab = tab;
-var event = {tabId: id, view: tab.view, isUserGesture: userGesture};
-this.dispatchEventToListeners("tab-selected", event);
-return true;
-},
-
-_showTab: function(tab)
-{
-tab.tabElement.addStyleClass("selected");
-tab.view.show(this._contentElement);
-},
-
-_hideTab: function(tab)
-{
-tab.tabElement.removeStyleClass("selected");
-tab.view.visible = false;
-}
-}
-
-WebInspector.TabbedPane.prototype.__proto__ = WebInspector.Object.prototype;
 
 
 
@@ -5558,89 +5802,12 @@ this.selected = !this.selected;
 
 
 
-WebInspector.PleaseWaitMessage = function()
-{
-this.element = document.createElement("div");
-this.element.className = "please-wait-msg";
-this.element.textContent = WebInspector.UIString("Please wait\u2026");
-
-this.cancelButton = document.createElement("button");
-this.cancelButton.textContent = WebInspector.UIString("Cancel");
-this.cancelButton.addEventListener("click", this._cancelClicked.bind(this), false);
-}
-
-WebInspector.PleaseWaitMessage.prototype = {
-_cancelClicked: function()
-{
-if (this._cancelCallback) {
-var cancelCallback = this._cancelCallback;
-delete this._cancelCallback;
-cancelCallback();
-}
-},
-
-hide: function()
-{
-var instance = WebInspector.PleaseWaitMessage.prototype.instance;
-var message = instance.element;
-if (message.parentNode)
-message.parentNode.removeChild(message);
-},
-
-get instance()
-{
-if (!("_instance" in WebInspector.PleaseWaitMessage.prototype))
-WebInspector.PleaseWaitMessage.prototype._instance = new WebInspector.PleaseWaitMessage();
-return WebInspector.PleaseWaitMessage.prototype._instance;
-},
-
-show: function(element, cancelCallback)
-{
-var instance = WebInspector.PleaseWaitMessage.prototype.instance;
-var message = instance.element;
-if (message.parentNode === element)
-return;
-else if (message.parentNode)
-message.parentNode.removeChild(message);
-if (message.childNodes.length > 1)
-message.removeChild(instance.cancelButton);
-if (cancelCallback) {
-message.appendChild(instance.cancelButton);
-instance._cancelCallback = cancelCallback;
-}
-element.appendChild(message);
-},
-
-showAndWaitFor: function(element, listenObject, listenEvent, action)
-{
-var instance = WebInspector.PleaseWaitMessage.prototype.instance;
-var message = instance.element;
-if (message.parentNode !== element) {
-
-listenObject.addEventListener(listenEvent, instance.unlistenAndHide.bind(instance, listenObject, listenEvent), instance);
-WebInspector.PleaseWaitMessage.prototype.show(element);
-}
-if (action)
-setTimeout(action, 0);
-},
-
-unlistenAndHide: function(listenObject, listenEvent)
-{
-var instance = WebInspector.PleaseWaitMessage.prototype.instance;
-listenObject.removeEventListener(listenEvent, instance.unlistenAndHide, instance);
-WebInspector.PleaseWaitMessage.prototype.hide();
-}
-};
-
-
-
-
-
 
 WebInspector.View = function(element)
 {
 this.element = element || document.createElement("div");
 this._visible = false;
+this._children = [];
 }
 
 WebInspector.View.prototype = {
@@ -5660,28 +5827,129 @@ else
 this.hide();
 },
 
+wasShown: function()
+{
+this.restoreScrollPositions();
+this.onResize();
+},
+
+willHide: function()
+{
+this.storeScrollPositions();
+},
+
+_innerShow: function()
+{
+this.element.addStyleClass("visible");
+},
+
 show: function(parentElement)
 {
 this._visible = true;
 if (parentElement && parentElement !== this.element.parentNode) {
-this.detach();
+this._detach();
 parentElement.appendChild(this.element);
 }
-if (!this.element.parentNode && this.attach)
+if (!this.element.parentNode) {
+if (this.attach)
 this.attach();
-this.element.addStyleClass("visible");
+else if (this._parentView)
+this._parentView.element.appendChild(this.element);
+}
+this._innerShow();
+this.dispatchToSelfAndVisibleChildren("wasShown");
+},
+
+_innerHide: function()
+{
+this.element.removeStyleClass("visible");
 },
 
 hide: function()
 {
-this.element.removeStyleClass("visible");
+this.dispatchToSelfAndVisibleChildren("willHide");
+this._innerHide();
 this._visible = false;
 },
 
-detach: function()
+_detach: function()
 {
 if (this.element.parentNode)
 this.element.parentNode.removeChild(this.element);
+},
+
+elementsToRestoreScrollPositionsFor: function()
+{
+return [this.element];
+},
+
+storeScrollPositions: function()
+{
+var elements = this.elementsToRestoreScrollPositionsFor();
+for (var i = 0; i < elements.length; ++i) {
+var container = elements[i];
+container._scrollTop = container.scrollTop;
+container._scrollLeft = container.scrollLeft;
+}
+},
+
+restoreScrollPositions: function()
+{
+var elements = this.elementsToRestoreScrollPositionsFor();
+for (var i = 0; i < elements.length; ++i) {
+var container = elements[i];
+if (container._scrollTop)
+container.scrollTop = container._scrollTop;
+if (container._scrollLeft)
+container.scrollLeft = container._scrollLeft;
+}
+},
+
+addChildView: function(view)
+{
+if (view._parentView === this)
+return;
+if (view._parentView)
+view._parentView.removeChildView(view);
+this._children.push(view);
+view._parentView = this;
+},
+
+removeChildView: function(view)
+{
+var childIndex = this._children.indexOf(view);
+if (childIndex < 0)
+return;
+
+this._children.splice(childIndex, 1);
+view._parentView = null;
+view._detach();
+},
+
+onResize: function()
+{
+},
+
+doResize: function()
+{
+this.dispatchToSelfAndVisibleChildren("onResize");
+},
+
+dispatchToSelfAndVisibleChildren: function(methodName)
+{
+if (!this.visible)
+return;
+if (typeof this[methodName] === "function")
+this[methodName].call(this);
+this.dispatchToVisibleChildren(methodName);
+},
+
+dispatchToVisibleChildren: function(methodName)
+{
+if (!this.visible)
+return;
+for (var i = 0; i < this._children.length; ++i)
+this._children[i].dispatchToSelfAndVisibleChildren(methodName);
 }
 }
 
@@ -5691,81 +5959,199 @@ WebInspector.View.prototype.__proto__ = WebInspector.Object.prototype;
 
 
 
+
+WebInspector.TabbedPane = function(element)
+{
+WebInspector.View.call(this, element);
+this.element.addStyleClass("tabbed-pane");
+this._tabsElement = this.element.createChild("div", "tabbed-pane-header");
+this._contentElement = this.element.createChild("div", "tabbed-pane-content");
+this._tabs = {};
+}
+
+WebInspector.TabbedPane.prototype = {
+appendTab: function(id, tabTitle, view)
+{
+var tabElement = document.createElement("li");
+tabElement.textContent = tabTitle;
+tabElement.addEventListener("click", this.selectTab.bind(this, id, true), false);
+
+this._tabsElement.appendChild(tabElement);
+this._contentElement.appendChild(view.element);
+this.addChildView(view);
+
+this._tabs[id] = { tabElement: tabElement, view: view };
+},
+
+selectTab: function(id, userGesture)
+{
+if (!(id in this._tabs))
+return false;
+
+if (this._currentTab) {
+this._hideTab(this._currentTab)
+delete this._currentTab;
+}
+
+var tab = this._tabs[id];
+this._showTab(tab);
+this._currentTab = tab;
+var event = {tabId: id, view: tab.view, isUserGesture: userGesture};
+this.dispatchEventToListeners("tab-selected", event);
+return true;
+},
+
+_showTab: function(tab)
+{
+tab.tabElement.addStyleClass("selected");
+tab.view.show(this._contentElement);
+},
+
+_hideTab: function(tab)
+{
+tab.tabElement.removeStyleClass("selected");
+tab.view.visible = false;
+}
+}
+
+WebInspector.TabbedPane.prototype.__proto__ = WebInspector.View.prototype;
+
+
+
+
+
+WebInspector.IFrameView = function(parentElement, stylesheets)
+{
+this._iframeElement = document.createElement("iframe");
+this._iframeElement.addStyleClass("view");
+this._initializeView = this._attachIFrameAndInitialize.bind(this, parentElement, stylesheets);
+WebInspector.View.call(this);
+}
+
+WebInspector.IFrameView.prototype = {
+_innerShow: function()
+{
+this._iframeElement.addStyleClass("visible");
+WebInspector.View.prototype._innerShow.call(this);
+},
+
+_innerHide: function()
+{
+this._iframeElement.removeStyleClass("visible");
+},
+
+attach: function(parent)
+{
+if (this._initializeView)
+this._initializeView();
+this._iframeElement.contentDocument.body.appendChild(this.element);
+},
+
+_attachIFrameAndInitialize: function(parent, stylesheets)
+{
+if (!this._initializeView)
+return;
+delete this._initializeView;
+parent.appendChild(this._iframeElement);
+this._setDocumentType();
+var iframeDocument = this._iframeElement.contentDocument;
+this._iframeElement.contentWindow.eval("(" + setupPrototypeUtilities.toString() + ")();");
+this.element = iframeDocument.body.createChild("div");
+this.addStylesheets(stylesheets);
+this._propagateBodyStyle();
+WebInspector.addMainEventListeners(iframeDocument);
+
+if (typeof this.initializeView === "function")
+this.initializeView();
+},
+
+addStylesheets: function(hrefs)
+{
+var cssText = "";
+for (var i = 0; i < hrefs.length; ++i) {
+var xhr = new XMLHttpRequest();
+xhr.open("GET", hrefs[i], false);
+xhr.send(null);
+cssText += xhr.responseText;
+}
+var style  = document.createElement("style");
+style.type = "text/css";
+style.textContent = cssText;
+this._iframeElement.contentDocument.head.appendChild(style);
+},
+
+_setDocumentType: function()
+{
+var doc = this._iframeElement.contentDocument.open();
+doc.write("<!DOCTYPE html>");
+doc.close();
+},
+
+_propagateBodyStyle: function()
+{
+var body = this._iframeElement.contentDocument.body;
+body.className = document.body.className;
+body.addStyleClass("visible");
+}
+}
+
+WebInspector.IFrameView.prototype.__proto__ = WebInspector.View.prototype;
+
+
+
+
+
 WebInspector.Drawer = function()
 {
-WebInspector.View.call(this, document.getElementById("drawer"));
-
+this.element = document.getElementById("drawer");
 this._savedHeight = 200; 
-this.state = WebInspector.Drawer.State.Hidden;
-this.fullPanel = false;
-
 this._mainElement = document.getElementById("main");
 this._toolbarElement = document.getElementById("toolbar");
 this._mainStatusBar = document.getElementById("main-status-bar");
 this._mainStatusBar.addEventListener("mousedown", this._startStatusBarDragging.bind(this), true);
-this._viewStatusBar = document.getElementById("other-drawer-status-bar-items");
 this._counters = document.getElementById("counters");
-this._drawerStatusBar = document.getElementById("drawer-status-bar");
+this._drawerStatusBar = document.createElement("div");
+this._drawerStatusBar.id = "drawer-status-bar";
+this._drawerStatusBar.className = "status-bar";
+this.element.appendChild(this._drawerStatusBar);
+
+this._viewStatusBar = document.createElement("div");
+this._drawerStatusBar.appendChild(this._viewStatusBar);
 }
 
 WebInspector.Drawer.prototype = {
-get visibleView()
+get visible()
 {
-return this._visibleView;
+return !!this._view;
 },
 
-set visibleView(x)
+_constrainHeight: function(height)
 {
-if (this._visibleView === x) {
-if (this.visible && this.fullPanel)
+return Number.constrain(height, Preferences.minConsoleHeight, window.innerHeight - this._mainElement.totalOffsetTop() - Preferences.minConsoleHeight);
+},
+
+show: function(view, immediately)
+{
+var drawerWasVisible = this.visible;
+
+this.immediatelyFinishAnimation();
+if (this._view)
+this.element.removeChild(this._view.element);
+
+this._view = view;
+this._view.show(this.element);
+
+var statusBarItems = this._view.statusBarItems || [];
+for (var i = 0; i < statusBarItems.length; ++i)
+this._viewStatusBar.appendChild(statusBarItems[i]);
+
+if (drawerWasVisible)
 return;
-this.visible = !this.visible;
-return;
-}
-
-var firstTime = !this._visibleView;
-if (this._visibleView)
-this._visibleView.hide();
-
-this._visibleView = x;
-
-if (x && !firstTime) {
-this._safelyRemoveChildren();
-this._viewStatusBar.removeChildren(); 
-x.attach(this.element, this._viewStatusBar);
-x.show();
-this.visible = true;
-}
-},
-
-get savedHeight()
-{
-var height = this._savedHeight || this.element.offsetHeight;
-return Number.constrain(height, Preferences.minConsoleHeight, window.innerHeight - this._mainElement.totalOffsetTop - Preferences.minConsoleHeight);
-},
-
-showView: function(view)
-{
-if (!this.visible || this.visibleView !== view)
-this.visibleView = view;
-},
-
-show: function()
-{
-if (this._animating || this.visible)
-return;
-
-if (this.visibleView)
-this.visibleView.show();
-
-WebInspector.View.prototype.show.call(this);
-
-this._animating = true;
 
 document.body.addStyleClass("drawer-visible");
 
 var anchoredItems = document.getElementById("anchored-status-bar-items");
-var height = (this.fullPanel ? window.innerHeight - this._toolbarElement.offsetHeight : this.savedHeight);
+var height = this._constrainHeight(this._savedHeight || this.element.offsetHeight);
 var animations = [
 {element: this.element, end: {height: height}},
 {element: this._mainElement, end: {bottom: height}},
@@ -5786,34 +6172,30 @@ this._mainStatusBar.appendChild(this._currentPanelCounters);
 
 function animationFinished()
 {
-if ("updateStatusBarItems" in WebInspector.currentPanel)
-WebInspector.currentPanel.updateStatusBarItems();
-if (this.visibleView.afterShow)
-this.visibleView.afterShow();
-delete this._animating;
+if ("updateStatusBarItems" in WebInspector.currentPanel())
+WebInspector.currentPanel().updateStatusBarItems();
+if (this._view && this._view.afterShow)
+this._view.afterShow();
 delete this._currentAnimation;
-this.state = (this.fullPanel ? WebInspector.Drawer.State.Full : WebInspector.Drawer.State.Variable);
 if (this._currentPanelCounters)
 this._currentPanelCounters.removeAttribute("style");
 }
 
 this._currentAnimation = WebInspector.animateStyle(animations, this._animationDuration(), animationFinished.bind(this));
+if (immediately)
+this._currentAnimation.forceComplete();
 },
 
-hide: function()
+hide: function(immediately)
 {
-if (this._animating || !this.visible)
+this.immediatelyFinishAnimation();
+if (!this.visible)
 return;
 
-WebInspector.View.prototype.hide.call(this);
-
-if (this.visibleView)
-this.visibleView.hide();
-
-this._animating = true;
-
-if (!this.fullPanel)
 this._savedHeight = this.element.offsetHeight;
+
+this.element.removeChild(this._view.element);
+delete this._view;
 
 if (this.element === WebInspector.currentFocusElement || this.element.isAncestor(WebInspector.currentFocusElement))
 WebInspector.currentFocusElement = WebInspector.previousFocusElement;
@@ -5824,8 +6206,8 @@ var anchoredItems = document.getElementById("anchored-status-bar-items");
 
 this._mainStatusBar.style.setProperty("padding-left", (anchoredItems.offsetWidth - 1) + "px");
 document.body.removeStyleClass("drawer-visible");
-if ("updateStatusBarItems" in WebInspector.currentPanel)
-WebInspector.currentPanel.updateStatusBarItems();
+if ("updateStatusBarItems" in WebInspector.currentPanel())
+WebInspector.currentPanel().updateStatusBarItems();
 document.body.addStyleClass("drawer-visible");
 
 var animations = [
@@ -5843,7 +6225,7 @@ animations.push({element: this._currentPanelCounters, start: {"padding-right": 0
 
 function animationFinished()
 {
-WebInspector.currentPanel.resize();
+WebInspector.currentPanel().doResize();
 this._mainStatusBar.insertBefore(anchoredItems, this._mainStatusBar.firstChild);
 this._mainStatusBar.style.removeProperty("padding-left");
 
@@ -5854,65 +6236,23 @@ this._counters.insertBefore(this._currentPanelCounters, this._counters.firstChil
 }
 
 document.body.removeStyleClass("drawer-visible");
-delete this._animating;
 delete this._currentAnimation;
-this.state = WebInspector.Drawer.State.Hidden;
 }
 
 this._currentAnimation = WebInspector.animateStyle(animations, this._animationDuration(), animationFinished.bind(this));
+if (immediately)
+this._currentAnimation.forceComplete();
 },
 
 resize: function()
 {
-if (this.state === WebInspector.Drawer.State.Hidden)
+if (!this.visible)
 return;
 
-var height;
-if (this.state === WebInspector.Drawer.State.Variable) {
-height = parseInt(this.element.style.height);
-height = Number.constrain(height, Preferences.minConsoleHeight, window.innerHeight - this._mainElement.totalOffsetTop - Preferences.minConsoleHeight);
-} else
-height = window.innerHeight - this._toolbarElement.offsetHeight;
-
+var height = this._constrainHeight(parseInt(this.element.style.height));
 this._mainElement.style.bottom = height + "px";
 this.element.style.height = height + "px";
-},
-
-enterPanelMode: function()
-{
-this._cancelAnimationIfNeeded();
-this.fullPanel = true;
-this.updateHeight();
-},
-
-exitPanelMode: function()
-{
-this._cancelAnimationIfNeeded();
-this.fullPanel = false;
-this.updateHeight();
-},
-
-updateHeight: function()
-{
-if (this.visible) {
-if (this.fullPanel) {
-this._savedHeight = this.element.offsetHeight;
-var height = window.innerHeight - this._toolbarElement.offsetHeight;
-this._animateDrawerHeight(height, WebInspector.Drawer.State.Full);
-} else {
-
-
-this.state = WebInspector.Drawer.State.Variable;
-var height = this.savedHeight;
-this._animateDrawerHeight(height, WebInspector.Drawer.State.Variable);
-}
-}
-},
-
-immediatelyExitPanelMode: function()
-{
-this.visible = false;
-this.fullPanel = false;
+this._view.doResize();
 },
 
 immediatelyFinishAnimation: function()
@@ -5937,41 +6277,8 @@ else
 this._counters.insertBefore(x, this._counters.firstChild);
 },
 
-_cancelAnimationIfNeeded: function()
-{
-if (this._animating) {
-if (this._currentAnimation)
-this._currentAnimation.cancel();
-delete this._animating;
-delete this._currentAnimation;
-}
-},
-
-_animateDrawerHeight: function(height, finalState)
-{
-this._animating = true;
-var animations = [
-{element: this.element, end: {height: height}},
-{element: this._mainElement, end: {bottom: height}}
-];
-
-function animationFinished()
-{
-WebInspector.currentPanel.resize();
-delete this._animating;
-delete this._currentAnimation;
-this.state = finalState;
-}
-
-this._currentAnimation = WebInspector.animateStyle(animations, this._animationDuration(), animationFinished.bind(this));
-},
-
 _animationDuration: function()
 {
-
-if (this.fullPanel && (this.state === WebInspector.Drawer.State.Hidden || this.state === WebInspector.Drawer.State.Full))
-return 0;
-
 return (window.event && window.event.shiftKey ? 2000 : 250);
 },
 
@@ -5995,7 +6302,7 @@ return;
 
 WebInspector.elementDragStart(this._mainStatusBar, this._statusBarDragging.bind(this), this._endStatusBarDragging.bind(this), event, "row-resize");
 
-this._statusBarDragOffset = event.pageY - this.element.totalOffsetTop;
+this._statusBarDragOffset = event.pageY - this.element.totalOffsetTop();
 
 event.stopPropagation();
 },
@@ -6003,10 +6310,12 @@ event.stopPropagation();
 _statusBarDragging: function(event)
 {
 var height = window.innerHeight - event.pageY + this._statusBarDragOffset;
-height = Number.constrain(height, Preferences.minConsoleHeight, window.innerHeight - this._mainElement.totalOffsetTop - Preferences.minConsoleHeight);
+height = Number.constrain(height, Preferences.minConsoleHeight, window.innerHeight - this._mainElement.totalOffsetTop() - Preferences.minConsoleHeight);
 
 this._mainElement.style.bottom = height + "px";
 this.element.style.height = height + "px";
+if (WebInspector.currentPanel())
+WebInspector.currentPanel().doResize();
 
 event.preventDefault();
 event.stopPropagation();
@@ -6023,695 +6332,21 @@ event.stopPropagation();
 }
 }
 
-WebInspector.Drawer.prototype.__proto__ = WebInspector.View.prototype;
-
-WebInspector.Drawer.State = {
-Hidden: 0,
-Variable: 1,
-Full: 2
-};
 
 
 
 
 
-const ExpressionStopCharacters = " =:[({;,!+-*/&|^<>";
-
-WebInspector.ConsoleView = function(drawer)
+WebInspector.ConsoleStackFrame = function()
 {
-WebInspector.View.call(this, document.getElementById("console-view"));
-
-this.messages = [];
-this.drawer = drawer;
-
-this.clearButton = document.getElementById("clear-console-status-bar-item");
-this.clearButton.title = WebInspector.UIString("Clear console log.");
-this.clearButton.addEventListener("click", this._clearButtonClicked.bind(this), false);
-
-this.messagesElement = document.getElementById("console-messages");
-this.messagesElement.addEventListener("selectstart", this._messagesSelectStart.bind(this), false);
-this.messagesElement.addEventListener("click", this._messagesClicked.bind(this), true);
-
-this.promptElement = document.getElementById("console-prompt");
-this.promptElement.className = "source-code";
-this.promptElement.addEventListener("keydown", this._promptKeyDown.bind(this), true);
-this.prompt = new WebInspector.TextPrompt(this.promptElement, this.completions.bind(this), ExpressionStopCharacters + ".");
-this.prompt.history = WebInspector.settings.consoleHistory;
-
-this.topGroup = new WebInspector.ConsoleGroup(null);
-this.messagesElement.insertBefore(this.topGroup.element, this.promptElement);
-this.currentGroup = this.topGroup;
-
-this.toggleConsoleButton = new WebInspector.StatusBarButton(WebInspector.UIString("Show console."), "console-status-bar-item");
-this.toggleConsoleButton.addEventListener("click", this._toggleConsoleButtonClicked.bind(this), false);
-
-
-this.filterBarElement = document.getElementById("console-filter");
-
-function createDividerElement() {
-var dividerElement = document.createElement("div");
-dividerElement.addStyleClass("scope-bar-divider");
-this.filterBarElement.appendChild(dividerElement);
-}
-
-var updateFilterHandler = this._updateFilter.bind(this);
-function createFilterElement(category, label) {
-var categoryElement = document.createElement("li");
-categoryElement.category = category;
-categoryElement.className = category;
-categoryElement.addEventListener("click", updateFilterHandler, false);
-categoryElement.textContent = label;
-
-this.filterBarElement.appendChild(categoryElement);
-
-return categoryElement;
-}
-
-this.allElement = createFilterElement.call(this, "all", WebInspector.UIString("All"));
-createDividerElement.call(this);
-this.errorElement = createFilterElement.call(this, "errors", WebInspector.UIString("Errors"));
-this.warningElement = createFilterElement.call(this, "warnings", WebInspector.UIString("Warnings"));
-this.logElement = createFilterElement.call(this, "logs", WebInspector.UIString("Logs"));
-
-this.filter(this.allElement, false);
-this._registerShortcuts();
-
-this.messagesElement.addEventListener("contextmenu", this._handleContextMenuEvent.bind(this), false);
-
-this._customFormatters = {
-"object": this._formatobject,
-"array":  this._formatarray,
-"node":   this._formatnode,
-"string": this._formatstring
-};
-
-this._registerConsoleDomainDispatcher();
-}
-
-WebInspector.ConsoleView.Events = {
-ConsoleCleared: "console-cleared",
-EntryAdded: "console-entry-added",
-MessageAdded: "console-message-added"
-}
-
-WebInspector.ConsoleView.prototype = {
-_registerConsoleDomainDispatcher: function() {
-var console = this;
-var dispatcher = {
-messageAdded: function(payload)
-{
-var consoleMessage = new WebInspector.ConsoleMessage(
-payload.source,
-payload.type,
-payload.level,
-payload.line,
-payload.url,
-payload.repeatCount,
-payload.text,
-payload.parameters,
-payload.stackTrace,
-payload.networkIdentifier);
-console.addMessage(consoleMessage);
-},
-
-messageRepeatCountUpdated: function(count)
-{
-var msg = console.previousMessage;
-var prevRepeatCount = msg.totalRepeatCount;
-
-if (!console.commandSincePreviousMessage) {
-msg.repeatDelta = count - prevRepeatCount;
-msg.repeatCount = msg.repeatCount + msg.repeatDelta;
-msg.totalRepeatCount = count;
-msg._updateRepeatCount();
-console._incrementErrorWarningCount(msg);
-} else {
-var msgCopy = new WebInspector.ConsoleMessage(msg.source, msg.type, msg.level, msg.line, msg.url, count - prevRepeatCount, msg._messageText, msg._parameters, msg._stackTrace, msg._requestId);
-msgCopy.totalRepeatCount = count;
-msgCopy._formatMessage();
-console.addMessage(msgCopy);
-}
-},
-
-messagesCleared: function()
-{
-if (!WebInspector.settings.preserveConsoleLog)
-console.clearMessages();
-},
-}
-InspectorBackend.registerDomainDispatcher("Console", dispatcher);
-},
-
-setConsoleMessageExpiredCount: function(count)
-{
-if (count) {
-var message = String.sprintf(WebInspector.UIString("%d console messages are not shown."), count);
-this.addMessage(WebInspector.ConsoleMessage.createTextMessage(message, WebInspector.ConsoleMessage.MessageLevel.Warning));
-}
-},
-
-_updateFilter: function(e)
-{
-var isMac = WebInspector.isMac();
-var selectMultiple = false;
-if (isMac && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey)
-selectMultiple = true;
-if (!isMac && e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey)
-selectMultiple = true;
-
-this.filter(e.target, selectMultiple);
-},
-
-filter: function(target, selectMultiple)
-{
-function unselectAll()
-{
-this.allElement.removeStyleClass("selected");
-this.errorElement.removeStyleClass("selected");
-this.warningElement.removeStyleClass("selected");
-this.logElement.removeStyleClass("selected");
-
-this.messagesElement.removeStyleClass("filter-all");
-this.messagesElement.removeStyleClass("filter-errors");
-this.messagesElement.removeStyleClass("filter-warnings");
-this.messagesElement.removeStyleClass("filter-logs");
-}
-
-var targetFilterClass = "filter-" + target.category;
-
-if (target.category === "all") {
-if (target.hasStyleClass("selected")) {
-
-return;
-}
-
-unselectAll.call(this);
-} else {
-
-if (this.allElement.hasStyleClass("selected")) {
-this.allElement.removeStyleClass("selected");
-this.messagesElement.removeStyleClass("filter-all");
-}
-}
-
-if (!selectMultiple) {
-
-
-unselectAll.call(this);
-
-target.addStyleClass("selected");
-this.messagesElement.addStyleClass(targetFilterClass);
-
-return;
-}
-
-if (target.hasStyleClass("selected")) {
-
-
-target.removeStyleClass("selected");
-this.messagesElement.removeStyleClass(targetFilterClass);
-} else {
-
-
-target.addStyleClass("selected");
-this.messagesElement.addStyleClass(targetFilterClass);
-}
-},
-
-_toggleConsoleButtonClicked: function()
-{
-this.drawer.visibleView = this;
-},
-
-attach: function(mainElement, statusBarElement)
-{
-mainElement.appendChild(this.element);
-statusBarElement.appendChild(this.clearButton);
-statusBarElement.appendChild(this.filterBarElement);
-},
-
-show: function()
-{
-this.toggleConsoleButton.toggled = true;
-this.toggleConsoleButton.title = WebInspector.UIString("Hide console.");
-if (!this.prompt.isCaretInsidePrompt())
-this.prompt.moveCaretToEndOfPrompt();
-},
-
-afterShow: function()
-{
-WebInspector.currentFocusElement = this.promptElement;
-},
-
-hide: function()
-{
-this.toggleConsoleButton.toggled = false;
-this.toggleConsoleButton.title = WebInspector.UIString("Show console.");
-},
-
-_scheduleScrollIntoView: function()
-{
-if (this._scrollIntoViewTimer)
-return;
-
-function scrollIntoView()
-{
-this.promptElement.scrollIntoView(true);
-delete this._scrollIntoViewTimer;
-}
-this._scrollIntoViewTimer = setTimeout(scrollIntoView.bind(this), 20);
-},
-
-addMessage: function(msg)
-{
-var shouldScrollToLastMessage = this.messagesElement.isScrolledToBottom();
-
-if (msg instanceof WebInspector.ConsoleMessage && !(msg instanceof WebInspector.ConsoleCommandResult)) {
-this._incrementErrorWarningCount(msg);
-this.dispatchEventToListeners(WebInspector.ConsoleView.Events.MessageAdded, msg);
-this.commandSincePreviousMessage = false;
-this.previousMessage = msg;
-} else if (msg instanceof WebInspector.ConsoleCommand) {
-if (this.previousMessage) {
-this.commandSincePreviousMessage = true;
-}
-}
-
-this.messages.push(msg);
-
-if (msg.type === WebInspector.ConsoleMessage.MessageType.EndGroup) {
-var parentGroup = this.currentGroup.parentGroup
-if (parentGroup)
-this.currentGroup = parentGroup;
-} else {
-if (msg.type === WebInspector.ConsoleMessage.MessageType.StartGroup || msg.type === WebInspector.ConsoleMessage.MessageType.StartGroupCollapsed) {
-var group = new WebInspector.ConsoleGroup(this.currentGroup);
-this.currentGroup.messagesElement.appendChild(group.element);
-this.currentGroup = group;
-}
-
-this.currentGroup.addMessage(msg);
+this.url = undefined;
+this.functionName = undefined;
+this.lineNumber = undefined;
+this.columnNumber = undefined;
 }
 
 
-if (shouldScrollToLastMessage || (msg instanceof WebInspector.ConsoleCommandResult))
-this._scheduleScrollIntoView();
-
-this.dispatchEventToListeners(WebInspector.ConsoleView.Events.EntryAdded, msg);
-},
-
-_incrementErrorWarningCount: function(msg)
-{
-switch (msg.level) {
-case WebInspector.ConsoleMessage.MessageLevel.Warning:
-WebInspector.warnings += msg.repeatDelta;
-break;
-case WebInspector.ConsoleMessage.MessageLevel.Error:
-WebInspector.errors += msg.repeatDelta;
-break;
-}
-},
-
-requestClearMessages: function()
-{
-ConsoleAgent.clearConsoleMessages();
-this.clearMessages();
-},
-
-clearMessages: function()
-{
-this.dispatchEventToListeners(WebInspector.ConsoleView.Events.ConsoleCleared);
-
-this.messages = [];
-
-this.currentGroup = this.topGroup;
-this.topGroup.messagesElement.removeChildren();
-
-WebInspector.errors = 0;
-WebInspector.warnings = 0;
-
-delete this.commandSincePreviousMessage;
-delete this.previousMessage;
-},
-
-completions: function(wordRange, bestMatchOnly, completionsReadyCallback)
-{
-
-var expressionRange = wordRange.startContainer.rangeOfWord(wordRange.startOffset, ExpressionStopCharacters, this.promptElement, "backward");
-var expressionString = expressionRange.toString();
-var prefix = wordRange.toString();
-this._completions(expressionString, prefix, bestMatchOnly, completionsReadyCallback);
-},
-
-_completions: function(expressionString, prefix, bestMatchOnly, completionsReadyCallback)
-{
-var lastIndex = expressionString.length - 1;
-
-var dotNotation = (expressionString[lastIndex] === ".");
-var bracketNotation = (expressionString[lastIndex] === "[");
-
-if (dotNotation || bracketNotation)
-expressionString = expressionString.substr(0, lastIndex);
-
-if (!expressionString && !prefix)
-return;
-
-if (!expressionString && WebInspector.panels.scripts.paused)
-WebInspector.panels.scripts.getSelectedCallFrameVariables(reportCompletions.bind(this));
-else
-this.evalInInspectedWindow(expressionString, "completion", true, evaluated.bind(this));
-
-function evaluated(result, wasThrown)
-{
-if (wasThrown)
-return;
-result.getAllProperties(evaluatedProperties.bind(this));
-}
-
-function evaluatedProperties(properties)
-{
-RuntimeAgent.releaseObjectGroup("completion");
-var propertyNames = {};
-for (var i = 0; properties && i < properties.length; ++i)
-propertyNames[properties[i].name] = true;
-reportCompletions.call(this, propertyNames);
-}
-
-function reportCompletions(propertyNames)
-{
-var includeCommandLineAPI = (!dotNotation && !bracketNotation);
-if (includeCommandLineAPI) {
-const commandLineAPI = ["dir", "dirxml", "keys", "values", "profile", "profileEnd", "monitorEvents", "unmonitorEvents", "inspect", "copy", "clear"];
-for (var i = 0; i < commandLineAPI.length; ++i)
-propertyNames[commandLineAPI[i]] = true;
-}
-
-this._reportCompletions(bestMatchOnly, completionsReadyCallback, dotNotation, bracketNotation, prefix, Object.keys(propertyNames));
-}
-},
-
-_reportCompletions: function(bestMatchOnly, completionsReadyCallback, dotNotation, bracketNotation, prefix, properties) {
-if (bracketNotation) {
-if (prefix.length && prefix[0] === "'")
-var quoteUsed = "'";
-else
-var quoteUsed = "\"";
-}
-
-var results = [];
-properties.sort();
-
-for (var i = 0; i < properties.length; ++i) {
-var property = properties[i];
-
-if (dotNotation && !/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(property))
-continue;
-
-if (bracketNotation) {
-if (!/^[0-9]+$/.test(property))
-property = quoteUsed + property.escapeCharacters(quoteUsed + "\\") + quoteUsed;
-property += "]";
-}
-
-if (property.length < prefix.length)
-continue;
-if (property.indexOf(prefix) !== 0)
-continue;
-
-results.push(property);
-if (bestMatchOnly)
-break;
-}
-completionsReadyCallback(results);
-},
-
-_clearButtonClicked: function()
-{
-this.requestClearMessages();
-},
-
-_handleContextMenuEvent: function(event)
-{
-if (!window.getSelection().isCollapsed) {
-
-
-return;
-}
-
-var contextMenu = new WebInspector.ContextMenu();
-
-var monitoringXHRItemAction = function () {
-WebInspector.settings.monitoringXHREnabled = !WebInspector.settings.monitoringXHREnabled;
-ConsoleAgent.setMonitoringXHREnabled(WebInspector.settings.monitoringXHREnabled);
-}.bind(this);
-contextMenu.appendCheckboxItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "XMLHttpRequest logging" : "XMLHttpRequest Logging"), monitoringXHRItemAction, WebInspector.settings.monitoringXHREnabled);
-
-var preserveLogItemAction = function () {
-WebInspector.settings.preserveConsoleLog = !WebInspector.settings.preserveConsoleLog;
-}.bind(this);
-contextMenu.appendCheckboxItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Preserve log" : "Preserve Log"), preserveLogItemAction, WebInspector.settings.preserveConsoleLog);
-
-contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Clear console" : "Clear Console"), this.requestClearMessages.bind(this));
-contextMenu.show(event);
-},
-
-_messagesSelectStart: function(event)
-{
-if (this._selectionTimeout)
-clearTimeout(this._selectionTimeout);
-
-this.prompt.clearAutoComplete();
-
-function moveBackIfOutside()
-{
-delete this._selectionTimeout;
-if (!this.prompt.isCaretInsidePrompt() && window.getSelection().isCollapsed)
-this.prompt.moveCaretToEndOfPrompt();
-this.prompt.autoCompleteSoon();
-}
-
-this._selectionTimeout = setTimeout(moveBackIfOutside.bind(this), 100);
-},
-
-_messagesClicked: function(event)
-{
-var link = event.target.enclosingNodeOrSelfWithNodeName("a");
-if (!link || !link.representedNode)
-return;
-
-WebInspector.updateFocusedNode(link.representedNode.id);
-event.stopPropagation();
-event.preventDefault();
-},
-
-_registerShortcuts: function()
-{
-this._shortcuts = {};
-
-var shortcut = WebInspector.KeyboardShortcut;
-var shortcutK = shortcut.makeDescriptor("k", WebInspector.KeyboardShortcut.Modifiers.Meta);
-
-this._shortcuts[shortcutK.key] = this.requestClearMessages.bind(this);
-this._shortcuts[shortcutK.key].isMacOnly = true;
-
-var clearConsoleHandler = this.requestClearMessages.bind(this);
-var shortcutL = shortcut.makeDescriptor("l", WebInspector.KeyboardShortcut.Modifiers.Ctrl);
-this._shortcuts[shortcutL.key] = clearConsoleHandler;
-
-var section = WebInspector.shortcutsHelp.section(WebInspector.UIString("Console"));
-var keys = WebInspector.isMac() ? [ shortcutK.name, shortcutL.name ] : [ shortcutL.name ];
-section.addAlternateKeys(keys, WebInspector.UIString("Clear Console"));
-
-keys = [
-shortcut.shortcutToString(shortcut.Keys.Tab),
-shortcut.shortcutToString(shortcut.Keys.Tab, shortcut.Modifiers.Shift)
-];
-section.addRelatedKeys(keys, WebInspector.UIString("Next/previous suggestion"));
-section.addKey(shortcut.shortcutToString(shortcut.Keys.Right), WebInspector.UIString("Accept suggestion"));
-keys = [
-shortcut.shortcutToString(shortcut.Keys.Down),
-shortcut.shortcutToString(shortcut.Keys.Up)
-];
-section.addRelatedKeys(keys, WebInspector.UIString("Next/previous line"));
-keys = [
-shortcut.shortcutToString("N", shortcut.Modifiers.Alt),
-shortcut.shortcutToString("P", shortcut.Modifiers.Alt)
-];
-if (WebInspector.isMac())
-section.addRelatedKeys(keys, WebInspector.UIString("Next/previous command"));
-section.addKey(shortcut.shortcutToString(shortcut.Keys.Enter), WebInspector.UIString("Execute command"));
-},
-
-_promptKeyDown: function(event)
-{
-if (isEnterKey(event)) {
-this._enterKeyPressed(event);
-return;
-}
-
-var shortcut = WebInspector.KeyboardShortcut.makeKeyFromEvent(event);
-var handler = this._shortcuts[shortcut];
-if (handler) {
-if (!this._shortcuts[shortcut].isMacOnly || WebInspector.isMac()) {
-handler();
-event.preventDefault();
-return;
-}
-}
-},
-
-evalInInspectedWindow: function(expression, objectGroup, includeCommandLineAPI, callback)
-{
-if (WebInspector.panels.scripts && WebInspector.panels.scripts.paused) {
-WebInspector.panels.scripts.evaluateInSelectedCallFrame(expression, objectGroup, includeCommandLineAPI, callback);
-return;
-}
-
-if (!expression) {
-
-expression = "this";
-}
-
-function evalCallback(error, result, wasThrown)
-{
-if (!error)
-callback(WebInspector.RemoteObject.fromPayload(result), wasThrown);
-}
-RuntimeAgent.evaluate(expression, objectGroup, includeCommandLineAPI, evalCallback);
-},
-
-_enterKeyPressed: function(event)
-{
-if (event.altKey || event.ctrlKey || event.shiftKey)
-return;
-
-event.preventDefault();
-event.stopPropagation();
-
-this.prompt.clearAutoComplete(true);
-
-var str = this.prompt.text;
-if (!str.length)
-return;
-
-var commandMessage = new WebInspector.ConsoleCommand(str);
-this.addMessage(commandMessage);
-
-var self = this;
-function printResult(result, wasThrown)
-{
-self.prompt.history.push(str);
-self.prompt.historyOffset = 0;
-self.prompt.text = "";
-
-WebInspector.settings.consoleHistory = self.prompt.history.slice(-30);
-
-self.addMessage(new WebInspector.ConsoleCommandResult(result, wasThrown, commandMessage));
-}
-this.evalInInspectedWindow(str, "console", true, printResult);
-},
-
-_format: function(output, forceObjectFormat)
-{
-var isProxy = (output != null && typeof output === "object");
-var type = (forceObjectFormat ? "object" : WebInspector.RemoteObject.type(output));
-
-var formatter = this._customFormatters[type];
-if (!formatter || !isProxy) {
-formatter = this._formatvalue;
-output = output.description;
-}
-
-var span = document.createElement("span");
-span.className = "console-formatted-" + type + " source-code";
-formatter.call(this, output, span);
-return span;
-},
-
-_formatvalue: function(val, elem)
-{
-elem.appendChild(document.createTextNode(val));
-},
-
-_formatobject: function(obj, elem)
-{
-elem.appendChild(new WebInspector.ObjectPropertiesSection(obj, obj.description).element);
-},
-
-_formatnode: function(object, elem)
-{
-function printNode(nodeId)
-{
-if (!nodeId) {
-
-
-this._formatobject(object, elem);
-return;
-}
-var treeOutline = new WebInspector.ElementsTreeOutline();
-treeOutline.showInElementsPanelEnabled = true;
-treeOutline.rootDOMNode = WebInspector.domAgent.nodeForId(nodeId);
-treeOutline.element.addStyleClass("outline-disclosure");
-if (!treeOutline.children[0].hasChildren)
-treeOutline.element.addStyleClass("single-node");
-elem.appendChild(treeOutline.element);
-}
-object.pushNodeToFrontend(printNode.bind(this));
-},
-
-_formatarray: function(arr, elem)
-{
-arr.getOwnProperties(this._printArray.bind(this, elem));
-},
-
-_formatstring: function(output, elem)
-{
-var span = document.createElement("span");
-span.className = "console-formatted-string source-code";
-span.appendChild(WebInspector.linkifyStringAsFragment(output.description));
-
-
-elem.removeStyleClass("console-formatted-string");
-elem.appendChild(document.createTextNode("\""));
-elem.appendChild(span);
-elem.appendChild(document.createTextNode("\""));
-},
-
-_printArray: function(elem, properties)
-{
-if (!properties)
-return;
-
-var elements = [];
-for (var i = 0; i < properties.length; ++i) {
-var name = properties[i].name;
-if (name == parseInt(name))
-elements[name] = this._formatAsArrayEntry(properties[i].value);
-}
-
-elem.appendChild(document.createTextNode("["));
-for (var i = 0; i < elements.length; ++i) {
-var element = elements[i];
-if (element)
-elem.appendChild(element);
-else
-elem.appendChild(document.createTextNode("undefined"))
-if (i < elements.length - 1)
-elem.appendChild(document.createTextNode(", "));
-}
-elem.appendChild(document.createTextNode("]"));
-},
-
-_formatAsArrayEntry: function(output)
-{
-
-return this._format(output, WebInspector.RemoteObject.type(output) === "array");
-}
-}
-
-WebInspector.ConsoleView.prototype.__proto__ = WebInspector.View.prototype;
-
-WebInspector.ConsoleMessage = function(source, type, level, line, url, repeatCount, message, parameters, stackTrace, requestId)
+WebInspector.ConsoleMessage = function(source, type, level, line, url, repeatCount, message, parameters, stackTrace, request)
 {
 this.source = source;
 this.type = type;
@@ -6724,7 +6359,7 @@ this.totalRepeatCount = repeatCount;
 this._messageText = message;
 this._parameters = parameters;
 this._stackTrace = stackTrace;
-this._requestId = requestId;
+this._request = request;
 
 if (stackTrace && stackTrace.length) {
 var topCallFrame = stackTrace[0];
@@ -6740,35 +6375,20 @@ this._formatMessage();
 WebInspector.ConsoleMessage.createTextMessage = function(text, level)
 {
 level = level || WebInspector.ConsoleMessage.MessageLevel.Log;
-return new WebInspector.ConsoleMessage(WebInspector.ConsoleMessage.MessageSource.JS, WebInspector.ConsoleMessage.MessageType.Log, level, 0, null, 1, null, [text], null);
+return new WebInspector.ConsoleMessage(WebInspector.ConsoleMessage.MessageSource.ConsoleAPI, WebInspector.ConsoleMessage.MessageType.Log, level, 0, null, 1, null, [text], null);
 }
 
 WebInspector.ConsoleMessage.prototype = {
 _formatMessage: function()
 {
-var stackTrace = this._stackTrace;
+this._formattedMessage = document.createElement("span");
+this._formattedMessage.className = "console-message-text source-code";
+
 var messageText;
+if (this.source === WebInspector.ConsoleMessage.MessageSource.ConsoleAPI) {
 switch (this.type) {
 case WebInspector.ConsoleMessage.MessageType.Trace:
 messageText = document.createTextNode("console.trace()");
-break;
-case WebInspector.ConsoleMessage.MessageType.UncaughtException:
-messageText = document.createTextNode(this._messageText);
-break;
-case WebInspector.ConsoleMessage.MessageType.NetworkError:
-var resource = this._requestId && WebInspector.networkResourceById(this._requestId);
-if (resource) {
-stackTrace = resource.stackTrace;
-
-messageText = document.createElement("span");
-messageText.appendChild(document.createTextNode(resource.requestMethod + " "));
-messageText.appendChild(WebInspector.linkifyURLAsNode(resource.url));
-if (resource.failed)
-messageText.appendChild(document.createTextNode(" " + resource.localizedFailDescription));
-else
-messageText.appendChild(document.createTextNode(" " + resource.statusCode + " (" + resource.statusText + ")"));
-} else
-messageText = this._format([this._messageText]);
 break;
 case WebInspector.ConsoleMessage.MessageType.Assert:
 var args = [WebInspector.UIString("Assertion failed:")];
@@ -6776,7 +6396,7 @@ if (this._parameters)
 args = args.concat(this._parameters);
 messageText = this._format(args);
 break;
-case WebInspector.ConsoleMessage.MessageType.Object:
+case WebInspector.ConsoleMessage.MessageType.Dir:
 var obj = this._parameters ? this._parameters[0] : undefined;
 var args = ["%O", obj];
 messageText = this._format(args);
@@ -6784,28 +6404,46 @@ break;
 default:
 var args = this._parameters || [this._messageText];
 messageText = this._format(args);
-break;
+}
+} else if (this.source === WebInspector.ConsoleMessage.MessageSource.Network) {
+if (this._request) {
+this._stackTrace = this._request.stackTrace;
+messageText = document.createElement("span");
+messageText.appendChild(document.createTextNode(this._request.requestMethod + " "));
+var anchor = WebInspector.linkifyURLAsNode(this._request.url);
+anchor.setAttribute("request_id", this._request.requestId);
+anchor.setAttribute("preferred_panel", "network");
+messageText.appendChild(anchor);
+if (this._request.failed)
+messageText.appendChild(document.createTextNode(" " + this._request.localizedFailDescription));
+else
+messageText.appendChild(document.createTextNode(" " + this._request.statusCode + " (" + this._request.statusText + ")"));
+} else {
+var isExternal = !WebInspector.resourceForURL(this.url);
+var anchor = WebInspector.linkifyURLAsNode(this.url, this.url, "console-message-url", isExternal);
+this._formattedMessage.appendChild(anchor);
+messageText = this._format([this._messageText]);
+}
+} else {
+var args = this._parameters || [this._messageText];
+messageText = this._format(args);
 }
 
-this._formattedMessage = document.createElement("span");
-this._formattedMessage.className = "console-message-text source-code";
 
+if (this.source !== WebInspector.ConsoleMessage.MessageSource.Network) {
 if (this._stackTrace && this._stackTrace.length && this._stackTrace[0].url) {
-var urlElement = WebInspector.linkifyCallFrameAsNode(this._stackTrace[0], "console-message-url");
+var urlElement = this._linkifyCallFrame(this._stackTrace[0]);
 this._formattedMessage.appendChild(urlElement);
 } else if (this.url && this.url !== "undefined") {
-var urlElement = WebInspector.linkifyResourceAsNode(this.url, "scripts", this.line, "console-message-url");
+var urlElement = this._linkifyLocation(this.url, this.line, 0);
 this._formattedMessage.appendChild(urlElement);
+}
 }
 
 this._formattedMessage.appendChild(messageText);
 
-if (this._stackTrace) {
-switch (this.type) {
-case WebInspector.ConsoleMessage.MessageType.Trace:
-case WebInspector.ConsoleMessage.MessageType.UncaughtException:
-case WebInspector.ConsoleMessage.MessageType.NetworkError:
-case WebInspector.ConsoleMessage.MessageType.Assert: {
+var dumpStackTrace = !!this._stackTrace && (this.level === WebInspector.ConsoleMessage.MessageLevel.Error || this.type === WebInspector.ConsoleMessage.MessageType.Trace);
+if (dumpStackTrace) {
 var ol = document.createElement("ol");
 ol.className = "outline-disclosure";
 var treeOutline = new TreeOutline(ol);
@@ -6820,11 +6458,22 @@ root.expand();
 this._populateStackTraceTreeElement(root);
 this._formattedMessage = ol;
 }
-}
-}
 
 
-this.message = this._formattedMessage.textContent;
+this.message = (urlElement ? urlElement.textContent + " " : "") + messageText.textContent;
+},
+
+_linkifyLocation: function(url, lineNumber, columnNumber)
+{
+
+lineNumber = lineNumber ? lineNumber - 1 : undefined;
+columnNumber = columnNumber ? columnNumber - 1 : 0;
+return WebInspector.debuggerPresentationModel.linkifyLocation(url, lineNumber, columnNumber, "console-message-url");
+},
+
+_linkifyCallFrame: function(callFrame)
+{
+return this._linkifyLocation(callFrame.url, callFrame.lineNumber, callFrame.columnNumber);
 },
 
 isErrorOrWarning: function()
@@ -6842,6 +6491,10 @@ return formattedResult;
 
 
 for (var i = 0; i < parameters.length; ++i) {
+
+if (parameters[i] instanceof WebInspector.RemoteObject)
+continue;
+
 if (typeof parameters[i] === "object")
 parameters[i] = WebInspector.RemoteObject.fromPayload(parameters[i]);
 else
@@ -6866,7 +6519,7 @@ for (var i = 0; i < parameters.length; ++i) {
 if (shouldFormatMessage && parameters[i].type === "string")
 formattedResult.appendChild(document.createTextNode(parameters[i].description));
 else
-formattedResult.appendChild(WebInspector.console._format(parameters[i]));
+formattedResult.appendChild(WebInspector.consoleView._format(parameters[i]));
 if (i < parameters.length - 1)
 formattedResult.appendChild(document.createTextNode(" "));
 }
@@ -6876,20 +6529,27 @@ return formattedResult;
 _formatWithSubstitutionString: function(parameters, formattedResult)
 {
 var formatters = {}
-for (var i in String.standardFormatters)
-formatters[i] = String.standardFormatters[i];
 
 function consoleFormatWrapper(force)
 {
 return function(obj) {
-return WebInspector.console._format(obj, force);
+return WebInspector.consoleView._format(obj, force);
 };
 }
 
+function valueFormatter(obj)
+{
+return obj.description;
+}
 
-formatters.o = consoleFormatWrapper();
 
-formatters.i = formatters.d;
+formatters.o = consoleFormatWrapper(false);
+formatters.s = valueFormatter;
+formatters.f = valueFormatter;
+
+formatters.i = valueFormatter;
+formatters.d = valueFormatter;
+
 
 formatters.O = consoleFormatWrapper(true);
 
@@ -6987,7 +6647,7 @@ messageTextElement.appendChild(document.createTextNode(functionName));
 content.appendChild(messageTextElement);
 
 if (frame.url) {
-var urlElement = WebInspector.linkifyCallFrameAsNode(frame, "console-message-url");
+var urlElement = this._linkifyCallFrame(frame);
 content.appendChild(urlElement);
 }
 
@@ -7020,8 +6680,11 @@ break;
 case WebInspector.ConsoleMessage.MessageSource.JS:
 sourceString = "JS";
 break;
-case WebInspector.ConsoleMessage.MessageSource.CSS:
-sourceString = "CSS";
+case WebInspector.ConsoleMessage.MessageSource.Network:
+sourceString = "Network";
+break;
+case WebInspector.ConsoleMessage.MessageSource.ConsoleAPI:
+sourceString = "ConsoleAPI";
 break;
 case WebInspector.ConsoleMessage.MessageSource.Other:
 sourceString = "Other";
@@ -7031,12 +6694,13 @@ break;
 var typeString;
 switch (this.type) {
 case WebInspector.ConsoleMessage.MessageType.Log:
-case WebInspector.ConsoleMessage.MessageType.UncaughtException:
-case WebInspector.ConsoleMessage.MessageType.NetworkError:
 typeString = "Log";
 break;
-case WebInspector.ConsoleMessage.MessageType.Object:
-typeString = "Object";
+case WebInspector.ConsoleMessage.MessageType.Dir:
+typeString = "Dir";
+break;
+case WebInspector.ConsoleMessage.MessageType.DirXML:
+typeString = "Dir XML";
 break;
 case WebInspector.ConsoleMessage.MessageType.Trace:
 typeString = "Trace";
@@ -7078,6 +6742,11 @@ break;
 return sourceString + " " + typeString + " " + levelString + ": " + this._formattedMessage.textContent + "\n" + this.url + " line " + this.line;
 },
 
+get text()
+{
+return this._messageText;
+},
+
 isEqual: function(msg)
 {
 if (!msg)
@@ -7103,7 +6772,12 @@ return (this.source === msg.source)
 && (this.line === msg.line)
 && (this.url === msg.url)
 && (this.message === msg.message)
-&& (this._requestId === msg._requestId);
+&& (this._request === msg._request);
+},
+
+get stackTrace()
+{
+return this._stackTrace;
 }
 }
 
@@ -7112,20 +6786,20 @@ WebInspector.ConsoleMessage.MessageSource = {
 HTML: "html",
 XML: "xml",
 JS: "javascript",
-CSS: "css",
+Network: "network",
+ConsoleAPI: "console-api",
 Other: "other"
 }
 
 WebInspector.ConsoleMessage.MessageType = {
 Log: "log",
-Object: "other",
+Dir: "dir",
+DirXML: "dirxml",
 Trace: "trace",
 StartGroup: "startGroup",
 StartGroupCollapsed: "startGroupCollapsed",
 EndGroup: "endGroup",
 Assert: "assert",
-UncaughtException: "uncaughtException",
-NetworkError: "networkError",
 Result: "result"
 }
 
@@ -7136,6 +6810,840 @@ Warning: "warning",
 Error: "error",
 Debug: "debug"
 }
+
+
+
+
+
+
+WebInspector.ConsoleModel = function()
+{
+this.messages = [];
+this.warnings = 0;
+this.errors = 0;
+this._interruptRepeatCount = false;
+InspectorBackend.registerConsoleDispatcher(new WebInspector.ConsoleDispatcher(this));
+}
+
+WebInspector.ConsoleModel.Events = {
+ConsoleCleared: "console-cleared",
+MessageAdded: "console-message-added",
+RepeatCountUpdated: "repeat-count-updated"
+}
+
+WebInspector.ConsoleModel.prototype = {
+enableAgent: function()
+{
+if (WebInspector.settings.monitoringXHREnabled.get())
+ConsoleAgent.setMonitoringXHREnabled(true);
+
+
+if (!WebInspector.WorkerManager.isWorkerFrontend())
+ConsoleAgent.enable(this._setConsoleMessageExpiredCount.bind(this));
+},
+
+_setConsoleMessageExpiredCount: function(count)
+{
+if (count) {
+var message = String.sprintf(WebInspector.UIString("%d console messages are not shown."), count);
+this.addMessage(WebInspector.ConsoleMessage.createTextMessage(message, WebInspector.ConsoleMessage.MessageLevel.Warning));
+}
+},
+
+addMessage: function(msg)
+{
+this.messages.push(msg);
+this._previousMessage = msg;
+this._incrementErrorWarningCount(msg);
+this.dispatchEventToListeners(WebInspector.ConsoleModel.Events.MessageAdded, msg);
+this._interruptRepeatCount = false;
+},
+
+_incrementErrorWarningCount: function(msg)
+{
+switch (msg.level) {
+case WebInspector.ConsoleMessage.MessageLevel.Warning:
+this.warnings += msg.repeatDelta;
+break;
+case WebInspector.ConsoleMessage.MessageLevel.Error:
+this.errors += msg.repeatDelta;
+break;
+}
+},
+
+requestClearMessages: function()
+{
+ConsoleAgent.clearMessages();
+this.clearMessages();
+},
+
+clearMessages: function()
+{
+this.messages = [];
+
+this.errors = 0;
+this.warnings = 0;
+
+this.dispatchEventToListeners(WebInspector.ConsoleModel.Events.ConsoleCleared);
+},
+
+interruptRepeatCount: function()
+{
+this._interruptRepeatCount = true;
+},
+
+_messageRepeatCountUpdated: function(count)
+{
+var msg = this._previousMessage;
+if (!msg)
+return;
+
+var prevRepeatCount = msg.totalRepeatCount;
+
+if (!this._interruptRepeatCount) {
+msg.repeatDelta = count - prevRepeatCount;
+msg.repeatCount = msg.repeatCount + msg.repeatDelta;
+msg.totalRepeatCount = count;
+msg._updateRepeatCount();
+
+this._incrementErrorWarningCount(msg);
+this.dispatchEventToListeners(WebInspector.ConsoleModel.Events.RepeatCountUpdated, msg);
+} else {
+var msgCopy = new WebInspector.ConsoleMessage(msg.source, msg.type, msg.level, msg.line, msg.url, count - prevRepeatCount, msg._messageText, msg._parameters, msg._stackTrace, msg._request);
+msgCopy.totalRepeatCount = count;
+msgCopy._formatMessage();
+this.addMessage(msgCopy);
+}
+}
+}
+
+WebInspector.ConsoleModel.prototype.__proto__ = WebInspector.Object.prototype;
+
+
+WebInspector.ConsoleDispatcher = function(console)
+{
+this._console = console;
+}
+
+WebInspector.ConsoleDispatcher.prototype = {
+messageAdded: function(payload)
+{
+var consoleMessage = new WebInspector.ConsoleMessage(
+payload.source,
+payload.type,
+payload.level,
+payload.line,
+payload.url,
+payload.repeatCount,
+payload.text,
+payload.parameters,
+payload.stackTrace,
+payload.networkRequestId ? WebInspector.networkResourceById(payload.networkRequestId) : undefined);
+this._console.addMessage(consoleMessage);
+},
+
+messageRepeatCountUpdated: function(count)
+{
+this._console._messageRepeatCountUpdated(count);
+},
+
+messagesCleared: function()
+{
+if (!WebInspector.settings.preserveConsoleLog.get())
+this._console.clearMessages();
+}
+}
+
+
+WebInspector.console = null;
+
+
+
+
+
+const ExpressionStopCharacters = " =:[({;,!+-*/&|^<>";
+
+WebInspector.ConsoleView = function()
+{
+WebInspector.View.call(this);
+this.element.id = "console-view";
+
+this.messages = [];
+
+this._clearConsoleButton = new WebInspector.StatusBarButton(WebInspector.UIString("Clear console log."), "clear-status-bar-item");
+this._clearConsoleButton.addEventListener("click", this._requestClearMessages.bind(this), false);
+
+this._contextSelectElement = document.createElement("select");
+this._contextSelectElement.id = "console-context";
+this._contextSelectElement.className = "status-bar-item";
+
+if (WebInspector.WorkerManager.isWorkerFrontend())
+this._contextSelectElement.addStyleClass("hidden");
+
+this.messagesElement = document.createElement("div");
+this.messagesElement.id = "console-messages";
+this.messagesElement.className = "monospace";
+this.messagesElement.addEventListener("click", this._messagesClicked.bind(this), true);
+this.element.appendChild(this.messagesElement);
+
+this.promptElement = document.createElement("div");
+this.promptElement.id = "console-prompt";
+this.promptElement.className = "source-code";
+this.promptElement.spellcheck = false;
+this.promptElement.addEventListener("keydown", this._promptKeyDown.bind(this), true);
+this.messagesElement.appendChild(this.promptElement);
+this.messagesElement.appendChild(document.createElement("br"));
+
+this.prompt = new WebInspector.TextPrompt(this.promptElement, this.completions.bind(this), ExpressionStopCharacters + ".");
+this.prompt.history = WebInspector.settings.consoleHistory.get();
+
+this.topGroup = new WebInspector.ConsoleGroup(null);
+this.messagesElement.insertBefore(this.topGroup.element, this.promptElement);
+this.currentGroup = this.topGroup;
+
+this._filterBarElement = document.createElement("div");
+this._filterBarElement.id = "console-filter";
+this._filterBarElement.className = "scope-bar status-bar-item";
+
+function createDividerElement() {
+var dividerElement = document.createElement("div");
+dividerElement.addStyleClass("scope-bar-divider");
+this._filterBarElement.appendChild(dividerElement);
+}
+
+var updateFilterHandler = this._updateFilter.bind(this);
+function createFilterElement(category, label) {
+var categoryElement = document.createElement("li");
+categoryElement.category = category;
+categoryElement.className = category;
+categoryElement.addEventListener("click", updateFilterHandler, false);
+categoryElement.textContent = label;
+
+this._filterBarElement.appendChild(categoryElement);
+
+return categoryElement;
+}
+
+this.allElement = createFilterElement.call(this, "all", WebInspector.UIString("All"));
+createDividerElement.call(this);
+this.errorElement = createFilterElement.call(this, "errors", WebInspector.UIString("Errors"));
+this.warningElement = createFilterElement.call(this, "warnings", WebInspector.UIString("Warnings"));
+this.logElement = createFilterElement.call(this, "logs", WebInspector.UIString("Logs"));
+
+this.filter(this.allElement, false);
+this._registerShortcuts();
+
+this.messagesElement.addEventListener("contextmenu", this._handleContextMenuEvent.bind(this), false);
+
+this._customFormatters = {
+"object": this._formatobject,
+"array":  this._formatarray,
+"node":   this._formatnode,
+"string": this._formatstring
+};
+
+WebInspector.settings.monitoringXHREnabled.addChangeListener(this._monitoringXHREnabledSettingChanged.bind(this));
+
+WebInspector.console.addEventListener(WebInspector.ConsoleModel.Events.MessageAdded, this._consoleMessageAdded, this);
+WebInspector.console.addEventListener(WebInspector.ConsoleModel.Events.ConsoleCleared, this._consoleCleared, this);
+}
+
+WebInspector.ConsoleView.Events = {
+ConsoleCleared: "console-cleared",
+EntryAdded: "console-entry-added",
+}
+
+WebInspector.ConsoleView.prototype = {
+get statusBarItems()
+{
+return [this._clearConsoleButton.element, this._contextSelectElement, this._filterBarElement];
+},
+
+addContext: function(context)
+{
+var option = document.createElement("option");
+option.text = context.displayName;
+option.title = context.url;
+option._context = context;
+context._consoleOption = option;
+this._contextSelectElement.appendChild(option);
+context.addEventListener(WebInspector.FrameEvaluationContext.EventTypes.Updated, this._contextUpdated, this);
+},
+
+removeContext: function(context)
+{
+this._contextSelectElement.removeChild(context._consoleOption);
+},
+
+_contextUpdated: function(event)
+{
+var context = event.data;
+var option= context._consoleOption;
+option.text = context.displayName;
+option.title = context.url;
+},
+
+_currentEvaluationContextId: function()
+{
+if (this._contextSelectElement.selectedIndex === -1)
+return undefined;
+return this._contextSelectElement[this._contextSelectElement.selectedIndex]._context.frameId;
+},
+
+_updateFilter: function(e)
+{
+var isMac = WebInspector.isMac();
+var selectMultiple = false;
+if (isMac && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey)
+selectMultiple = true;
+if (!isMac && e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey)
+selectMultiple = true;
+
+this.filter(e.target, selectMultiple);
+},
+
+filter: function(target, selectMultiple)
+{
+function unselectAll()
+{
+this.allElement.removeStyleClass("selected");
+this.errorElement.removeStyleClass("selected");
+this.warningElement.removeStyleClass("selected");
+this.logElement.removeStyleClass("selected");
+
+this.messagesElement.removeStyleClass("filter-all");
+this.messagesElement.removeStyleClass("filter-errors");
+this.messagesElement.removeStyleClass("filter-warnings");
+this.messagesElement.removeStyleClass("filter-logs");
+}
+
+var targetFilterClass = "filter-" + target.category;
+
+if (target.category === "all") {
+if (target.hasStyleClass("selected")) {
+
+return;
+}
+
+unselectAll.call(this);
+} else {
+
+if (this.allElement.hasStyleClass("selected")) {
+this.allElement.removeStyleClass("selected");
+this.messagesElement.removeStyleClass("filter-all");
+}
+}
+
+if (!selectMultiple) {
+
+
+unselectAll.call(this);
+
+target.addStyleClass("selected");
+this.messagesElement.addStyleClass(targetFilterClass);
+
+return;
+}
+
+if (target.hasStyleClass("selected")) {
+
+
+target.removeStyleClass("selected");
+this.messagesElement.removeStyleClass(targetFilterClass);
+} else {
+
+
+target.addStyleClass("selected");
+this.messagesElement.addStyleClass(targetFilterClass);
+}
+},
+
+wasShown: function()
+{
+if (!this.prompt.isCaretInsidePrompt())
+this.prompt.moveCaretToEndOfPrompt();
+},
+
+afterShow: function()
+{
+WebInspector.currentFocusElement = this.promptElement;
+},
+
+_isScrollIntoViewScheduled: function()
+{
+return !!this._scrollIntoViewTimer;
+},
+
+_scheduleScrollIntoView: function()
+{
+if (this._scrollIntoViewTimer)
+return;
+
+function scrollIntoView()
+{
+this.promptElement.scrollIntoView(true);
+delete this._scrollIntoViewTimer;
+}
+this._scrollIntoViewTimer = setTimeout(scrollIntoView.bind(this), 20);
+},
+
+_consoleMessageAdded: function(event)
+{
+this._appendConsoleMessage(event.data);
+},
+
+_appendConsoleMessage: function(msg)
+{
+
+
+if (!this._isScrollIntoViewScheduled() && ((msg instanceof WebInspector.ConsoleCommandResult) || this.messagesElement.isScrolledToBottom()))
+this._scheduleScrollIntoView();
+
+this.messages.push(msg);
+
+if (msg.type === WebInspector.ConsoleMessage.MessageType.EndGroup) {
+var parentGroup = this.currentGroup.parentGroup
+if (parentGroup)
+this.currentGroup = parentGroup;
+} else {
+if (msg.type === WebInspector.ConsoleMessage.MessageType.StartGroup || msg.type === WebInspector.ConsoleMessage.MessageType.StartGroupCollapsed) {
+var group = new WebInspector.ConsoleGroup(this.currentGroup);
+this.currentGroup.messagesElement.appendChild(group.element);
+this.currentGroup = group;
+}
+
+this.currentGroup.addMessage(msg);
+}
+
+this.dispatchEventToListeners(WebInspector.ConsoleView.Events.EntryAdded, msg);
+},
+
+_consoleCleared: function()
+{
+this.messages = [];
+
+this.currentGroup = this.topGroup;
+this.topGroup.messagesElement.removeChildren();
+
+delete this.commandSincePreviousMessage;
+delete this.previousMessage;
+
+this.dispatchEventToListeners(WebInspector.ConsoleView.Events.ConsoleCleared);
+},
+
+completions: function(wordRange, bestMatchOnly, completionsReadyCallback)
+{
+
+var expressionRange = wordRange.startContainer.rangeOfWord(wordRange.startOffset, ExpressionStopCharacters, this.promptElement, "backward");
+var expressionString = expressionRange.toString();
+var prefix = wordRange.toString();
+this._completions(expressionString, prefix, bestMatchOnly, completionsReadyCallback);
+},
+
+_completions: function(expressionString, prefix, bestMatchOnly, completionsReadyCallback)
+{
+var lastIndex = expressionString.length - 1;
+
+var dotNotation = (expressionString[lastIndex] === ".");
+var bracketNotation = (expressionString[lastIndex] === "[");
+
+if (dotNotation || bracketNotation)
+expressionString = expressionString.substr(0, lastIndex);
+
+if (!expressionString && !prefix) {
+completionsReadyCallback([]);
+return;
+}
+
+if (parseInt(expressionString) == expressionString) {
+
+completionsReadyCallback([]);
+return;
+}
+
+if (!expressionString && WebInspector.panels.scripts.paused)
+WebInspector.panels.scripts.getSelectedCallFrameVariables(receivedPropertyNames.bind(this));
+else
+this.evalInInspectedWindow(expressionString, "completion", true, true, undefined, evaluated.bind(this));
+
+function evaluated(result, wasThrown)
+{
+if (!result || wasThrown) {
+completionsReadyCallback([]);
+return;
+}
+
+function getCompletions(primitiveType)
+{
+var object;
+if (primitiveType === "string")
+object = new String();
+else if (primitiveType === "number")
+object = new Number();
+else if (primitiveType === "boolean")
+object = new Boolean();
+else
+object = this;
+
+var resultSet = {};
+for (var o = object; o; o = o.__proto__) {
+try {
+var names = Object.getOwnPropertyNames(o);
+for (var i = 0; i < names.length; ++i)
+resultSet[names[i]] = true;
+} catch (e) {
+}
+}
+return resultSet;
+}
+
+if (result.type === "object" || result.type === "function")
+result.callFunctionJSON(getCompletions, receivedPropertyNames.bind(this));
+else if (result.type === "string" || result.type === "number" || result.type === "boolean")
+this.evalInInspectedWindow("(" + getCompletions + ")(\"" + result.type + "\")", "completion", undefined, true, true, receivedPropertyNamesFromEval.bind(this));
+}
+
+function receivedPropertyNamesFromEval(result, wasThrown)
+{
+if (result && !wasThrown)
+receivedPropertyNames.call(this, result.value);
+else
+completionsReadyCallback([]);
+}
+
+function receivedPropertyNames(propertyNames)
+{
+RuntimeAgent.releaseObjectGroup("completion");
+if (!propertyNames) {
+completionsReadyCallback([]);
+return;
+}
+var includeCommandLineAPI = (!dotNotation && !bracketNotation);
+if (includeCommandLineAPI) {
+const commandLineAPI = ["dir", "dirxml", "keys", "values", "profile", "profileEnd", "monitorEvents", "unmonitorEvents", "inspect", "copy", "clear"];
+for (var i = 0; i < commandLineAPI.length; ++i)
+propertyNames[commandLineAPI[i]] = true;
+}
+this._reportCompletions(bestMatchOnly, completionsReadyCallback, dotNotation, bracketNotation, prefix, Object.keys(propertyNames));
+}
+},
+
+_reportCompletions: function(bestMatchOnly, completionsReadyCallback, dotNotation, bracketNotation, prefix, properties) {
+if (bracketNotation) {
+if (prefix.length && prefix[0] === "'")
+var quoteUsed = "'";
+else
+var quoteUsed = "\"";
+}
+
+var results = [];
+properties.sort();
+
+for (var i = 0; i < properties.length; ++i) {
+var property = properties[i];
+
+if (dotNotation && !/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(property))
+continue;
+
+if (bracketNotation) {
+if (!/^[0-9]+$/.test(property))
+property = quoteUsed + property.escapeCharacters(quoteUsed + "\\") + quoteUsed;
+property += "]";
+}
+
+if (property.length < prefix.length)
+continue;
+if (property.indexOf(prefix) !== 0)
+continue;
+
+results.push(property);
+if (bestMatchOnly)
+break;
+}
+completionsReadyCallback(results);
+},
+
+_handleContextMenuEvent: function(event)
+{
+if (!window.getSelection().isCollapsed) {
+
+
+return;
+}
+
+var contextMenu = new WebInspector.ContextMenu();
+
+if (WebInspector.populateHrefContextMenu(contextMenu, null, event))
+contextMenu.appendSeparator();
+
+function monitoringXHRItemAction()
+{
+WebInspector.settings.monitoringXHREnabled.set(!WebInspector.settings.monitoringXHREnabled.get());
+}
+contextMenu.appendCheckboxItem(WebInspector.UIString("Log XMLHttpRequests"), monitoringXHRItemAction.bind(this), WebInspector.settings.monitoringXHREnabled.get());
+
+function preserveLogItemAction()
+{
+WebInspector.settings.preserveConsoleLog.set(!WebInspector.settings.preserveConsoleLog.get());
+}
+contextMenu.appendCheckboxItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Preserve log upon navigation" : "Preserve Log upon Navigation"), preserveLogItemAction.bind(this), WebInspector.settings.preserveConsoleLog.get());
+
+contextMenu.appendSeparator();
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Clear console" : "Clear Console"), this._requestClearMessages.bind(this));
+contextMenu.show(event);
+},
+
+_monitoringXHREnabledSettingChanged: function(event)
+{
+ConsoleAgent.setMonitoringXHREnabled(event.data);
+},
+
+_messagesClicked: function(event)
+{
+var link = event.target.enclosingNodeOrSelfWithNodeName("a");
+if (!link || !link.representedNode) {
+if (!this.prompt.isCaretInsidePrompt() && window.getSelection().isCollapsed)
+this.prompt.moveCaretToEndOfPrompt();
+return;
+}
+
+WebInspector.updateFocusedNode(link.representedNode.id);
+event.stopPropagation();
+event.preventDefault();
+},
+
+_registerShortcuts: function()
+{
+this._shortcuts = {};
+
+var shortcut = WebInspector.KeyboardShortcut;
+
+if (WebInspector.isMac()) {
+var shortcutK = shortcut.makeDescriptor("k", WebInspector.KeyboardShortcut.Modifiers.Meta);
+this._shortcuts[shortcutK.key] = this._requestClearMessages.bind(this);
+}
+
+var shortcutL = shortcut.makeDescriptor("l", WebInspector.KeyboardShortcut.Modifiers.Ctrl);
+this._shortcuts[shortcutL.key] = this._requestClearMessages.bind(this);
+
+var section = WebInspector.shortcutsScreen.section(WebInspector.UIString("Console"));
+var keys = WebInspector.isMac() ? [ shortcutK.name, shortcutL.name ] : [ shortcutL.name ];
+section.addAlternateKeys(keys, WebInspector.UIString("Clear Console"));
+
+keys = [
+shortcut.shortcutToString(shortcut.Keys.Tab),
+shortcut.shortcutToString(shortcut.Keys.Tab, shortcut.Modifiers.Shift)
+];
+section.addRelatedKeys(keys, WebInspector.UIString("Next/previous suggestion"));
+section.addKey(shortcut.shortcutToString(shortcut.Keys.Right), WebInspector.UIString("Accept suggestion"));
+keys = [
+shortcut.shortcutToString(shortcut.Keys.Down),
+shortcut.shortcutToString(shortcut.Keys.Up)
+];
+section.addRelatedKeys(keys, WebInspector.UIString("Next/previous line"));
+keys = [
+shortcut.shortcutToString("N", shortcut.Modifiers.Alt),
+shortcut.shortcutToString("P", shortcut.Modifiers.Alt)
+];
+if (WebInspector.isMac())
+section.addRelatedKeys(keys, WebInspector.UIString("Next/previous command"));
+section.addKey(shortcut.shortcutToString(shortcut.Keys.Enter), WebInspector.UIString("Execute command"));
+},
+
+_requestClearMessages: function()
+{
+WebInspector.console.requestClearMessages();
+},
+
+_promptKeyDown: function(event)
+{
+if (isEnterKey(event)) {
+this._enterKeyPressed(event);
+return;
+}
+
+var shortcut = WebInspector.KeyboardShortcut.makeKeyFromEvent(event);
+var handler = this._shortcuts[shortcut];
+if (handler) {
+handler();
+event.preventDefault();
+return;
+}
+},
+
+evalInInspectedWindow: function(expression, objectGroup, includeCommandLineAPI, doNotPauseOnExceptions, returnByValue, callback)
+{
+if (WebInspector.panels.scripts && WebInspector.panels.scripts.paused) {
+WebInspector.panels.scripts.evaluateInSelectedCallFrame(expression, objectGroup, includeCommandLineAPI, returnByValue, callback);
+return;
+}
+
+if (!expression) {
+
+expression = "this";
+}
+
+function evalCallback(error, result, wasThrown)
+{
+if (error) {
+console.error(error);
+callback(null);
+return;
+}
+
+if (returnByValue && !wasThrown)
+callback(result, wasThrown);
+else
+callback(WebInspector.RemoteObject.fromPayload(result), wasThrown);
+}
+RuntimeAgent.evaluate(expression, objectGroup, includeCommandLineAPI, doNotPauseOnExceptions, this._currentEvaluationContextId(), returnByValue, evalCallback);
+},
+
+_enterKeyPressed: function(event)
+{
+if (event.altKey || event.ctrlKey || event.shiftKey)
+return;
+
+event.preventDefault();
+event.stopPropagation();
+
+this.prompt.clearAutoComplete(true);
+
+var str = this.prompt.text;
+if (!str.length)
+return;
+
+var commandMessage = new WebInspector.ConsoleCommand(str);
+WebInspector.console.interruptRepeatCount();
+this._appendConsoleMessage(commandMessage);
+
+function printResult(result, wasThrown)
+{
+if (!result)
+return;
+
+this.prompt.history.push(str);
+this.prompt.historyOffset = 0;
+this.prompt.text = "";
+
+WebInspector.settings.consoleHistory.set(this.prompt.history.slice(-30));
+
+this._appendConsoleMessage(new WebInspector.ConsoleCommandResult(result, wasThrown, commandMessage));
+}
+this.evalInInspectedWindow(str, "console", true, undefined, undefined, printResult.bind(this));
+
+WebInspector.userMetrics.ConsoleEvaluated.record();
+},
+
+_format: function(output, forceObjectFormat)
+{
+var type;
+if (forceObjectFormat)
+type = "object";
+else if (output instanceof WebInspector.RemoteObject)
+type = output.subtype || output.type;
+else
+type = typeof output;
+
+var formatter = this._customFormatters[type];
+if (!formatter) {
+formatter = this._formatvalue;
+output = output.description;
+}
+
+var span = document.createElement("span");
+span.className = "console-formatted-" + type + " source-code";
+formatter.call(this, output, span);
+return span;
+},
+
+_formatvalue: function(val, elem)
+{
+elem.appendChild(document.createTextNode(val));
+},
+
+_formatobject: function(obj, elem)
+{
+elem.appendChild(new WebInspector.ObjectPropertiesSection(obj, obj.description).element);
+},
+
+_formatnode: function(object, elem)
+{
+function printNode(nodeId)
+{
+if (!nodeId) {
+
+
+this._formatobject(object, elem);
+return;
+}
+var treeOutline = new WebInspector.ElementsTreeOutline();
+treeOutline.showInElementsPanelEnabled = true;
+treeOutline.rootDOMNode = WebInspector.domAgent.nodeForId(nodeId);
+treeOutline.element.addStyleClass("outline-disclosure");
+if (!treeOutline.children[0].hasChildren)
+treeOutline.element.addStyleClass("single-node");
+elem.appendChild(treeOutline.element);
+}
+object.pushNodeToFrontend(printNode.bind(this));
+},
+
+_formatarray: function(arr, elem)
+{
+arr.getOwnProperties(this._printArray.bind(this, elem));
+},
+
+_formatstring: function(output, elem)
+{
+var span = document.createElement("span");
+span.className = "console-formatted-string source-code";
+span.appendChild(WebInspector.linkifyStringAsFragment(output.description));
+
+
+elem.removeStyleClass("console-formatted-string");
+elem.appendChild(document.createTextNode("\""));
+elem.appendChild(span);
+elem.appendChild(document.createTextNode("\""));
+},
+
+_printArray: function(elem, properties)
+{
+if (!properties)
+return;
+
+var elements = [];
+for (var i = 0; i < properties.length; ++i) {
+var name = properties[i].name;
+if (name == parseInt(name))
+elements[name] = this._formatAsArrayEntry(properties[i].value);
+}
+
+elem.appendChild(document.createTextNode("["));
+for (var i = 0; i < elements.length; ++i) {
+var element = elements[i];
+if (element)
+elem.appendChild(element);
+else
+elem.appendChild(document.createTextNode("undefined"))
+if (i < elements.length - 1)
+elem.appendChild(document.createTextNode(", "));
+}
+elem.appendChild(document.createTextNode("]"));
+},
+
+_formatAsArrayEntry: function(output)
+{
+
+return this._format(output, output.subtype && output.subtype === "array");
+},
+
+elementsToRestoreScrollPositionsFor: function()
+{
+return [this.messagesElement];
+}
+}
+
+WebInspector.ConsoleView.prototype.__proto__ = WebInspector.View.prototype;
 
 WebInspector.ConsoleCommand = function(command)
 {
@@ -7271,7 +7779,6 @@ event.preventDefault();
 
 
 
-
 WebInspector.Panel = function(name)
 {
 WebInspector.View.call(this);
@@ -7282,7 +7789,7 @@ this._panelName = name;
 
 this._shortcuts = {};
 
-WebInspector.settings.installApplicationSetting(this._sidebarWidthSettingName(), undefined);
+WebInspector.settings[this._sidebarWidthSettingName()] = WebInspector.settings.createSetting(this._sidebarWidthSettingName(), undefined);
 }
 
 
@@ -7321,13 +7828,11 @@ this._toolbarItem.addStyleClass("toggled-on");
 WebInspector.currentFocusElement = this.defaultFocusedElement;
 
 this.restoreSidebarWidth();
-this._restoreScrollPositions();
 WebInspector.extensionServer.notifyPanelShown(this.name);
 },
 
 hide: function()
 {
-this._storeScrollPositions();
 WebInspector.View.prototype.hide.call(this);
 
 if (this._statusBarItemContainer && this._statusBarItemContainer.parentNode)
@@ -7341,7 +7846,6 @@ WebInspector.extensionServer.notifyPanelHidden(this.name);
 reset: function()
 {
 this.searchCanceled();
-WebInspector.resetFocusElement();
 },
 
 get defaultFocusedElement()
@@ -7447,9 +7951,6 @@ clearInterval(chunkIntervalIdentifier);
 
 if (!view)
 return;
-
-if (view.element.parentNode !== parentElement && view.element.parentNode && parentElement)
-view.detach();
 
 view.currentQuery = query;
 view.performSearch(query, boundFinishedCallback);
@@ -7595,12 +8096,15 @@ this._currentSidebarWidth = this.sidebarElement.offsetWidth;
 if (typeof width === "undefined")
 width = this._currentSidebarWidth;
 
-width = Number.constrain(width, Preferences.minSidebarWidth, window.innerWidth / 2);
+var maxWidth = window.innerWidth / 2;
+if (!maxWidth)
+maxWidth = width;
+width = Number.constrain(width, Preferences.minSidebarWidth, maxWidth);
 
 this._currentSidebarWidth = width;
 this.setSidebarWidth(width);
-
 this.updateMainViewWidth(width);
+this.doResize();
 },
 
 setSidebarWidth: function(width)
@@ -7609,47 +8113,26 @@ this.sidebarElement.style.width = width + "px";
 this.sidebarResizeElement.style.left = (width - 3) + "px";
 },
 
+preferredSidebarWidth: function()
+{
+return WebInspector.settings[this._sidebarWidthSettingName()].get();
+},
+
 restoreSidebarWidth: function()
 {
-var sidebarWidth = WebInspector.settings[this._sidebarWidthSettingName()];
-this.updateSidebarWidth(sidebarWidth);
+this.updateSidebarWidth(this.preferredSidebarWidth());
 },
 
 saveSidebarWidth: function()
 {
 if (!this.sidebarElement)
 return;
-WebInspector.settings[this._sidebarWidthSettingName()] = this.sidebarElement.offsetWidth;
+WebInspector.settings[this._sidebarWidthSettingName()].set(this.sidebarElement.offsetWidth);
 },
 
 updateMainViewWidth: function(width)
 {
 
-},
-
-resize: function()
-{
-var visibleView = this.visibleView;
-if (visibleView && "resize" in visibleView)
-visibleView.resize();
-},
-
-createAnchor: function(url, lineNumber, columnNumber, classes, tooltipText)
-{
-var linkText = this.formatAnchorText(url, lineNumber);
-var anchor = WebInspector.linkifyURLAsNode(url, linkText, classes, false, tooltipText);
-anchor.setAttribute("preferred_panel", "resources");
-if (lineNumber !== undefined)
-anchor.setAttribute("line_number", lineNumber);
-return anchor;
-},
-
-formatAnchorText: function(url, lineNumber)
-{
-var text = WebInspector.displayNameForURL(url);
-if (lineNumber !== undefined)
-text += ":" + (lineNumber + 1);
-return text;
 },
 
 canShowAnchorLocation: function(anchor)
@@ -7665,25 +8148,6 @@ return false;
 elementsToRestoreScrollPositionsFor: function()
 {
 return [];
-},
-
-_storeScrollPositions: function()
-{
-var elements = this.elementsToRestoreScrollPositionsFor();
-for (var i = 0; i < elements.length; ++i) {
-var container = elements[i];
-container._scrollTop = container.scrollTop;
-}
-},
-
-_restoreScrollPositions: function()
-{
-var elements = this.elementsToRestoreScrollPositionsFor();
-for (var i = 0; i < elements.length; ++i) {
-var container = elements[i];
-if (container._scrollTop)
-container.scrollTop = container._scrollTop;
-}
 },
 
 handleShortcut: function(event)
@@ -7876,9 +8340,50 @@ this._dividersLabelBarElement.style.top = dividersTop + "px";
 
 
 
-WebInspector.Resource = function(identifier, url, loaderId)
+
+
+
+
+
+
+WebInspector.MIMETypes = {
+"text/html":                   {0: true},
+"text/xml":                    {0: true},
+"text/plain":                  {0: true},
+"application/xhtml+xml":       {0: true},
+"text/css":                    {1: true},
+"text/xsl":                    {1: true},
+"image/jpeg":                  {2: true},
+"image/png":                   {2: true},
+"image/gif":                   {2: true},
+"image/bmp":                   {2: true},
+"image/svg+xml":               {2: true},
+"image/vnd.microsoft.icon":    {2: true},
+"image/x-icon":                {2: true},
+"image/x-xbitmap":             {2: true},
+"font/ttf":                    {3: true},
+"font/opentype":               {3: true},
+"application/x-font-type1":    {3: true},
+"application/x-font-ttf":      {3: true},
+"application/x-font-woff":     {3: true},
+"application/x-truetype-font": {3: true},
+"text/javascript":             {4: true},
+"text/ecmascript":             {4: true},
+"application/javascript":      {4: true},
+"application/ecmascript":      {4: true},
+"application/x-javascript":    {4: true},
+"application/json":            {4: true},
+"text/javascript1.1":          {4: true},
+"text/javascript1.2":          {4: true},
+"text/javascript1.3":          {4: true},
+"text/jscript":                {4: true},
+"text/livescript":             {4: true},
+}
+
+
+WebInspector.Resource = function(requestId, url, loaderId)
 {
-this.identifier = identifier;
+this.requestId = requestId;
 this.url = url;
 this.loaderId = loaderId;
 this._startTime = -1;
@@ -7886,6 +8391,11 @@ this._endTime = -1;
 this._category = WebInspector.resourceCategories.other;
 this._pendingContentCallbacks = [];
 this.history = [];
+
+this.statusCode = 0;
+this.requestMethod = "";
+this.requestTime = 0;
+this.receiveHeadersEnd = 0;
 }
 
 
@@ -7901,27 +8411,27 @@ Other:      8,
 
 isTextType: function(type)
 {
-return (type === this.Document) || (type === this.Stylesheet) || (type === this.Script) || (type === this.XHR);
+return (type === WebInspector.Resource.Type.Document) || (type === WebInspector.Resource.Type.Stylesheet) || (type === WebInspector.Resource.Type.Script) || (type === WebInspector.Resource.Type.XHR);
 },
 
 toUIString: function(type)
 {
 switch (type) {
-case this.Document:
+case WebInspector.Resource.Type.Document:
 return WebInspector.UIString("Document");
-case this.Stylesheet:
+case WebInspector.Resource.Type.Stylesheet:
 return WebInspector.UIString("Stylesheet");
-case this.Image:
+case WebInspector.Resource.Type.Image:
 return WebInspector.UIString("Image");
-case this.Font:
+case WebInspector.Resource.Type.Font:
 return WebInspector.UIString("Font");
-case this.Script:
+case WebInspector.Resource.Type.Script:
 return WebInspector.UIString("Script");
-case this.XHR:
+case WebInspector.Resource.Type.XHR:
 return WebInspector.UIString("XHR");
-case this.WebSocket:
+case WebInspector.Resource.Type.WebSocket:
 return WebInspector.UIString("WebSocket");
-case this.Other:
+case WebInspector.Resource.Type.Other:
 default:
 return WebInspector.UIString("Other");
 }
@@ -7932,21 +8442,21 @@ return WebInspector.UIString("Other");
 toString: function(type)
 {
 switch (type) {
-case this.Document:
+case WebInspector.Resource.Type.Document:
 return "document";
-case this.Stylesheet:
+case WebInspector.Resource.Type.Stylesheet:
 return "stylesheet";
-case this.Image:
+case WebInspector.Resource.Type.Image:
 return "image";
-case this.Font:
+case WebInspector.Resource.Type.Font:
 return "font";
-case this.Script:
+case WebInspector.Resource.Type.Script:
 return "script";
-case this.XHR:
+case WebInspector.Resource.Type.XHR:
 return "xhr";
-case this.WebSocket:
+case WebInspector.Resource.Type.WebSocket:
 return "websocket";
-case this.Other:
+case WebInspector.Resource.Type.Other:
 default:
 return "other";
 }
@@ -8037,7 +8547,9 @@ setTimeout(persist, 0);
 }
 
 WebInspector.Resource.Events = {
-RevisionAdded: 0
+RevisionAdded: "revision-added",
+MessageAdded: "message-added",
+MessagesCleared: "messages-cleared"
 }
 
 WebInspector.Resource.prototype = {
@@ -8096,6 +8608,16 @@ this._displayName = this.url.trimURL(WebInspector.mainResource ? WebInspector.ma
 if (this._displayName === "/")
 this._displayName = this.url;
 return this._displayName;
+},
+
+get folder()
+{
+var path = this.path;
+var indexOfQuery = path.indexOf("?");
+if (indexOfQuery !== -1)
+path = path.substring(0, indexOfQuery);
+var lastSlashIndex = path.lastIndexOf("/");
+return lastSlashIndex !== -1 ? path.substring(0, lastSlashIndex) : "";
 },
 
 get displayDomain()
@@ -8215,7 +8737,6 @@ return;
 this._finished = x;
 
 if (x) {
-this._checkWarnings();
 this.dispatchEventToListeners("finished");
 if (this._pendingContentCallbacks.length)
 this._innerRequestContent();
@@ -8331,6 +8852,18 @@ default:
 this.category = WebInspector.resourceCategories.other;
 break;
 }
+},
+
+get redirectSource()
+{
+if (this.redirects && this.redirects.length > 0)
+return this.redirects[this.redirects.length - 1];
+return this._redirectSource;
+},
+
+set redirectSource(x)
+{
+this._redirectSource = x;
 },
 
 get requestHeaders()
@@ -8537,13 +9070,13 @@ return this._messages || [];
 
 addMessage: function(msg)
 {
-if (!msg.isErrorOrWarning() || !msg.message) 
+if (!msg.isErrorOrWarning() || !msg.message)
 return;
 
 if (!this._messages)
 this._messages = [];
 this._messages.push(msg);
-this.dispatchEventToListeners("errors-warnings-message-added", msg);
+this.dispatchEventToListeners(WebInspector.Resource.Events.MessageAdded, msg);
 },
 
 get errors()
@@ -8571,61 +9104,7 @@ clearErrorsAndWarnings: function()
 this._messages = [];
 this._warnings = 0;
 this._errors = 0;
-this.dispatchEventToListeners("errors-warnings-cleared");
-},
-
-_mimeTypeIsConsistentWithType: function()
-{
-
-
-
-
-
-
-if (this.hasErrorStatusCode() || this.statusCode === 304)
-return true;
-
-if (typeof this.type === "undefined"
-|| this.type === WebInspector.Resource.Type.Other
-|| this.type === WebInspector.Resource.Type.XHR
-|| this.type === WebInspector.Resource.Type.WebSocket)
-return true;
-
-if (!this.mimeType)
-return true; 
-
-if (this.mimeType in WebInspector.MIMETypes)
-return this.type in WebInspector.MIMETypes[this.mimeType];
-
-return false;
-},
-
-_checkWarnings: function()
-{
-for (var warning in WebInspector.Warnings)
-this._checkWarning(WebInspector.Warnings[warning]);
-},
-
-_checkWarning: function(warning)
-{
-var msg;
-switch (warning.id) {
-case WebInspector.Warnings.IncorrectMIMEType.id:
-if (!this._mimeTypeIsConsistentWithType())
-msg = new WebInspector.ConsoleMessage(WebInspector.ConsoleMessage.MessageSource.Other,
-WebInspector.ConsoleMessage.MessageType.Log,
-WebInspector.ConsoleMessage.MessageLevel.Warning,
--1,
-this.url,
-1,
-String.sprintf(WebInspector.Warnings.IncorrectMIMEType.message, WebInspector.Resource.Type.toUIString(this.type), this.mimeType),
-null,
-null);
-break;
-}
-
-if (msg)
-WebInspector.console.addMessage(msg);
+this.dispatchEventToListeners(WebInspector.Resource.Events.MessagesCleared);
 },
 
 get content()
@@ -8633,14 +9112,14 @@ get content()
 return this._content;
 },
 
+get contentEncoded()
+{
+return this._contentEncoded;
+},
+
 get contentTimestamp()
 {
 return this._contentTimestamp;
-},
-
-setInitialContent: function(content)
-{
-this._content = content;
 },
 
 isEditable: function()
@@ -8674,6 +9153,7 @@ this.dispatchEventToListeners(WebInspector.Resource.Events.RevisionAdded, revisi
 
 if (!restoringHistory)
 this._persistRevision();
+WebInspector.extensionServer.notifyResourceContentCommitted(this, newContent);
 },
 
 _persistRevision: function()
@@ -8712,9 +9192,9 @@ else
 image.src = this.url;
 },
 
-isDataURL: function()
+isHttpFamily: function()
 {
-return this.url.match(/^data:/i);
+return this.url.match(/^https?:/i);
 },
 
 requestContentType: function()
@@ -8764,6 +9244,7 @@ WebInspector.networkManager.requestContent(this, onResourceContent.bind(this));
 }
 
 WebInspector.Resource.prototype.__proto__ = WebInspector.Object.prototype;
+
 
 WebInspector.ResourceRevision = function(resource, content, timestamp)
 {
@@ -8821,22 +9302,13 @@ WebInspector.networkManager.requestContent(this._resource, mycallback.bind(this)
 }
 }
 
-WebInspector.ResourceDomainModelBinding = function()
-{
-}
 
+WebInspector.ResourceDomainModelBinding = function() { }
 WebInspector.ResourceDomainModelBinding.prototype = {
-canSetContent: function()
-{
-
-return true;
-},
-
-setContent: function(resource, content, majorChange, callback)
-{
-
+canSetContent: function() { return true; },
+setContent: function(resource, content, majorChange, callback) { }
 }
-}
+
 
 
 
@@ -9033,6 +9505,7 @@ CSSAgent.setStyleSheetText(styleSheetId, newText, callback.bind(this));
 
 WebInspector.CSSStyleModel.prototype.__proto__ = WebInspector.Object.prototype;
 
+
 WebInspector.CSSStyleDeclaration = function(payload)
 {
 this.id = payload.styleId;
@@ -9219,6 +9692,7 @@ this.insertPropertyAt(this.allProperties.length, name, value, userCallback);
 }
 }
 
+
 WebInspector.CSSRule = function(payload)
 {
 this.id = payload.ruleId;
@@ -9257,6 +9731,7 @@ get isRegular()
 return this.origin === "";
 }
 }
+
 
 WebInspector.CSSProperty = function(ownerStyle, index, name, value, priority, status, parsedOk, implicit, shorthand, text)
 {
@@ -9327,8 +9802,8 @@ setText: function(propertyText, majorChange, userCallback)
 function enabledCallback(style)
 {
 if (style)
-WebInspector.cssModel._fireStyleSheetChanged(style.id.styleSheetId, majorChange);
-if (userCallback)
+WebInspector.cssModel._fireStyleSheetChanged(style.id.styleSheetId, majorChange, userCallback ? userCallback.bind(null, style) : null);
+else if (userCallback)
 userCallback(style);
 }
 
@@ -9344,7 +9819,7 @@ newProperty.setDisabled(false, enabledCallback);
 return;
 }
 
-WebInspector.cssModel._fireStyleSheetChanged(style.id.styleSheetId, majorChange, userCallback ? userCallback.bind(this, style) : null);
+WebInspector.cssModel._fireStyleSheetChanged(style.id.styleSheetId, majorChange, userCallback ? userCallback.bind(null, style) : null);
 } else {
 if (userCallback)
 userCallback(null);
@@ -9388,6 +9863,7 @@ WebInspector.cssModel._fireStyleSheetChanged(this.ownerStyle.id.styleSheetId, fa
 CSSAgent.toggleProperty(this.ownerStyle.id, this.index, disabled, callback.bind(this));
 }
 }
+
 
 WebInspector.CSSStyleSheet = function(payload)
 {
@@ -9435,6 +9911,7 @@ WebInspector.cssModel._fireStyleSheetChanged(this.id, majorChange);
 CSSAgent.setStyleSheetText(this.id, newText, callback.bind(this));
 }
 }
+
 
 WebInspector.CSSStyleModelResourceBinding = function(cssModel)
 {
@@ -9530,11 +10007,16 @@ WebInspector.CSSStyleModelResourceBinding.prototype.__proto__ = WebInspector.Res
 
 
 
+
 WebInspector.NetworkManager = function()
 {
 WebInspector.Object.call(this);
 this._dispatcher = new WebInspector.NetworkDispatcher(this);
+if (WebInspector.settings.cacheDisabled.get())
+NetworkAgent.setCacheDisabled(true);
 NetworkAgent.enable();
+
+WebInspector.settings.cacheDisabled.addChangeListener(this._cacheDisabledSettingChanged.bind(this));
 }
 
 WebInspector.NetworkManager.EventTypes = {
@@ -9555,8 +10037,8 @@ callback(content, content && contentEncoded);
 }
 
 
-if (resource.identifier)
-NetworkAgent.getResourceContent(resource.identifier, callbackWrapper);
+if (resource.requestId)
+NetworkAgent.getResponseBody(resource.requestId, callbackWrapper);
 else
 PageAgent.getResourceContent(resource.frameId, resource.url, callbackWrapper);
 },
@@ -9564,17 +10046,23 @@ PageAgent.getResourceContent(resource.frameId, resource.url, callbackWrapper);
 inflightResourceForURL: function(url)
 {
 return this._dispatcher._inflightResourcesByURL[url];
+},
+
+_cacheDisabledSettingChanged: function(event)
+{
+NetworkAgent.setCacheDisabled(event.data);
 }
 }
 
 WebInspector.NetworkManager.prototype.__proto__ = WebInspector.Object.prototype;
+
 
 WebInspector.NetworkDispatcher = function(manager)
 {
 this._manager = manager;
 this._inflightResourcesById = {};
 this._inflightResourcesByURL = {};
-InspectorBackend.registerDomainDispatcher("Network", this);
+InspectorBackend.registerNetworkDispatcher(this);
 }
 
 WebInspector.NetworkDispatcher.prototype = {
@@ -9590,6 +10078,8 @@ _updateResourceWithResponse: function(resource, response)
 if (!response)
 return;
 
+if (response.url && resource.url !== response.url)
+resource.url = response.url;
 resource.mimeType = response.mimeType;
 resource.statusCode = response.status;
 resource.statusText = response.statusText;
@@ -9608,6 +10098,42 @@ if (response.fromDiskCache)
 resource.cached = true;
 else
 resource.timing = response.timing;
+
+if (!this._mimeTypeIsConsistentWithType(resource)) {
+WebInspector.console.addMessage(new WebInspector.ConsoleMessage(WebInspector.ConsoleMessage.MessageSource.Other,
+WebInspector.ConsoleMessage.MessageType.Log,
+WebInspector.ConsoleMessage.MessageLevel.Warning,
+-1,
+this.url,
+1,
+WebInspector.UIString("Resource interpreted as %s but transferred with MIME type %s.", WebInspector.Resource.Type.toUIString(this.type), this.mimeType)));
+}
+},
+
+_mimeTypeIsConsistentWithType: function(resource)
+{
+
+
+
+
+
+
+if (resource.hasErrorStatusCode() || resource.statusCode === 304)
+return true;
+
+if (typeof resource.type === "undefined"
+|| resource.type === WebInspector.Resource.Type.Other
+|| resource.type === WebInspector.Resource.Type.XHR
+|| resource.type === WebInspector.Resource.Type.WebSocket)
+return true;
+
+if (!resource.mimeType)
+return true; 
+
+if (resource.mimeType in WebInspector.MIMETypes)
+return resource.type in WebInspector.MIMETypes[resource.mimeType];
+
+return false;
 },
 
 _updateResourceWithCachedResource: function(resource, cachedResource)
@@ -9622,26 +10148,27 @@ _isNull: function(response)
 return response && !response.status && !response.mimeType && !Object.keys(response.headers).length;
 },
 
-requestWillBeSent: function(identifier, frameId, loaderId, documentURL, request, time, stackTrace, redirectResponse)
+requestWillBeSent: function(requestId, frameId, loaderId, documentURL, request, time, initiator, stackTrace, redirectResponse)
 {
-var resource = this._inflightResourcesById[identifier];
+var resource = this._inflightResourcesById[requestId];
 if (resource) {
 
 if (this._isNull(redirectResponse))
 return;
-this.responseReceived(identifier, time, "Other", redirectResponse);
-resource = this._appendRedirect(identifier, time, request.url);
+this.responseReceived(requestId, time, "Other", redirectResponse);
+resource = this._appendRedirect(requestId, time, request.url);
 } else
-resource = this._createResource(identifier, frameId, loaderId, request.url, documentURL, stackTrace);
+resource = this._createResource(requestId, frameId, loaderId, request.url, documentURL, initiator, stackTrace);
+resource.hasNetworkData = true;
 this._updateResourceWithRequest(resource, request);
 resource.startTime = time;
 
 this._startResource(resource);
 },
 
-resourceMarkedAsCached: function(identifier)
+requestServedFromCache: function(requestId)
 {
-var resource = this._inflightResourcesById[identifier];
+var resource = this._inflightResourcesById[requestId];
 if (!resource)
 return;
 
@@ -9649,13 +10176,13 @@ resource.cached = true;
 this._updateResource(resource);
 },
 
-responseReceived: function(identifier, time, resourceType, response)
+responseReceived: function(requestId, time, resourceType, response)
 {
 
 if (this._isNull(response))
 return;
 
-var resource = this._inflightResourcesById[identifier];
+var resource = this._inflightResourcesById[requestId];
 if (!resource)
 return;
 
@@ -9667,9 +10194,9 @@ this._updateResourceWithResponse(resource, response);
 this._updateResource(resource);
 },
 
-dataReceived: function(identifier, time, dataLength, encodedDataLength)
+dataReceived: function(requestId, time, dataLength, encodedDataLength)
 {
-var resource = this._inflightResourcesById[identifier];
+var resource = this._inflightResourcesById[requestId];
 if (!resource)
 return;
 
@@ -9681,18 +10208,18 @@ resource.endTime = time;
 this._updateResource(resource);
 },
 
-loadingFinished: function(identifier, finishTime)
+loadingFinished: function(requestId, finishTime)
 {
-var resource = this._inflightResourcesById[identifier];
+var resource = this._inflightResourcesById[requestId];
 if (!resource)
 return;
 
 this._finishResource(resource, finishTime);
 },
 
-loadingFailed: function(identifier, time, localizedDescription, canceled)
+loadingFailed: function(requestId, time, localizedDescription, canceled)
 {
-var resource = this._inflightResourcesById[identifier];
+var resource = this._inflightResourcesById[requestId];
 if (!resource)
 return;
 
@@ -9702,9 +10229,9 @@ resource.localizedFailDescription = localizedDescription;
 this._finishResource(resource, time);
 },
 
-resourceLoadedFromMemoryCache: function(frameId, loaderId, documentURL, time, cachedResource)
+requestServedFromMemoryCache: function(requestId, frameId, loaderId, documentURL, time, initiator, cachedResource)
 {
-var resource = this._createResource(null, frameId, loaderId, cachedResource.url, documentURL);
+var resource = this._createResource(requestId, frameId, loaderId, cachedResource.url, documentURL, initiator);
 this._updateResourceWithCachedResource(resource, cachedResource);
 resource.cached = true;
 resource.requestMethod = "GET";
@@ -9713,27 +10240,16 @@ resource.startTime = resource.responseReceivedTime = time;
 this._finishResource(resource, time);
 },
 
-initialContentSet: function(identifier, sourceString, type)
+webSocketCreated: function(requestId, requestURL)
 {
-var resource = WebInspector.networkResourceById(identifier);
-if (!resource)
-return;
-
-resource.type = WebInspector.Resource.Type[type];
-resource.setInitialContent(sourceString);
-this._updateResource(resource);
-},
-
-webSocketCreated: function(identifier, requestURL)
-{
-var resource = this._createResource(identifier, null, null, requestURL);
+var resource = this._createResource(requestId, null, null, requestURL);
 resource.type = WebInspector.Resource.Type.WebSocket;
 this._startResource(resource);
 },
 
-webSocketWillSendHandshakeRequest: function(identifier, time, request)
+webSocketWillSendHandshakeRequest: function(requestId, time, request)
 {
-var resource = this._inflightResourcesById[identifier];
+var resource = this._inflightResourcesById[requestId];
 if (!resource)
 return;
 
@@ -9745,9 +10261,9 @@ resource.startTime = time;
 this._updateResource(resource);
 },
 
-webSocketHandshakeResponseReceived: function(identifier, time, response)
+webSocketHandshakeResponseReceived: function(requestId, time, response)
 {
-var resource = this._inflightResourcesById[identifier];
+var resource = this._inflightResourcesById[requestId];
 if (!resource)
 return;
 
@@ -9760,30 +10276,32 @@ resource.responseReceivedTime = time;
 this._updateResource(resource);
 },
 
-webSocketClosed: function(identifier, time)
+webSocketClosed: function(requestId, time)
 {
-var resource = this._inflightResourcesById[identifier];
+var resource = this._inflightResourcesById[requestId];
 if (!resource)
 return;
 this._finishResource(resource, time);
 },
 
-_appendRedirect: function(identifier, time, redirectURL)
+_appendRedirect: function(requestId, time, redirectURL)
 {
-var originalResource = this._inflightResourcesById[identifier];
+var originalResource = this._inflightResourcesById[requestId];
 var previousRedirects = originalResource.redirects || [];
-delete originalResource.identifier;
+originalResource.requestId = "redirected:" + requestId + "." + previousRedirects.length;
 delete originalResource.redirects;
+if (previousRedirects.length > 0)
+originalResource.redirectSource = previousRedirects[previousRedirects.length - 1];
 this._finishResource(originalResource, time);
-var newResource = this._createResource(identifier, originalResource.frameId, originalResource.loaderId,
-redirectURL, originalResource.documentURL, originalResource.stackTrace);
+var newResource = this._createResource(requestId, originalResource.frameId, originalResource.loaderId,
+redirectURL, originalResource.documentURL, originalResource.initiator, originalResource.stackTrace);
 newResource.redirects = previousRedirects.concat(originalResource);
 return newResource;
 },
 
 _startResource: function(resource)
 {
-this._inflightResourcesById[resource.identifier] = resource;
+this._inflightResourcesById[resource.requestId] = resource;
 this._inflightResourcesByURL[resource.url] = resource;
 this._dispatchEventToListeners(WebInspector.NetworkManager.EventTypes.ResourceStarted, resource);
 },
@@ -9798,7 +10316,7 @@ _finishResource: function(resource, finishTime)
 resource.endTime = finishTime;
 resource.finished = true;
 this._dispatchEventToListeners(WebInspector.NetworkManager.EventTypes.ResourceFinished, resource);
-delete this._inflightResourcesById[resource.identifier];
+delete this._inflightResourcesById[resource.requestId];
 delete this._inflightResourcesByURL[resource.url];
 },
 
@@ -9807,13 +10325,53 @@ _dispatchEventToListeners: function(eventType, resource)
 this._manager.dispatchEventToListeners(eventType, resource);
 },
 
-_createResource: function(identifier, frameId, loaderId, url, documentURL, stackTrace)
+_createResource: function(requestId, frameId, loaderId, url, documentURL, initiator, stackTrace)
 {
-var resource = new WebInspector.Resource(identifier, url, loaderId);
+var resource = new WebInspector.Resource(requestId, url, loaderId);
 resource.documentURL = documentURL;
 resource.frameId = frameId;
+resource.initiator = initiator;
 resource.stackTrace = stackTrace;
 return resource;
+}
+}
+
+
+WebInspector.networkManager = null;
+
+
+
+
+
+
+WebInspector.NetworkLog = function()
+{
+this._resources = [];
+WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceStarted, this._onResourceStarted, this);
+WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.FrameNavigated, this._frameNavigated, this);
+}
+
+WebInspector.NetworkLog.prototype = {
+get resources()
+{
+return this._resources;
+},
+
+_frameNavigated: function(event)
+{
+if (!event.data.isMainFrame)
+return;
+
+var oldResources = this._resources.splice(0, this._resources.length);
+for (var i = 0; i < oldResources.length; ++i) {
+if (oldResources[i].loaderId === event.data.loaderId)
+this._resources.push(oldResources[i]);
+}
+},
+
+_onResourceStarted: function(event)
+{
+this._resources.push(event.data);
 }
 }
 
@@ -9828,11 +10386,16 @@ WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTy
 WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceUpdated, this._onResourceUpdated, this);
 WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceFinished, this._onResourceUpdated, this);
 
-WebInspector.console.addEventListener(WebInspector.ConsoleView.Events.MessageAdded, this._consoleMessageAdded, this);
-WebInspector.console.addEventListener(WebInspector.ConsoleView.Events.ConsoleCleared, this._consoleCleared, this);
+WebInspector.console.addEventListener(WebInspector.ConsoleModel.Events.MessageAdded, this._consoleMessageAdded, this);
+WebInspector.console.addEventListener(WebInspector.ConsoleModel.Events.RepeatCountUpdated, this._consoleMessageAdded, this);
+WebInspector.console.addEventListener(WebInspector.ConsoleModel.Events.ConsoleCleared, this._consoleCleared, this);
+
+PageAgent.enable();
 
 this.frontendReused();
-InspectorBackend.registerDomainDispatcher("Page", new WebInspector.PageDispatcher(this));
+InspectorBackend.registerPageDispatcher(new WebInspector.PageDispatcher(this));
+
+this._pendingConsoleMessages = {};
 }
 
 WebInspector.ResourceTreeModel.EventTypes = {
@@ -9945,10 +10508,9 @@ this._dispatchInspectedURLChanged(frame.url);
 
 _cleanupFramesAfterNavigation: function(newMainFrame)
 {
-for (var frameId in this._frameIds) {
-if (frameId !== newMainFrame.id)
-this._frameDetached(frameId);
-}
+if (this._currentMainFrameId)
+this._frameDetached(this._currentMainFrameId);
+this._currentMainFrameId = newMainFrame.id;
 },
 
 _frameDetached: function(frameId)
@@ -9988,6 +10550,11 @@ this._unbindResourceURL(resource);
 return;
 }
 
+if (resource.type === WebInspector.Resource.Type.XHR) {
+this._unbindResourceURL(resource);
+return;
+}
+
 if (resource.finished)
 this._addResourceToFrame(resource);
 },
@@ -10019,9 +10586,33 @@ _consoleMessageAdded: function(event)
 {
 var msg = event.data;
 var resource = this.resourceForURL(msg.url);
-if (!resource)
-return;
+if (resource)
+this._addConsoleMessageToResource(msg, resource);
+else
+this._addPendingConsoleMessage(msg);
+},
 
+_addPendingConsoleMessage: function(msg)
+{
+if (!msg.url)
+return;
+if (!this._pendingConsoleMessages[msg.url])
+this._pendingConsoleMessages[msg.url] = [];
+this._pendingConsoleMessages[msg.url].push(msg);
+},
+
+_addPendingConsoleMessagesToResource: function(resource)
+{
+var messages = this._pendingConsoleMessages[resource.url];
+if (messages) {
+for (var i = 0; i < messages.length; i++)
+this._addConsoleMessageToResource(messages[i], resource);
+delete this._pendingConsoleMessages[resource.url];
+}
+},
+
+_addConsoleMessageToResource: function(msg, resource)
+{
 switch (msg.level) {
 case WebInspector.ConsoleMessage.MessageLevel.Warning:
 resource.warnings += msg.repeatDelta;
@@ -10039,6 +10630,8 @@ function callback(resource)
 {
 resource.clearErrorsAndWarnings();
 }
+
+this._pendingConsoleMessages = {};
 this.forAllResources(callback);
 },
 
@@ -10050,6 +10643,8 @@ return this._resourcesByURL[url];
 _bindResourceURL: function(resource)
 {
 this._resourcesByURL[resource.url] = resource;
+
+this._addPendingConsoleMessagesToResource(resource);
 },
 
 _clearChildFramesAndResources: function(frameId, loaderToPreserveId)
@@ -10116,8 +10711,10 @@ var frameResource = this._createResource(framePayload, framePayload.url);
 frameResource.type = WebInspector.Resource.Type.Document;
 frameResource.finished = true;
 
-if (!framePayload.parentId)
+if (!framePayload.parentId) {
 WebInspector.mainResource = frameResource;
+this._currentMainFrameId = framePayload.id;
+}
 this._addFrame(framePayload);
 this._addResourceToFrame(frameResource);
 
@@ -10132,6 +10729,7 @@ for (var i = 0; i < frameTreePayload.resources.length; ++i) {
 var subresource = frameTreePayload.resources[i];
 var resource = this._createResource(framePayload, subresource.url);
 resource.type = WebInspector.Resource.Type[subresource.type];
+resource.mimeType = subresource.mimeType;
 resource.finished = true;
 this._addResourceToFrame(resource);
 }
@@ -10142,11 +10740,13 @@ _createResource: function(frame, url)
 var resource = new WebInspector.Resource(null, url, frame.loaderId);
 resource.frameId = frame.id;
 resource.documentURL = frame.url;
+resource.mimeType = frame.mimeType;
 return resource;
 }
 }
 
 WebInspector.ResourceTreeModel.prototype.__proto__ = WebInspector.Object.prototype;
+
 
 WebInspector.PageDispatcher = function(resourceTreeModel)
 {
@@ -10185,10 +10785,11 @@ this._resourceTreeModel._frameDetached(frameId);
 
 
 
+
 WebInspector.ResourceCategory = function(name, title, color)
 {
 this.name = name;
-this.title = title;
+this._title = title;
 this.color = color;
 }
 
@@ -10196,8 +10797,25 @@ WebInspector.ResourceCategory.prototype = {
 toString: function()
 {
 return this.title;
+},
+
+get title()
+{
+return WebInspector.UIString(this._title);
 }
 }
+
+WebInspector.resourceCategories = {
+documents: new WebInspector.ResourceCategory("documents", "Documents", "rgb(47,102,236)"),
+stylesheets: new WebInspector.ResourceCategory("stylesheets", "Stylesheets", "rgb(157,231,119)"),
+images: new WebInspector.ResourceCategory("images", "Images", "rgb(164,60,255)"),
+scripts: new WebInspector.ResourceCategory("scripts", "Scripts", "rgb(255,121,0)"),
+xhr: new WebInspector.ResourceCategory("xhr", "XHR", "rgb(231,231,10)"),
+fonts: new WebInspector.ResourceCategory("fonts", "Fonts", "rgb(255,82,62)"),
+websockets: new WebInspector.ResourceCategory("websockets", "WebSockets", "rgb(186,186,186)"), 
+other: new WebInspector.ResourceCategory("other", "Other", "rgb(186,186,186)")
+}
+
 
 
 
@@ -10217,11 +10835,11 @@ TimelineEventRecorded: "TimelineEventRecorded"
 }
 
 WebInspector.TimelineManager.prototype = {
-start: function()
+start: function(maxCallStackDepth)
 {
 this._enablementCount++;
 if (this._enablementCount === 1)
-TimelineAgent.start();
+TimelineAgent.start(maxCallStackDepth);
 },
 
 stop: function()
@@ -10238,10 +10856,11 @@ TimelineAgent.stop();
 
 WebInspector.TimelineManager.prototype.__proto__ = WebInspector.Object.prototype;
 
+
 WebInspector.TimelineDispatcher = function(manager)
 {
 this._manager = manager;
-InspectorBackend.registerDomainDispatcher("Timeline", this);
+InspectorBackend.registerTimelineDispatcher(this);
 }
 
 WebInspector.TimelineDispatcher.prototype = {
@@ -10262,6 +10881,7 @@ this._manager.dispatchEventToListeners(WebInspector.TimelineManager.EventTypes.T
 }
 
 WebInspector.timelineManager = new WebInspector.TimelineManager();
+
 
 
 
@@ -10344,6 +10964,7 @@ DatabaseAgent.executeSQL(this._id, query, callback);
 }
 }
 
+
 WebInspector.DatabaseDispatcher = function()
 {
 }
@@ -10384,7 +11005,8 @@ callback(errorObj);
 }
 }
 
-InspectorBackend.registerDomainDispatcher("Database", new WebInspector.DatabaseDispatcher());
+InspectorBackend.registerDatabaseDispatcher(new WebInspector.DatabaseDispatcher());
+
 
 
 
@@ -10450,7 +11072,7 @@ WebInspector.panels.resources.updateDOMStorage(storageId);
 }
 }
 
-InspectorBackend.registerDomainDispatcher("DOMStorage", new WebInspector.DOMStorageDispatcher());
+InspectorBackend.registerDOMStorageDispatcher(new WebInspector.DOMStorageDispatcher());
 
 
 
@@ -10508,7 +11130,7 @@ this._dataGrid.autoSizeColumns(10);
 this.deleteButton.visible = true;
 },
 
-resize: function()
+onResize: function()
 {
 if (this._dataGrid)
 this._dataGrid.updateWidths();
@@ -10727,6 +11349,16 @@ this._columnWidthsInitialized = false;
 }
 
 WebInspector.DataGrid.prototype = {
+get refreshCallback()
+{
+return this._refreshCallback;
+},
+
+set refreshCallback(refreshCallback)
+{
+this._refreshCallback = refreshCallback;
+},
+
 _ondblclick: function(event)
 {
 if (this._editing || this._editingNode)
@@ -11068,7 +11700,7 @@ this._columnWidthsInitialized = false;
 
 get scrollContainer()
 {
-return this._scrollContainer;        
+return this._scrollContainer;
 },
 
 isScrolledToLastRow: function()
@@ -11379,6 +12011,11 @@ reveal: function()
 
 },
 
+revealAndSelect: function()
+{
+
+},
+
 dataGridNodeFromNode: function(target)
 {
 var rowElement = target.enclosingNodeOrSelfWithNodeName("tr");
@@ -11450,15 +12087,13 @@ gridNode.select();
 
 _contextMenuInDataTable: function(event)
 {
-var gridNode = this.dataGridNodeFromNode(event.target);
-if (!gridNode || !gridNode.selectable)
-return;
-
-if (gridNode.isEventWithinDisclosureTriangle(event))
-return;
-
 var contextMenu = new WebInspector.ContextMenu();
 
+var gridNode = this.dataGridNodeFromNode(event.target);
+if (this.dataGrid._refreshCallback && (!gridNode || gridNode !== this.creationNode))
+contextMenu.appendItem(WebInspector.UIString("Refresh"), this._refreshCallback.bind(this));
+
+if (gridNode && gridNode.selectable && !gridNode.isEventWithinDisclosureTriangle(event)) {
 
 if (this.dataGrid._editCallback) {
 if (gridNode === this.creationNode)
@@ -11468,6 +12103,7 @@ contextMenu.appendItem(WebInspector.UIString("Edit"), this._startEditing.bind(th
 }
 if (this.dataGrid._deleteCallback && gridNode !== this.creationNode)
 contextMenu.appendItem(WebInspector.UIString("Delete"), this._deleteCallback.bind(this, gridNode));
+}
 
 contextMenu.show(event);
 },
@@ -11523,7 +12159,7 @@ return;
 
 
 
-var dragPoint = event.clientX - this.element.totalOffsetLeft;
+var dragPoint = event.clientX - this.element.totalOffsetLeft();
 
 
 var leftCellIndex = resizer.leftNeighboringColumnID;
@@ -11918,6 +12554,12 @@ if (!supressSelectedEvent)
 this.dispatchEventToListeners("selected");
 },
 
+revealAndSelect: function()
+{
+this.reveal();
+this.select();
+},
+
 deselect: function(supressDeselectedEvent)
 {
 if (!this.dataGrid || this.dataGrid.selectedNode !== this || !this.selected)
@@ -11997,7 +12639,7 @@ var cell = event.target.enclosingNodeOrSelfWithNodeName("td");
 if (!cell.hasStyleClass("disclosure"))
 return false;
 var computedLeftPadding = window.getComputedStyle(cell).getPropertyCSSValue("padding-left").getFloatValue(CSSPrimitiveValue.CSS_PX);
-var left = cell.totalOffsetLeft + computedLeftPadding;
+var left = cell.totalOffsetLeft() + computedLeftPadding;
 return event.pageX >= left && event.pageX <= left + this.disclosureToggleWidth;
 },
 
@@ -12135,7 +12777,7 @@ WebInspector.ShowMoreDataGridNode.prototype.__proto__ = WebInspector.DataGridNod
 
 
 
-WebInspector.CookiesTable = function(cookieDomain, expandable, deleteCallback)
+WebInspector.CookiesTable = function(cookieDomain, expandable, deleteCallback, refreshCallback)
 {
 this._cookieDomain = cookieDomain;
 
@@ -12171,6 +12813,7 @@ columns[7].width = "7%";
 
 this._dataGrid = new WebInspector.DataGrid(columns, null, deleteCallback ? this._onDeleteFromGrid.bind(this) : null);
 this._dataGrid.addEventListener("sorting changed", this._rebuildTable, this);
+this._dataGrid.refreshCallback = refreshCallback;
 
 this.element = this._dataGrid.element;
 this._data = [];
@@ -12333,6 +12976,8 @@ this._cookieDomain = cookieDomain;
 
 this._emptyView = new WebInspector.EmptyView(WebInspector.UIString("This site has no cookies."));
 this._emptyView.show(this.element);
+
+this.element.addEventListener("contextmenu", this._contextMenu.bind(this), true);
 }
 
 WebInspector.CookieItemsView.prototype = {
@@ -12353,7 +12998,7 @@ WebInspector.View.prototype.hide.call(this);
 this._deleteButton.visible = false;
 },
 
-resize: function()
+onResize: function()
 {
 if (this._cookiesTable)
 this._cookiesTable.updateWidths();
@@ -12378,7 +13023,7 @@ return;
 }
 
 if (!this._cookiesTable) {
-this._cookiesTable = isAdvanced ? new WebInspector.CookiesTable(this._cookieDomain, false, this._deleteCookie.bind(this)) : new WebInspector.SimpleCookiesTable();
+this._cookiesTable = isAdvanced ? new WebInspector.CookiesTable(this._cookieDomain, false, this._deleteCookie.bind(this), this._update.bind(this)) : new WebInspector.SimpleCookiesTable();
 this.element.appendChild(this._cookiesTable.element);
 }
 
@@ -12439,6 +13084,15 @@ this._deleteCookie(this._cookiesTable.selectedCookie);
 _refreshButtonClicked: function(event)
 {
 this._update();
+},
+
+_contextMenu: function()
+{
+if (!this._cookies.length) {
+var contextMenu = new WebInspector.ContextMenu();
+contextMenu.appendItem(WebInspector.UIString("Refresh"), this._update.bind(this));
+contextMenu.show(event);
+}
 }
 }
 
@@ -12479,7 +13133,7 @@ this._dataGrid.appendChild(node);
 this._dataGrid.children[0].selected = true;
 },
 
-resize: function()
+onResize: function()
 {
 if (this._dataGrid)
 this._dataGrid.updateWidths();
@@ -12770,7 +13424,7 @@ if (!nodeToSelect)
 this._dataGrid.children[0].selected = true;
 },
 
-resize: function()
+onResize: function()
 {
 if (this._dataGrid)
 this._dataGrid.updateWidths();
@@ -12829,15 +13483,16 @@ WebInspector.panels.resources.updateNetworkState(isNowOnline);
 }
 }
 
-InspectorBackend.registerDomainDispatcher("ApplicationCache", new WebInspector.ApplicationCacheDispatcher());
+InspectorBackend.registerApplicationCacheDispatcher(new WebInspector.ApplicationCacheDispatcher());
 
 
 
 
 
-WebInspector.Script = function(sourceId, sourceURL, startLine, startColumn, endLine, endColumn, errorLine, errorMessage, isContentScript)
+
+WebInspector.Script = function(scriptId, sourceURL, startLine, startColumn, endLine, endColumn, errorLine, errorMessage, isContentScript)
 {
-this.sourceId = sourceId;
+this.scriptId = scriptId;
 this.sourceURL = sourceURL;
 this.lineOffset = startLine;
 this.columnOffset = startColumn;
@@ -12861,7 +13516,7 @@ function didGetScriptSource(error, source)
 this._source = source;
 callback(this._source);
 }
-DebuggerAgent.getScriptSource(this.sourceId, didGetScriptSource.bind(this));
+DebuggerAgent.getScriptSource(this.scriptId, didGetScriptSource.bind(this));
 },
 
 editSource: function(newSource, callback)
@@ -12872,7 +13527,7 @@ if (!error)
 this._source = newSource;
 callback(error, callFrames);
 }
-DebuggerAgent.setScriptSource(this.sourceId, newSource, didEditScriptSource.bind(this));
+DebuggerAgent.setScriptSource(this.scriptId, newSource, undefined, didEditScriptSource.bind(this));
 }
 }
 
@@ -12995,6 +13650,11 @@ this.element = document.createElement("ol");
 this.element.addEventListener("mousedown", this._onmousedown.bind(this), false);
 this.element.addEventListener("mousemove", this._onmousemove.bind(this), false);
 this.element.addEventListener("mouseout", this._onmouseout.bind(this), false);
+this.element.addEventListener("dragstart", this._ondragstart.bind(this), false);
+this.element.addEventListener("dragover", this._ondragover.bind(this), false);
+this.element.addEventListener("dragleave", this._ondragleave.bind(this), false);
+this.element.addEventListener("drop", this._ondrop.bind(this), false);
+this.element.addEventListener("dragend", this._ondragend.bind(this), false);
 
 TreeOutline.call(this, this.element);
 
@@ -13002,7 +13662,8 @@ this.includeRootDOMNode = true;
 this.selectEnabled = false;
 this.showInElementsPanelEnabled = false;
 this.rootDOMNode = null;
-this.focusedDOMNode = null;
+this._selectDOMNode = null;
+this.element.addEventListener("contextmenu", this._contextMenuEventFired.bind(this), true);
 }
 
 WebInspector.ElementsTreeOutline.prototype = {
@@ -13033,28 +13694,27 @@ nodeNameToCorrectCase: function(nodeName)
 return this.isXMLMimeType ? nodeName : nodeName.toLowerCase();
 },
 
-get focusedDOMNode()
+selectedDOMNode: function()
 {
-return this._focusedDOMNode;
+return this._selectedDOMNode;
 },
 
-set focusedDOMNode(x)
+selectDOMNode: function(node, focus)
 {
-if (this._focusedDOMNode === x) {
-this.revealAndSelectNode(x);
+if (this._selectedDOMNode === node) {
+this._revealAndSelectNode(node, !focus);
 return;
 }
 
-this._focusedDOMNode = x;
-
-this.revealAndSelectNode(x);
-
+this._selectedDOMNode = node;
+this._revealAndSelectNode(node, !focus);
 
 
 
 
-if (this._focusedDOMNode === x)
-this.focusedNodeChanged();
+
+if (this._selectedDOMNode === node)
+this.selectedNodeChanged();
 },
 
 get editing()
@@ -13088,7 +13748,7 @@ node = node.nextSibling;
 }
 
 if (selectedNode)
-this.revealAndSelectNode(selectedNode);
+this._revealAndSelectNode(selectedNode, true);
 },
 
 updateSelection: function()
@@ -13099,10 +13759,14 @@ var element = this.treeOutline.selectedTreeElement;
 element.updateSelection();
 },
 
-focusedNodeChanged: function(forceUpdate) {},
+selectedNodeChanged: function(forceUpdate) {},
 
 findTreeElement: function(node)
 {
+function isAncestorNode(ancestor, node)
+{
+return ancestor.isAncestor(node);
+}
 var treeElement = TreeOutline.prototype.findTreeElement.call(this, node, isAncestorNode, parentNode);
 if (!treeElement && node.nodeType() === Node.TEXT_NODE) {
 
@@ -13134,7 +13798,7 @@ return;
 this._suppressRevealAndSelect = x;
 },
 
-revealAndSelectNode: function(node)
+_revealAndSelectNode: function(node, omitFocus)
 {
 if (!node || this._suppressRevealAndSelect)
 return;
@@ -13143,8 +13807,7 @@ var treeElement = this.createTreeElementFor(node);
 if (!treeElement)
 return;
 
-treeElement.reveal();
-treeElement.select();
+treeElement.revealAndSelect(omitFocus);
 },
 
 _treeElementFromEvent: function(event)
@@ -13155,7 +13818,7 @@ var scrollContainer = this.element.parentElement;
 
 
 
-var x = scrollContainer.totalOffsetLeft + scrollContainer.offsetWidth - 36;
+var x = scrollContainer.totalOffsetLeft() + scrollContainer.offsetWidth - 36;
 
 var y = event.pageY;
 
@@ -13220,40 +13883,166 @@ delete this._previousHoveredElement;
 WebInspector.highlightDOMNode(0);
 },
 
-populateContextMenu: function(contextMenu, event)
+_ondragstart: function(event)
 {
-var listItem = event.target.enclosingNodeOrSelfWithNodeName("LI");
-if (!listItem || !listItem.treeElement)
+var treeElement = this._treeElementFromEvent(event);
+if (!treeElement)
 return false;
 
-var populated;
-if (this.showInElementsPanelEnabled) {
+if (!this._isValidDragSourceOrTarget(treeElement))
+return false;
+
+if (treeElement.representedObject.nodeName() === "BODY" || treeElement.representedObject.nodeName() === "HEAD")
+return false;
+
+event.dataTransfer.setData("text/plain", treeElement.listItemElement.textContent);
+event.dataTransfer.effectAllowed = "copyMove";
+this._nodeBeingDragged = treeElement.representedObject;
+
+WebInspector.highlightDOMNode(0);
+
+return true;
+},
+
+_ondragover: function(event)
+{
+if (!this._nodeBeingDragged)
+return false;
+
+var treeElement = this._treeElementFromEvent(event);
+if (!this._isValidDragSourceOrTarget(treeElement))
+return false;
+
+var node = treeElement.representedObject;
+while (node) {
+if (node === this._nodeBeingDragged)
+return false;
+node = node.parentNode;
+}
+
+treeElement.updateSelection();
+treeElement.listItemElement.addStyleClass("elements-drag-over");
+this._dragOverTreeElement = treeElement;
+event.preventDefault();
+event.dataTransfer.dropEffect = 'move';
+return false;
+},
+
+_ondragleave: function(event)
+{
+this._clearDragOverTreeElementMarker();
+event.preventDefault();
+return false;
+},
+
+_isValidDragSourceOrTarget: function(treeElement)
+{
+if (!treeElement)
+return false;
+
+var node = treeElement.representedObject;
+if (!(node instanceof WebInspector.DOMNode))
+return false;
+
+if (!node.parentNode || node.parentNode.nodeType() !== Node.ELEMENT_NODE)
+return false;
+
+return true;
+},
+
+_ondrop: function(event)
+{
+event.preventDefault();
+var treeElement = this._treeElementFromEvent(event);
+if (this._nodeBeingDragged && treeElement) {
+var parentNode;
+var anchorNode;
+
+if (treeElement._elementCloseTag) {
+
+parentNode = treeElement.representedObject;
+} else {
+var dragTargetNode = treeElement.representedObject;
+parentNode = dragTargetNode.parentNode;
+anchorNode = dragTargetNode;
+}
+
+function callback(error, newNodeId)
+{
+if (error)
+return;
+
+WebInspector.panels.elements.updateModifiedNodes();
+var newNode = WebInspector.domAgent.nodeForId(newNodeId);
+if (newNode)
+this.selectDOMNode(newNode, true);
+}
+this._nodeBeingDragged.moveTo(parentNode, anchorNode, callback.bind(this));
+}
+
+delete this._nodeBeingDragged;
+},
+
+_ondragend: function(event)
+{
+event.preventDefault();
+this._clearDragOverTreeElementMarker();
+delete this._nodeBeingDragged;
+},
+
+_clearDragOverTreeElementMarker: function()
+{
+if (this._dragOverTreeElement) {
+this._dragOverTreeElement.updateSelection();
+this._dragOverTreeElement.listItemElement.removeStyleClass("elements-drag-over");
+delete this._dragOverTreeElement;
+}
+},
+
+_contextMenuEventFired: function(event)
+{
+if (!this.showInElementsPanelEnabled)
+return;
+
+var treeElement = this._treeElementFromEvent(event);
+if (!treeElement)
+return;
+
 function focusElement()
 {
-WebInspector.panels.elements.switchToAndFocus(listItem.treeElement.representedObject);
+WebInspector.panels.elements.switchToAndFocus(treeElement.representedObject);
 }
+var contextMenu = new WebInspector.ContextMenu();
 contextMenu.appendItem(WebInspector.UIString("Reveal in Elements Panel"), focusElement.bind(this));
-populated = true;
-} else {
-var href = event.target.enclosingNodeOrSelfWithClass("webkit-html-resource-link") || event.target.enclosingNodeOrSelfWithClass("webkit-html-external-link");
+contextMenu.show(event);
+},
+
+populateContextMenu: function(contextMenu, event)
+{
+var treeElement = this._treeElementFromEvent(event);
+if (!treeElement)
+return false;
+
 var tag = event.target.enclosingNodeOrSelfWithClass("webkit-html-tag");
 var textNode = event.target.enclosingNodeOrSelfWithClass("webkit-html-text-node");
-if (href)
-populated = WebInspector.panels.elements.populateHrefContextMenu(contextMenu, event, href);
-if (tag && listItem.treeElement._populateTagContextMenu) {
+var populated = WebInspector.populateHrefContextMenu(contextMenu, this.selectedDOMNode(), event);
+if (tag && treeElement._populateTagContextMenu) {
 if (populated)
 contextMenu.appendSeparator();
-listItem.treeElement._populateTagContextMenu(contextMenu, event);
+treeElement._populateTagContextMenu(contextMenu, event);
 populated = true;
-} else if (textNode && listItem.treeElement._populateTextContextMenu) {
+} else if (textNode && treeElement._populateTextContextMenu) {
 if (populated)
 contextMenu.appendSeparator();
-listItem.treeElement._populateTextContextMenu(contextMenu, textNode);
+treeElement._populateTextContextMenu(contextMenu, textNode);
 populated = true;
-}
 }
 
 return populated;
+},
+
+adjustCollapsedRange: function()
+{
 }
 }
 
@@ -13410,9 +14199,9 @@ var node = this.representedObject;
 if (!node.nodeName() || node.nodeName().toLowerCase() !== "img")
 return;
 
-function setTooltip(error, result, wasThrown)
+function setTooltip(result)
 {
-if (error || wasThrown || result.type !== "string")
+if (!result || result.type !== "string")
 return;
 
 try {
@@ -13435,7 +14224,12 @@ function resolvedNode(object)
 if (!object)
 return;
 
-object.evaluate("return '[' + this.offsetWidth + ',' + this.offsetHeight + ',' + this.naturalWidth + ',' + this.naturalHeight + ']'", setTooltip.bind(this));
+function dimensions()
+{
+return "[" + this.offsetWidth + "," + this.offsetHeight + "," + this.naturalWidth + "," + this.naturalHeight + "]";
+}
+
+object.callFunction(dimensions, setTooltip.bind(this));
 object.release();
 }
 WebInspector.RemoteObject.resolveNode(node, "", resolvedNode.bind(this));
@@ -13470,8 +14264,8 @@ this.listItemElement.addStyleClass("hovered");
 }
 
 this.updateTitle();
-
 this._preventFollowingLinksOnDoubleClick();
+this.listItemElement.draggable = true;
 },
 
 _preventFollowingLinksOnDoubleClick: function()
@@ -13522,7 +14316,7 @@ if (this._updateChildrenInProgress)
 return;
 
 this._updateChildrenInProgress = true;
-var focusedNode = this.treeOutline.focusedDOMNode;
+var selectedNode = this.treeOutline.selectedDOMNode();
 var originalScrollTop;
 if (fullRefresh) {
 var treeOutlineContainerElement = this.treeOutline.element.parentNode;
@@ -13560,7 +14354,7 @@ treeElement.moveChild(existingTreeElement, treeChildIndex);
 
 if (treeChildIndex < treeElement.expandedChildrenLimit) {
 var newElement = treeElement.insertChildElement(child, treeChildIndex);
-if (child === focusedNode)
+if (child === selectedNode)
 elementToSelect = newElement;
 if (treeElement.expandedChildCount > treeElement.expandedChildrenLimit)
 treeElement.expandedChildrenLimit++;
@@ -13590,7 +14384,7 @@ this.removeChildAtIndex(i);
 }
 
 updateChildrenOfNode(this.representedObject);
-this.adjustCollapsedRange(false);
+this.adjustCollapsedRange();
 
 var lastChild = this.children[this.children.length - 1];
 if (this.representedObject.nodeType() == Node.ELEMENT_NODE && (!lastChild || !lastChild._elementCloseTag))
@@ -13678,7 +14472,7 @@ this.listItemElement.scrollIntoViewIfNeeded(false);
 onselect: function(treeElement, selectedByUser)
 {
 this.treeOutline.suppressRevealAndSelect = true;
-this.treeOutline.focusedDOMNode = this.representedObject;
+this.treeOutline.selectDOMNode(this.representedObject, selectedByUser);
 if (selectedByUser)
 WebInspector.highlightDOMNode(this.representedObject.id);
 this.updateSelection();
@@ -13714,7 +14508,7 @@ return;
 
 if (this.treeOutline.showInElementsPanelEnabled) {
 WebInspector.showPanel("elements");
-WebInspector.panels.elements.focusedDOMNode = this.representedObject;
+WebInspector.panels.elements.selectDOMNode(this.representedObject, true);
 }
 
 
@@ -13751,7 +14545,7 @@ this.updateSelection();
 
 _startEditingTarget: function(eventTarget)
 {
-if (this.treeOutline.focusedDOMNode != this.representedObject)
+if (this.treeOutline.selectedDOMNode() != this.representedObject)
 return;
 
 if (this.representedObject.nodeType() != Node.ELEMENT_NODE && this.representedObject.nodeType() != Node.TEXT_NODE)
@@ -13807,7 +14601,7 @@ contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles
 
 _startEditing: function()
 {
-if (this.treeOutline.focusedDOMNode !== this.representedObject)
+if (this.treeOutline.selectedDOMNode() !== this.representedObject)
 return;
 
 var listItem = this._listItemNode;
@@ -14202,7 +14996,7 @@ _buildAttributeDOM: function(parentElement, name, value, node, linkify)
 var hasText = (value.length > 0);
 var attrSpanElement = parentElement.createChild("span", "webkit-html-attribute");
 var attrNameElement = attrSpanElement.createChild("span", "webkit-html-attribute-name");
-attrNameElement.textContent = name.escapeHTML();
+attrNameElement.textContent = name;
 
 if (hasText)
 attrSpanElement.appendChild(document.createTextNode("=\u200B\""));
@@ -14212,7 +15006,7 @@ var rewrittenHref = WebInspector.resourceURLForRelatedNode(node, value);
 value = value.replace(/([\/;:\)\]\}])/g, "$1\u200B");
 attrSpanElement.appendChild(linkify(rewrittenHref, value, "webkit-html-attribute-value", node.nodeName().toLowerCase() === "a"));
 } else {
-value = value.escapeHTML().replace(/([\/;:\)\]\}])/g, "$1\u200B");
+value = value.replace(/([\/;:\)\]\}])/g, "$1\u200B");
 var attrValueElement = attrSpanElement.createChild("span", "webkit-html-attribute-value");
 attrValueElement.textContent = value;
 }
@@ -14263,7 +15057,7 @@ this._buildAttributeDOM(info.titleDOM, node.name, value);
 break;
 
 case Node.ELEMENT_NODE:
-var tagName = this.treeOutline.nodeNameToCorrectCase(node.nodeName()).escapeHTML();
+var tagName = this.treeOutline.nodeNameToCorrectCase(node.nodeName());
 if (this._elementCloseTag) {
 this._buildTagDOM(info.titleDOM, tagName, true, true);
 info.hasChildren = false;
@@ -14289,7 +15083,7 @@ this._buildTagDOM(info.titleDOM, tagName, true, false, false);
 
 if (showInlineText) {
 var textNodeElement = info.titleDOM.createChild("span", "webkit-html-text-node");
-textNodeElement.textContent = textChild.nodeValue().escapeHTML();
+textNodeElement.textContent = textChild.nodeValue();
 info.titleDOM.appendChild(document.createTextNode("\u200B"));
 this._buildTagDOM(info.titleDOM, tagName, true, false);
 info.hasChildren = false;
@@ -14297,7 +15091,7 @@ info.hasChildren = false;
 break;
 
 case Node.TEXT_NODE:
-if (isNodeWhitespace.call(node))
+if (node.isWhitespace())
 info.titleDOM.appendChild(document.createTextNode("(whitespace)"));
 else {
 if (node.parentNode && node.parentNode.nodeName().toLowerCase() === "script") {
@@ -14315,7 +15109,7 @@ cssSyntaxHighlighter.syntaxHighlightNode(newNode);
 } else {
 info.titleDOM.appendChild(document.createTextNode("\""));
 var textNodeElement = info.titleDOM.createChild("span", "webkit-html-text-node");
-textNodeElement.textContent = node.nodeValue().escapeHTML();
+textNodeElement.textContent = node.nodeValue();
 info.titleDOM.appendChild(document.createTextNode("\""));
 }
 }
@@ -14323,7 +15117,7 @@ break;
 
 case Node.COMMENT_NODE:
 var commentElement = info.titleDOM.createChild("span", "webkit-html-comment");
-commentElement.appendChild(document.createTextNode("<!--" + node.nodeValue().escapeHTML() + "-->"));
+commentElement.appendChild(document.createTextNode("<!--" + node.nodeValue() + "-->"));
 break;
 
 case Node.DOCUMENT_TYPE_NODE:
@@ -14344,10 +15138,10 @@ break;
 
 case Node.CDATA_SECTION_NODE:
 var cdataElement = info.titleDOM.createChild("span", "webkit-html-text-node");
-cdataElement.appendChild(document.createTextNode("<![CDATA[" + node.nodeValue().escapeHTML() + "]]>"));
+cdataElement.appendChild(document.createTextNode("<![CDATA[" + node.nodeValue() + "]]>"));
 break;
 default:
-var defaultElement = info.titleDOM.appendChild(document.createTextNode(this.treeOutline.nodeNameToCorrectCase(node.nodeName()).collapseWhitespace().escapeHTML()));
+var defaultElement = info.titleDOM.appendChild(document.createTextNode(this.treeOutline.nodeNameToCorrectCase(node.nodeName()).collapseWhitespace()));
 }
 
 return info;
@@ -14389,7 +15183,7 @@ if (error)
 return;
 
 parentElement.removeChild(self);
-parentElement.adjustCollapsedRange(true);
+parentElement.adjustCollapsedRange();
 }
 
 this.representedObject.removeNode(removeNodeCallback);
@@ -14595,6 +15389,14 @@ this._bubbleText = x;
 this.bubbleElement.textContent = x;
 },
 
+set wait(x)
+{
+if (x)
+this._listItemNode.addStyleClass("wait");
+else
+this._listItemNode.removeStyleClass("wait");
+},
+
 refreshTitles: function()
 {
 var mainTitle = this.mainTitle;
@@ -14745,6 +15547,38 @@ this._populated = true;
 }
 },
 
+get firstSibling()
+{
+var parent = this.element.parentElement;
+if (!parent)
+return null;
+
+var childElement = parent.firstChild;
+while (childElement) {
+if (childElement._section)
+return childElement._section;
+childElement = childElement.nextSibling;
+}
+
+return null;
+},
+
+get lastSibling()
+{
+var parent = this.element.parentElement;
+if (!parent)
+return null;
+
+var childElement = parent.lastChild;
+while (childElement) {
+if (childElement._section)
+return childElement._section;
+childElement = childElement.previousSibling;
+}
+
+return null;
+},
+
 get nextSibling()
 {
 var curElement = this.element;
@@ -14822,17 +15656,28 @@ WebInspector.PropertiesSection.prototype.__proto__ = WebInspector.Section.protot
 
 
 
-WebInspector.RemoteObject = function(objectId, type, description, hasChildren)
+
+WebInspector.RemoteObject = function(objectId, type, subtype, value, description)
 {
-this._objectId = objectId;
 this._type = type;
+this._subtype = subtype;
+if (objectId) {
+
+this._objectId = objectId;
 this._description = description;
-this._hasChildren = hasChildren;
+this._hasChildren = true;
+} else {
+
+console.assert(type !== "object" || value === null);
+this._description = description || (value + "");
+this._hasChildren = false;
+this.value = value;
+}
 }
 
 WebInspector.RemoteObject.fromPrimitiveValue = function(value)
 {
-return new WebInspector.RemoteObject(null, typeof value, value);
+return new WebInspector.RemoteObject(null, typeof value, null, value);
 }
 
 WebInspector.RemoteObject.fromLocalObject = function(value)
@@ -14857,10 +15702,9 @@ DOMAgent.resolveNode(node.id, objectGroup, mycallback);
 
 WebInspector.RemoteObject.fromPayload = function(payload)
 {
-if (typeof payload === "object")
-return new WebInspector.RemoteObject(payload.objectId, payload.type, payload.description, payload.hasChildren);
+console.assert(typeof payload === "object", "Remote object payload should only be an object");
 
-return payload;
+return new WebInspector.RemoteObject(payload.objectId, payload.type, payload.subtype, payload.value, payload.description);
 }
 
 WebInspector.RemoteObject.type = function(remoteObject)
@@ -14886,6 +15730,11 @@ get type()
 return this._type;
 },
 
+get subtype()
+{
+return this._subtype;
+},
+
 get description()
 {
 return this._description;
@@ -14898,15 +15747,15 @@ return this._hasChildren;
 
 getOwnProperties: function(callback)
 {
-this._getProperties(false, callback);
+this._getProperties(true, callback);
 },
 
 getAllProperties: function(callback)
 {
-this._getProperties(true, callback);
+this._getProperties(false, callback);
 },
 
-_getProperties: function(ignoreHasOwnProperty, callback)
+_getProperties: function(ownProperties, callback)
 {
 if (!this._objectId) {
 callback([]);
@@ -14918,20 +15767,56 @@ if (error) {
 callback(null);
 return;
 }
-for (var i = 0; properties && i < properties.length; ++i)
-properties[i].value = WebInspector.RemoteObject.fromPayload(properties[i].value);
-callback(properties);
+var result = [];
+for (var i = 0; properties && i < properties.length; ++i) {
+var property = properties[i];
+if (property.get || property.set) {
+if (property.get)
+result.push(new WebInspector.RemoteObjectProperty("get " + property.name, WebInspector.RemoteObject.fromPayload(property.get), property));
+if (property.set)
+result.push(new WebInspector.RemoteObjectProperty("set " + property.name, WebInspector.RemoteObject.fromPayload(property.set), property));
+} else
+result.push(new WebInspector.RemoteObjectProperty(property.name, WebInspector.RemoteObject.fromPayload(property.value), property));
 }
-RuntimeAgent.getProperties(this._objectId, !!ignoreHasOwnProperty, remoteObjectBinder);
+callback(result);
+}
+RuntimeAgent.getProperties(this._objectId, ownProperties, remoteObjectBinder);
 },
 
 setPropertyValue: function(name, value, callback)
 {
 if (!this._objectId) {
-callback("Can't get a property of non-object.");
+callback("Can't set a property of non-object.");
 return;
 }
-RuntimeAgent.setPropertyValue(this._objectId, name, value, callback);
+
+RuntimeAgent.evaluate.invoke({expression:value, doNotPauseOnExceptions:true}, evaluatedCallback.bind(this));
+
+function evaluatedCallback(error, result, wasThrown)
+{
+if (error || wasThrown) {
+callback(error || result);
+return;
+}
+
+function setPropertyValue(propertyName, propertyValue)
+{
+this[propertyName] = propertyValue;
+}
+
+delete result.description; 
+RuntimeAgent.callFunctionOn(this._objectId, setPropertyValue.toString(), [{ value:name }, result], undefined, propertySetCallback.bind(this));
+if (result._objectId)
+RuntimeAgent.releaseObject(result._objectId);
+}
+
+function propertySetCallback(error, result, wasThrown) {
+if (error || wasThrown) {
+callback(error || result);
+return;
+}
+callback();
+}
 },
 
 pushNodeToFrontend: function(callback)
@@ -14942,9 +15827,24 @@ else
 callback(0);
 },
 
-evaluate: function(expression, callback)
+callFunction: function(functionDeclaration, callback)
 {
-RuntimeAgent.evaluateOn(this._objectId, expression, callback);
+function mycallback(error, result, wasThrown)
+{
+callback((error || wasThrown) ? null : WebInspector.RemoteObject.fromPayload(result));
+}
+
+RuntimeAgent.callFunctionOn(this._objectId, functionDeclaration.toString(), undefined, undefined, mycallback);
+},
+
+callFunctionJSON: function(functionDeclaration, callback)
+{
+function mycallback(error, result, wasThrown)
+{
+callback((error || wasThrown) ? null : result.value);
+}
+
+RuntimeAgent.callFunctionOn(this._objectId, functionDeclaration.toString(), undefined, true, mycallback);
 },
 
 release: function()
@@ -14953,16 +15853,22 @@ RuntimeAgent.releaseObject(this._objectId);
 }
 }
 
-WebInspector.RemoteObjectProperty = function(name, value)
+
+WebInspector.RemoteObjectProperty = function(name, value, descriptor)
 {
 this.name = name;
 this.value = value;
+this.enumerable = descriptor ? !!descriptor.enumerable : true;
+this.writable = descriptor ? !!descriptor.writable : true;
+if (descriptor && descriptor.wasThrown)
+this.wasThrown = true;
 }
 
 WebInspector.RemoteObjectProperty.fromPrimitiveValue = function(name, value)
 {
 return new WebInspector.RemoteObjectProperty(name, WebInspector.RemoteObject.fromPrimitiveValue(value));
 }
+
 
 
 
@@ -14981,9 +15887,8 @@ get description()
 if (this._cachedDescription)
 return this._cachedDescription;
 
-var type = this.type;
-
-switch (type) {
+if (this.type === "object") {
+switch (this.subtype) {
 case "array":
 function formatArrayItem(property)
 {
@@ -14991,16 +15896,19 @@ return property.value.description;
 }
 this._cachedDescription = this._concatenate("[", "]", formatArrayItem);
 break;
-case "object":
+case "null":
+this._cachedDescription = "null";
+break;
+default:
 function formatObjectItem(property)
 {
 return property.name + ":" + property.value.description;
 }
 this._cachedDescription = this._concatenate("{", "}", formatObjectItem);
-break;
-default:
-this._cachedDescription = String(this._value);
 }
+} else
+this._cachedDescription = String(this._value);
+
 return this._cachedDescription;
 },
 
@@ -15026,11 +15934,18 @@ return buffer;
 
 get type()
 {
+return typeof this._value;
+},
+
+get subtype()
+{
 if (this._value === null)
 return "null";
+
 if (this._value instanceof Array)
 return "array";
-return typeof this._value;
+
+return undefined;
 },
 
 get hasChildren()
@@ -15050,6 +15965,9 @@ callback(this._children());
 
 _children: function()
 {
+if (!this.hasChildren)
+return [];
+
 function buildProperty(propName)
 {
 return new WebInspector.RemoteObjectProperty(propName, new WebInspector.LocalJSONObject(this._value[propName]));
@@ -15135,7 +16053,7 @@ this.propertiesForTest = properties;
 
 WebInspector.ObjectPropertiesSection.prototype.__proto__ = WebInspector.PropertiesSection.prototype;
 
-WebInspector.ObjectPropertiesSection.CompareProperties = function(propertyA, propertyB) 
+WebInspector.ObjectPropertiesSection.CompareProperties = function(propertyA, propertyB)
 {
 var a = propertyA.name;
 var b = propertyB.name;
@@ -15186,6 +16104,8 @@ this.property = property;
 
 
 TreeElement.call(this, "", null, false);
+this.toggleOnClick = true;
+this.selectable = false;
 }
 
 WebInspector.ObjectPropertyTreeElement.prototype = {
@@ -15209,6 +16129,7 @@ this.property.value.getOwnProperties(callback.bind(this));
 
 ondblclick: function(event)
 {
+if (this.property.writable)
 this.startEditing();
 },
 
@@ -15222,6 +16143,8 @@ update: function()
 this.nameElement = document.createElement("span");
 this.nameElement.className = "name";
 this.nameElement.textContent = this.property.name;
+if (!this.property.enumerable)
+this.nameElement.addStyleClass("dimmed");
 
 var separatorElement = document.createElement("span");
 separatorElement.className = "separator";
@@ -15243,13 +16166,13 @@ this.valueElement._originalTextContent = description;
 } else
 this.valueElement.textContent = description;
 
-if (this.property.isGetter)
-this.valueElement.addStyleClass("dimmed");
 if (this.property.wasThrown)
 this.valueElement.addStyleClass("error");
-if (this.property.value.type)
+if (this.property.value.subtype)
+this.valueElement.addStyleClass("console-formatted-" + this.property.value.subtype);
+else if (this.property.value.type)
 this.valueElement.addStyleClass("console-formatted-" + this.property.value.type);
-if (this.property.value.type === "node")
+if (this.property.value.subtype === "node")
 this.valueElement.addEventListener("contextmenu", this._contextMenuEventFired.bind(this), false);
 
 this.listItemElement.removeChildren();
@@ -15386,6 +16309,10 @@ this._items = {};
 WebInspector.JavaScriptBreakpointsSidebarPane.prototype = {
 addBreakpoint: function(breakpoint)
 {
+var breakpointItemId = this._createBreakpointItemId(breakpoint.uiSourceCode, breakpoint.lineNumber);
+if (breakpointItemId in this._items)
+return;
+
 var element = document.createElement("li");
 element.addStyleClass("cursor-pointer");
 element.addEventListener("contextmenu", this._contextMenu.bind(this, breakpoint), true);
@@ -15398,20 +16325,21 @@ checkbox.checked = breakpoint.enabled;
 checkbox.addEventListener("click", this._breakpointCheckboxClicked.bind(this, breakpoint), false);
 element.appendChild(checkbox);
 
-var displayName = breakpoint.url ? WebInspector.displayNameForURL(breakpoint.url) : WebInspector.UIString("(program)");
+var url = breakpoint.uiSourceCode.url;
+var displayName = url ? WebInspector.displayNameForURL(url) : WebInspector.UIString("(program)");
 var labelElement = document.createTextNode(displayName + ":" + (breakpoint.lineNumber + 1));
 element.appendChild(labelElement);
 
 var snippetElement = document.createElement("div");
 snippetElement.className = "source-text monospace";
 element.appendChild(snippetElement);
-if (breakpoint.loadSnippet) {
-function didLoadSnippet(snippet)
+function didRequestContent(mimeType, content)
 {
-snippetElement.textContent = snippet;
+var lineEndings = content.lineEndings();
+if (breakpoint.lineNumber < lineEndings.length)
+snippetElement.textContent = content.substring(lineEndings[breakpoint.lineNumber - 1], lineEndings[breakpoint.lineNumber]);
 }
-breakpoint.loadSnippet(didLoadSnippet);
-}
+breakpoint.uiSourceCode.requestContent(didRequestContent.bind(this));
 
 element._data = breakpoint;
 var currentElement = this.listElement.firstChild;
@@ -15425,15 +16353,15 @@ this._addListElement(element, currentElement);
 var breakpointItem = {};
 breakpointItem.element = element;
 breakpointItem.checkbox = checkbox;
-this._items[this._createBreakpointItemId(breakpoint.sourceFileId, breakpoint.lineNumber)] = breakpointItem;
+this._items[breakpointItemId] = breakpointItem;
 
 if (!this.expanded)
 this.expanded = true;
 },
 
-removeBreakpoint: function(sourceFileId, lineNumber)
+removeBreakpoint: function(uiSourceCode, lineNumber)
 {
-var breakpointItemId = this._createBreakpointItemId(sourceFileId, lineNumber);
+var breakpointItemId = this._createBreakpointItemId(uiSourceCode, lineNumber);
 var breakpointItem = this._items[breakpointItemId];
 if (!breakpointItem)
 return;
@@ -15441,9 +16369,9 @@ delete this._items[breakpointItemId];
 this._removeListElement(breakpointItem.element);
 },
 
-highlightBreakpoint: function(sourceFileId, lineNumber)
+highlightBreakpoint: function(uiSourceCode, lineNumber)
 {
-var breakpointItem = this._items[this._createBreakpointItemId(sourceFileId, lineNumber)];
+var breakpointItem = this._items[this._createBreakpointItemId(uiSourceCode, lineNumber)];
 if (!breakpointItem)
 return;
 breakpointItem.element.addStyleClass("breakpoint-hit");
@@ -15458,14 +16386,14 @@ delete this._highlightedBreakpointItem;
 }
 },
 
-_createBreakpointItemId: function(sourceFileId, lineNumber)
+_createBreakpointItemId: function(uiSourceCode, lineNumber)
 {
-return sourceFileId + ":" + lineNumber;
+return uiSourceCode.id + ":" + lineNumber;
 },
 
 _breakpointClicked: function(breakpoint, event)
 {
-this._showSourceLineDelegate(breakpoint.sourceFileId, breakpoint.lineNumber);
+this._showSourceLineDelegate(breakpoint.uiSourceCode, breakpoint.lineNumber);
 },
 
 _breakpointCheckboxClicked: function(breakpoint, event)
@@ -15473,14 +16401,14 @@ _breakpointCheckboxClicked: function(breakpoint, event)
 
 event.stopPropagation();
 
-this._model.setBreakpointEnabled(breakpoint.sourceFileId, breakpoint.lineNumber, event.target.checked);
+this._model.setBreakpointEnabled(breakpoint.uiSourceCode, breakpoint.lineNumber, event.target.checked);
 },
 
 _contextMenu: function(breakpoint, event)
 {
 var contextMenu = new WebInspector.ContextMenu();
 
-var removeHandler = this._model.removeBreakpoint.bind(this._model, breakpoint.sourceFileId, breakpoint.lineNumber);
+var removeHandler = this._model.removeBreakpoint.bind(this._model, breakpoint.uiSourceCode, breakpoint.lineNumber);
 contextMenu.appendItem(WebInspector.UIString("Remove Breakpoint"), removeHandler);
 
 contextMenu.show(event);
@@ -15747,12 +16675,12 @@ _saveBreakpoints: function()
 var breakpoints = [];
 for (var url in this._breakpointElements)
 breakpoints.push({ url: url, enabled: this._breakpointElements[url]._checkboxElement.checked });
-WebInspector.settings.xhrBreakpoints = breakpoints;
+WebInspector.settings.xhrBreakpoints.set(breakpoints);
 },
 
 _restoreBreakpoints: function()
 {
-var breakpoints = WebInspector.settings.xhrBreakpoints;
+var breakpoints = WebInspector.settings.xhrBreakpoints.get();
 for (var i = 0; i < breakpoints.length; ++i) {
 var breakpoint = breakpoints[i];
 if (breakpoint && typeof breakpoint.url === "string")
@@ -15930,12 +16858,12 @@ for (var eventName in this._breakpointItems) {
 if (this._breakpointItems[eventName].checkbox.checked)
 breakpoints.push({ eventName: eventName });
 }
-WebInspector.settings.eventListenerBreakpoints = breakpoints;
+WebInspector.settings.eventListenerBreakpoints.set(breakpoints);
 },
 
 _restoreBreakpoints: function()
 {
-var breakpoints = WebInspector.settings.eventListenerBreakpoints;
+var breakpoints = WebInspector.settings.eventListenerBreakpoints.get();
 for (var i = 0; i < breakpoints.length; ++i) {
 var breakpoint = breakpoints[i];
 if (breakpoint && typeof breakpoint.eventName === "string")
@@ -15957,21 +16885,22 @@ WebInspector.NativeBreakpointsSidebarPane.call(this, WebInspector.UIString("DOM 
 this._breakpointElements = {};
 
 this._breakpointTypes = {
-SubtreeModified: 0,
-AttributeModified: 1,
-NodeRemoved: 2
+SubtreeModified: "subtree-modified",
+AttributeModified: "attribute-modified",
+NodeRemoved: "node-removed"
 };
-this._breakpointTypeLabels = [
-WebInspector.UIString("Subtree Modified"),
-WebInspector.UIString("Attribute Modified"),
-WebInspector.UIString("Node Removed")
-];
-this._contextMenuLabels = [
-WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Break on subtree modifications" : "Break on Subtree Modifications"),
-WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Break on attributes modifications" : "Break on Attributes Modifications"),
-WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Break on node removal" : "Break on Node Removal")
-];
+this._breakpointTypeLabels = {};
+this._breakpointTypeLabels[this._breakpointTypes.SubtreeModified] = WebInspector.UIString("Subtree Modified");
+this._breakpointTypeLabels[this._breakpointTypes.AttributeModified] = WebInspector.UIString("Attribute Modified");
+this._breakpointTypeLabels[this._breakpointTypes.NodeRemoved] = WebInspector.UIString("Node Removed");
+
+this._contextMenuLabels = {};
+this._contextMenuLabels[this._breakpointTypes.SubtreeModified] = WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Break on subtree modifications" : "Break on Subtree Modifications");
+this._contextMenuLabels[this._breakpointTypes.AttributeModified] = WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Break on attributes modifications" : "Break on Attributes Modifications");
+this._contextMenuLabels[this._breakpointTypes.NodeRemoved] = WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Break on node removal" : "Break on Node Removal");
+
 WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.InspectedURLChanged, this._inspectedURLChanged, this);
+WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.NodeRemoved, this._nodeRemoved, this);
 }
 
 WebInspector.DOMBreakpointsSidebarPane.prototype = {
@@ -16000,40 +16929,41 @@ this._removeBreakpoint(node, type);
 this._saveBreakpoints();
 }
 
-for (var type = 0; type < 3; ++type) {
+for (var key in this._breakpointTypes) {
+var type = this._breakpointTypes[key];
 var label = this._contextMenuLabels[type];
 contextMenu.appendCheckboxItem(label, toggleBreakpoint.bind(this, type), nodeBreakpoints[type]);
 }
 },
 
-createBreakpointHitStatusMessage: function(eventData, callback)
+createBreakpointHitStatusMessage: function(auxData, callback)
 {
-if (eventData.type === this._breakpointTypes.SubtreeModified) {
-var targetNodeObject = WebInspector.RemoteObject.fromPayload(eventData.targetNode);
+if (auxData.type === this._breakpointTypes.SubtreeModified) {
+var targetNodeObject = WebInspector.RemoteObject.fromPayload(auxData.targetNode);
 function didPushNodeToFrontend(targetNodeId)
 {
 if (targetNodeId)
 targetNodeObject.release();
-this._doCreateBreakpointHitStatusMessage(eventData, targetNodeId, callback);
+this._doCreateBreakpointHitStatusMessage(auxData, targetNodeId, callback);
 }
 targetNodeObject.pushNodeToFrontend(didPushNodeToFrontend.bind(this));
 } else
-this._doCreateBreakpointHitStatusMessage(eventData, null, callback);
+this._doCreateBreakpointHitStatusMessage(auxData, null, callback);
 },
 
-_doCreateBreakpointHitStatusMessage: function (eventData, targetNodeId, callback)
+_doCreateBreakpointHitStatusMessage: function (auxData, targetNodeId, callback)
 {
 var message;
-var typeLabel = this._breakpointTypeLabels[eventData.type];
-var linkifiedNode = WebInspector.panels.elements.linkifyNodeById(eventData.nodeId);
+var typeLabel = this._breakpointTypeLabels[auxData.type];
+var linkifiedNode = WebInspector.panels.elements.linkifyNodeById(auxData.nodeId);
 var substitutions = [typeLabel, linkifiedNode];
 var targetNode = "";
 if (targetNodeId)
 targetNode = WebInspector.panels.elements.linkifyNodeById(targetNodeId);
 
-if (eventData.type === this._breakpointTypes.SubtreeModified) {
-if (eventData.insertion) {
-if (targetNodeId !== eventData.nodeId) {
+if (auxData.type === this._breakpointTypes.SubtreeModified) {
+if (auxData.insertion) {
+if (targetNodeId !== auxData.nodeId) {
 message = "Paused on a \"%s\" breakpoint set on %s, because a new child was added to its descendant %s.";
 substitutions.push(targetNode);
 } else
@@ -16063,9 +16993,10 @@ WebInspector.formatLocalized(message, substitutions, formatters, "", append);
 callback(element);
 },
 
-nodeRemoved: function(node)
+_nodeRemoved: function(event)
 {
-this._removeBreakpointsForNode(node);
+var node = event.data.node;
+this._removeBreakpointsForNode(event.data.node);
 if (!node.children)
 return;
 for (var i = 0; i < node.children.length; ++i)
@@ -16159,9 +17090,9 @@ DOMDebuggerAgent.removeDOMBreakpoint(node.id, type);
 this._saveBreakpoints();
 },
 
-highlightBreakpoint: function(eventData)
+highlightBreakpoint: function(auxData)
 {
-var breakpointId = this._createBreakpointId(eventData.nodeId, eventData.type);
+var breakpointId = this._createBreakpointId(auxData.nodeId, auxData.type);
 var element = this._breakpointElements[breakpointId];
 if (!element)
 return;
@@ -16186,7 +17117,7 @@ return nodeId + ":" + type;
 _saveBreakpoints: function()
 {
 var breakpoints = [];
-var storedBreakpoints = WebInspector.settings.domBreakpoints;
+var storedBreakpoints = WebInspector.settings.domBreakpoints.get();
 for (var i = 0; i < storedBreakpoints.length; ++i) {
 var breakpoint = storedBreakpoints[i];
 if (breakpoint.url !== this._inspectedURL)
@@ -16196,7 +17127,7 @@ for (var id in this._breakpointElements) {
 var element = this._breakpointElements[id];
 breakpoints.push({ url: this._inspectedURL, path: element._node.path(), type: element._type, enabled: element._checkboxElement.checked });
 }
-WebInspector.settings.domBreakpoints = breakpoints;
+WebInspector.settings.domBreakpoints.set(breakpoints);
 },
 
 restoreBreakpoints: function()
@@ -16214,7 +17145,7 @@ for (var i = 0; i < breakpoints.length; ++i)
 this._setBreakpoint(node, breakpoints[i].type, breakpoints[i].enabled);
 }
 
-var breakpoints = WebInspector.settings.domBreakpoints;
+var breakpoints = WebInspector.settings.domBreakpoints.get();
 for (var i = 0; i < breakpoints.length; ++i) {
 var breakpoint = breakpoints[i];
 if (breakpoint.url !== this._inspectedURL)
@@ -16272,7 +17203,7 @@ var placard = new WebInspector.Placard(title, subtitle);
 placard.callFrame = callFrame;
 placard.element.addEventListener("click", this._placardSelected.bind(this, placard), false);
 
-function didGetSourceLine(placard, sourceFileId, lineNumber)
+function didGetSourceLine(placard, uiSourceCode, lineNumber)
 {
 if (placard.subtitle)
 placard.subtitle += ":" + (lineNumber + 1);
@@ -16349,7 +17280,7 @@ _copyStackTrace: function()
 {
 var text = "";
 for (var i = 0; i < this.placards.length; ++i)
-text += this.placards[i]._text;
+text += this.placards[i]._text + "\n";
 InspectorFrontendHost.copyText(text);
 },
 
@@ -16435,7 +17366,8 @@ subtitle = null;
 if (callFrame.this)
 extraProperties = [ new WebInspector.RemoteObjectProperty("this", WebInspector.RemoteObject.fromPayload(callFrame.this)) ];
 if (i == 0) {
-var exception = WebInspector.debuggerModel.debuggerPausedDetails.exception;
+var details = WebInspector.debuggerModel.debuggerPausedDetails;
+var exception = details.reason === WebInspector.ScriptsPanel.BreakReason.Exception ? details.auxData : 0;
 if (exception) {
 extraProperties = extraProperties || [];
 extraProperties.push(new WebInspector.RemoteObjectProperty("<exception>", WebInspector.RemoteObject.fromPayload(exception)));
@@ -16538,15 +17470,7 @@ WebInspector.ScopeVariableTreeElement.prototype.__proto__ = WebInspector.ObjectP
 WebInspector.WatchExpressionsSidebarPane = function()
 {
 WebInspector.SidebarPane.call(this, WebInspector.UIString("Watch Expressions"));
-this.reset();
-}
 
-WebInspector.WatchExpressionsSidebarPane.prototype = {
-reset: function()
-{
-this.bodyElement.removeChildren();
-
-this.expanded = WebInspector.settings.watchExpressions.length > 0;
 this.section = new WebInspector.WatchExpressionsSection();
 this.bodyElement.appendChild(this.section.element);
 
@@ -16559,8 +17483,45 @@ var addButton = document.createElement("button");
 addButton.className = "pane-title-button add";
 addButton.addEventListener("click", this._addButtonClicked.bind(this), false);
 this.titleElement.appendChild(addButton);
+this._requiresUpdate = true;
+}
 
-this.onexpand = this.refreshExpressions.bind(this);
+WebInspector.WatchExpressionsSidebarPane.prototype = {
+show: function()
+{
+this._visible = true;
+
+
+if (!this._wasShown && WebInspector.settings.watchExpressions.get().length > 0)
+this.expanded = true;
+
+this._refreshExpressionsIfNeeded();
+this._wasShown = true;
+},
+
+hide: function()
+{
+this._visible = false;
+},
+
+reset: function()
+{
+this.refreshExpressions();
+},
+
+refreshExpressions: function()
+{
+this._requiresUpdate = true;
+this._refreshExpressionsIfNeeded();
+},
+
+_refreshExpressionsIfNeeded: function()
+{
+if (this._requiresUpdate && this._visible) {
+this.section.update();
+delete this._requiresUpdate;
+} else
+this._requiresUpdate = true;
 },
 
 _addButtonClicked: function(event)
@@ -16574,11 +17535,6 @@ _refreshButtonClicked: function(event)
 {
 event.stopPropagation();
 this.refreshExpressions();
-},
-
-refreshExpressions: function()
-{
-this.section.update();
 }
 }
 
@@ -16593,7 +17549,7 @@ this.emptyElement = document.createElement("div");
 this.emptyElement.className = "info";
 this.emptyElement.textContent = WebInspector.UIString("No Watch Expressions");
 
-this.watchExpressions = WebInspector.settings.watchExpressions;
+this.watchExpressions = WebInspector.settings.watchExpressions.get();
 
 this.headerElement.className = "hidden";
 this.editable = true;
@@ -16614,6 +17570,9 @@ e.stopPropagation();
 
 function appendResult(expression, watchIndex, result, wasThrown)
 {
+if (!result)
+return;
+
 var property = new WebInspector.RemoteObjectProperty(expression, result);
 property.watchIndex = watchIndex;
 property.wasThrown = wasThrown;
@@ -16666,7 +17625,7 @@ var expression = this.watchExpressions[i];
 if (!expression)
 continue;
 
-WebInspector.console.evalInInspectedWindow(expression, this._watchObjectGroupId, false, appendResult.bind(this, expression, i));
+WebInspector.consoleView.evalInInspectedWindow(expression, this._watchObjectGroupId, false, true, undefined, appendResult.bind(this, expression, i));
 }
 
 if (!propertyCount) {
@@ -16712,7 +17671,7 @@ for (var i = 0; i < this.watchExpressions.length; i++)
 if (this.watchExpressions[i])
 toSave.push(this.watchExpressions[i]);
 
-WebInspector.settings.watchExpressions = toSave;
+WebInspector.settings.watchExpressions.set(toSave);
 return toSave.length;
 },
 
@@ -16739,7 +17698,7 @@ while (true) {
 var next = this._hoveredElement.nextSibling;
 while(next && !next.clientHeight)
 next = next.nextSibling;
-if (!next || next.totalOffsetTop > pageY)
+if (!next || next.totalOffsetTop() > pageY)
 break;
 this._hoveredElement = next;
 }
@@ -17010,6 +17969,9 @@ WebInspector.WorkerListSidebarPane.prototype.__proto__ = WebInspector.SidebarPan
 WebInspector.MetricsSidebarPane = function()
 {
 WebInspector.SidebarPane.call(this, WebInspector.UIString("Metrics"));
+
+WebInspector.cssModel.addEventListener(WebInspector.CSSStyleModel.Events.StyleSheetChanged, this._styleSheetChanged, this);
+WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.AttrModified, this._attributesUpdated, this);
 }
 
 WebInspector.MetricsSidebarPane.prototype = {
@@ -17017,28 +17979,49 @@ update: function(node)
 {
 if (node)
 this.node = node;
-else
-node = this.node;
+this._innerUpdate();
+},
+
+_innerUpdate: function()
+{
+
+var node = this.node;
 
 if (!node || node.nodeType() !== Node.ELEMENT_NODE) {
 this.bodyElement.removeChildren();
 return;
 }
 
-var self = this;
-var callback = function(style) {
-if (!style)
+function callback(style)
+{
+if (!style || this.node !== node)
 return;
-self._update(style);
-};
-WebInspector.cssModel.getComputedStyleAsync(node.id, callback);
+this._updateMetrics(style);
+}
+WebInspector.cssModel.getComputedStyleAsync(node.id, callback.bind(this));
 
-var inlineStyleCallback = function(style) {
-if (!style)
+function inlineStyleCallback(style)
+{
+if (!style || this.node !== node)
 return;
-self.inlineStyle = style;
-};
-WebInspector.cssModel.getInlineStyleAsync(node.id, inlineStyleCallback);
+this.inlineStyle = style;
+}
+WebInspector.cssModel.getInlineStyleAsync(node.id, inlineStyleCallback.bind(this));
+},
+
+_styleSheetChanged: function()
+{
+this._innerUpdate();
+},
+
+_attributesUpdated: function(event)
+{
+if (this.node !== event.data)
+return;
+
+
+if (!this._isEditingMetrics)
+this._innerUpdate();
 },
 
 _getPropertyValueAsPx: function(style, propertyName)
@@ -17058,54 +18041,28 @@ return { left: left, top: top, right: right, bottom: bottom };
 
 _highlightDOMNode: function(showHighlight, mode, event)
 {
-function enclosingOrSelfWithClassInArray(element, classNames)
-{
-for (var node = element; node && node !== element.ownerDocument; node = node.parentNode) {
-if (node.nodeType === Node.ELEMENT_NODE) {
-for (var i = 0; i < classNames.length; ++i) {
-if (node.hasStyleClass(classNames[i]))
-return node;
-}
-}
-}
-return null;
-}
-
-function getBoxRectangleElement(element)
-{
-if (!element)
-return null;
-return enclosingOrSelfWithClassInArray(element, ["metrics", "margin", "border", "padding", "content"]);
-}
-
 event.stopPropagation();
-var fromElement = getBoxRectangleElement(event.fromElement);
-var toElement = getBoxRectangleElement(event.toElement);
-
-if (fromElement === toElement)
-return;
-
-if (showHighlight) {
-
-if (this.node && toElement)
-toElement.addStyleClass("hovered");
-var nodeId = this.node ? this.node.id : 0;
-} else {
-
-if (fromElement)
-fromElement.removeStyleClass("hovered");
-var nodeId = 0;
-}
+var nodeId = showHighlight && this.node ? this.node.id : 0;
 if (nodeId) {
 if (this._highlightMode === mode)
 return;
 this._highlightMode = mode;
-} else
-delete this._highlightMode;
 WebInspector.highlightDOMNode(nodeId, mode);
+} else {
+delete this._highlightMode;
+WebInspector.highlightDOMNode(0, "");
+}
+
+for (var i = 0; this._boxElements && i < this._boxElements.length; ++i) {
+var element = this._boxElements[i];
+if (!nodeId || mode === "all" || element._name === mode)
+element.style.backgroundColor = element._backgroundColor;
+else
+element.style.backgroundColor = "";
+}
 },
 
-_update: function(style)
+_updateMetrics: function(style)
 {
 
 var metricsElement = document.createElement("div");
@@ -17182,8 +18139,16 @@ var noPositionType = {
 };
 
 var boxes = ["content", "padding", "border", "margin", "position"];
+var boxColors = [
+WebInspector.Color.PageHighlight.Content,
+WebInspector.Color.PageHighlight.Padding,
+WebInspector.Color.PageHighlight.Border,
+WebInspector.Color.PageHighlight.Margin,
+WebInspector.Color.fromRGBA(0, 0, 0, 0)
+];
 var boxLabels = [WebInspector.UIString("content"), WebInspector.UIString("padding"), WebInspector.UIString("border"), WebInspector.UIString("margin"), WebInspector.UIString("position")];
 var previousBox;
+this._boxElements = [];
 for (var i = 0; i < boxes.length; ++i) {
 var name = boxes[i];
 
@@ -17196,8 +18161,11 @@ continue;
 
 var boxElement = document.createElement("div");
 boxElement.className = name;
-boxElement.addEventListener("mouseover", this._highlightDOMNode.bind(this, true, name), false);
-boxElement.addEventListener("mouseout", this._highlightDOMNode.bind(this, false, ""), false);
+boxElement._backgroundColor = boxColors[i].toString("original");
+boxElement._name = name;
+boxElement.style.backgroundColor = boxElement._backgroundColor;
+boxElement.addEventListener("mouseover", this._highlightDOMNode.bind(this, true, name === "position" ? "all" : name), false);
+this._boxElements.push(boxElement);
 
 if (name === "content") {
 var widthElement = document.createElement("span");
@@ -17235,12 +18203,9 @@ previousBox = boxElement;
 }
 
 metricsElement.appendChild(previousBox);
-metricsElement.addEventListener("mouseover", this._highlightDOMNode.bind(this, true, ""), false);
-metricsElement.addEventListener("mouseout", this._highlightDOMNode.bind(this, false, ""), false);
+metricsElement.addEventListener("mouseover", this._highlightDOMNode.bind(this, false, ""), false);
 this.bodyElement.removeChildren();
 this.bodyElement.appendChild(metricsElement);
-
-WebInspector.highlightDOMNode(0);
 },
 
 startEditing: function(targetElement, box, styleProperty, computedStyle)
@@ -17253,7 +18218,7 @@ var boundKeyDown = this._handleKeyDown.bind(this, context, styleProperty);
 context.keyDownHandler = boundKeyDown;
 targetElement.addEventListener("keydown", boundKeyDown, false);
 
-WebInspector.panels.elements.startEditingStyle();
+this._isEditingMetrics = true;
 WebInspector.startEditing(targetElement, {
 context: context,
 commitHandler: this.editingCommitted.bind(this),
@@ -17321,7 +18286,7 @@ editingEnded: function(element, context)
 delete this.originalPropertyData;
 delete this.previousPropertyDataCandidate;
 element.removeEventListener("keydown", context.keyDownHandler, false);
-WebInspector.panels.elements.endEditingStyle();
+delete this._isEditingMetrics;
 },
 
 editingCancelled: function(element, context)
@@ -17391,10 +18356,12 @@ return;
 self.inlineStyle = style;
 if (!("originalPropertyData" in self))
 self.originalPropertyData = self.previousPropertyDataCandidate;
-if ("_highlightMode" in self) {
+
+if (typeof self._highlightMode !== "undefined") {
 WebInspector.highlightDOMNode(0, "");
 WebInspector.highlightDOMNode(self.node.id, self._highlightMode);
 }
+
 if (commitEditor) {
 self.dispatchEventToListeners("metrics edited");
 self.update();
@@ -17452,15 +18419,25 @@ function nodeResolved(object)
 {
 if (!object)
 return;
-object.evaluate("var proto = this; result = {}; var counter = 1; while (proto) { result[counter++] = proto; proto = proto.__proto__ }; return result;", nodePrototypesReady.bind(this));
+function protoList()
+{
+var proto = this;
+var result = {};
+var counter = 1;
+while (proto) {
+result[counter++] = proto;
+proto = proto.__proto__;
+}
+return result;
+}
+object.callFunction(protoList, nodePrototypesReady.bind(this));
 object.release();
 }
 
-function nodePrototypesReady(error, objectPayload, wasThrown)
+function nodePrototypesReady(object)
 {
-if (error || wasThrown)
+if (!object)
 return;
-var object = WebInspector.RemoteObject.fromPayload(objectPayload);
 object.getOwnProperties(fillSection.bind(this));
 }
 
@@ -17516,7 +18493,7 @@ option.value = "selected";
 option.label = WebInspector.UIString("Selected Node Only");
 this.settingsSelectElement.appendChild(option);
 
-var filter = WebInspector.settings.eventListenersFilter;
+var filter = WebInspector.settings.eventListenersFilter.get();
 if (filter === "all")
 this.settingsSelectElement[0].selected = true;
 else if (filter === "selected")
@@ -17584,7 +18561,7 @@ node.eventListeners(callback);
 _changeSetting: function(event)
 {
 var selectedOption = this.settingsSelectElement[this.settingsSelectElement.selectedIndex];
-WebInspector.settings.eventListenersFilter = selectedOption.value;
+WebInspector.settings.eventListenersFilter.set(selectedOption.value);
 
 for (var i = 0; i < this.sections.length; ++i)
 this.sections[i].update();
@@ -17614,7 +18591,7 @@ update: function()
 {
 
 var filteredEventListeners = this.eventListeners;
-if (WebInspector.settings.eventListenersFilter === "selected") {
+if (WebInspector.settings.eventListenersFilter.get() == "selected") {
 filteredEventListeners = [];
 for (var i = 0; i < this.eventListeners.length; ++i) {
 var eventListener = this.eventListeners[i];
@@ -17671,7 +18648,7 @@ properties.push(new WebInspector.RemoteObjectProperty("node", nodeObject));
 if (typeof this.eventListener.handlerBody !== "undefined")
 properties.push(WebInspector.RemoteObjectProperty.fromPrimitiveValue("listenerBody", this.eventListener.handlerBody));
 if (this.eventListener.location) {
-properties.push(WebInspector.RemoteObjectProperty.fromPrimitiveValue("sourceName", this.eventListener.location.sourceId));
+properties.push(WebInspector.RemoteObjectProperty.fromPrimitiveValue("sourceName", this.eventListener.location.scriptId));
 properties.push(WebInspector.RemoteObjectProperty.fromPrimitiveValue("lineNumber", this.eventListener.location.lineNumber));
 }
 
@@ -17705,7 +18682,12 @@ _setFunctionSubtitle: function()
 
 if (this.eventListener.location) {
 this.subtitleElement.removeChildren();
-this.subtitleElement.appendChild(WebInspector.linkifyResourceAsNode(this.eventListener.location.sourceId, "scripts", this.eventListener.location.lineNumber));
+
+var url = this.eventListener.location.scriptId;
+var lineNumber = this.eventListener.location.lineNumber - 1;
+var columnNumber = 0;
+var urlElement = WebInspector.debuggerPresentationModel.linkifyLocation(url, lineNumber, columnNumber);
+this.subtitleElement.appendChild(urlElement);
 } else {
 var match = this.eventListener.handlerBody.match(/function ([^\(]+?)\(/);
 if (match)
@@ -17726,6 +18708,11 @@ WebInspector.Color = function(str)
 {
 this.value = str;
 this._parse();
+}
+
+WebInspector.Color.fromRGBA = function(r, g, b, a)
+{
+return new WebInspector.Color("rgba(" + r + "," + g + "," + b + "," + (typeof a === "undefined" ? 1 : a) + ")");
 }
 
 WebInspector.Color.prototype = {
@@ -17859,6 +18846,21 @@ return this.nickname;
 }
 
 throw "invalid color format";
+},
+
+toProtocolRGBA: function()
+{
+if (this._protocolRGBA)
+return this._protocolRGBA;
+
+var components = this.rgba;
+if (components)
+this._protocolRGBA = { r: Number(components[0]), g: Number(components[1]), b: Number(components[2]), a: Number(components[3]) };
+else {
+components = this.rgb;
+this._protocolRGBA = { r: Number(components[0]), g: Number(components[1]), b: Number(components[2]) };
+}
+return this._protocolRGBA;
 },
 
 _rgbToHex: function(rgb)
@@ -18357,6 +19359,18 @@ WebInspector.Color.AdvancedNickNames = {
 "hsla(0,0,0,0)": [[0, 0, 0, 0], [0, 0, 0, 0], "transparent"],
 };
 
+WebInspector.Color.PageHighlight = {
+Content: WebInspector.Color.fromRGBA(111, 168, 220, .66),
+ContentLight: WebInspector.Color.fromRGBA(111, 168, 220, .5),
+ContentOutline: WebInspector.Color.fromRGBA(9, 83, 148),
+Padding: WebInspector.Color.fromRGBA(147, 196, 125, .55),
+PaddingLight: WebInspector.Color.fromRGBA(147, 196, 125, .4),
+Border: WebInspector.Color.fromRGBA(255, 229, 153, .66),
+BorderLight: WebInspector.Color.fromRGBA(255, 229, 153, .5),
+Margin: WebInspector.Color.fromRGBA(246, 178, 107, .66),
+MarginLight: WebInspector.Color.fromRGBA(246, 178, 107, .5)
+}
+
 
 
 
@@ -18720,7 +19734,7 @@ WebInspector.CSSKeywordCompletions._propertyKeywordMap = {
 "-webkit-control", "status-bar", "italic", "oblique", "small-caps", "normal", "bold", "bolder", "lighter",
 "100", "200", "300", "400", "500", "600", "700", "800", "900", "xx-small", "x-small", "small", "medium",
 "large", "x-large", "xx-large", "-webkit-xxx-large", "smaller", "larger", "serif", "sans-serif", "cursive",
-"fantasy", "monospace", "-webkit-body"
+"fantasy", "monospace", "-webkit-body", "-webkit-pictograph"
 ],
 "dominant-baseline": [
 "middle", "auto", "central", "text-before-edge", "text-after-edge", "ideographic", "alphabetic", "hanging",
@@ -18784,7 +19798,7 @@ WebInspector.CSSKeywordCompletions._propertyKeywordMap = {
 "absolute", "fixed", "relative", "static"
 ],
 "font-family": [
-"serif", "sans-serif", "cursive", "fantasy", "monospace", "-webkit-body"
+"serif", "sans-serif", "cursive", "fantasy", "monospace", "-webkit-body", "-webkit-pictograph"
 ],
 "text-overflow-mode": [
 "clip", "ellipsis"
@@ -18885,51 +19899,70 @@ this.settingsSelectElement = document.createElement("select");
 this.settingsSelectElement.className = "select-settings";
 
 var option = document.createElement("option");
-option.value = "original";
-option.action = this._changeColorFormat.bind(this);
-option.label = WebInspector.UIString("As Authored");
+option.value = WebInspector.StylesSidebarPane.ColorFormat.Original;
+option.label = WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "As authored" : "As Authored");
 this.settingsSelectElement.appendChild(option);
 
 var option = document.createElement("option");
-option.value = "hex";
-option.action = this._changeColorFormat.bind(this);
+option.value = WebInspector.StylesSidebarPane.ColorFormat.HEX;
 option.label = WebInspector.UIString("Hex Colors");
 this.settingsSelectElement.appendChild(option);
 
 option = document.createElement("option");
-option.value = "rgb";
-option.action = this._changeColorFormat.bind(this);
+option.value = WebInspector.StylesSidebarPane.ColorFormat.RGB;
 option.label = WebInspector.UIString("RGB Colors");
 this.settingsSelectElement.appendChild(option);
 
 option = document.createElement("option");
-option.value = "hsl";
-option.action = this._changeColorFormat.bind(this);
+option.value = WebInspector.StylesSidebarPane.ColorFormat.HSL;
 option.label = WebInspector.UIString("HSL Colors");
 this.settingsSelectElement.appendChild(option);
 
-this.settingsSelectElement.appendChild(document.createElement("hr"));
 
-option = document.createElement("option");
-option.action = this._createNewRule.bind(this);
-option.label = WebInspector.UIString("New Style Rule");
-this.settingsSelectElement.appendChild(option);
+var muteEventListener = function(event) { event.stopPropagation(); event.preventDefault(); };
 
-this.settingsSelectElement.addEventListener("click", function(event) { event.stopPropagation() }, false);
+this.settingsSelectElement.addEventListener("click", muteEventListener, true);
 this.settingsSelectElement.addEventListener("change", this._changeSetting.bind(this), false);
-var format = WebInspector.settings.colorFormat;
-if (format === "original")
-this.settingsSelectElement[0].selected = true;
-else if (format === "hex")
-this.settingsSelectElement[1].selected = true;
-else if (format === "rgb")
-this.settingsSelectElement[2].selected = true;
-else if (format === "hsl")
-this.settingsSelectElement[3].selected = true;
+this._updateColorFormatFilter();
 
 this.titleElement.appendChild(this.settingsSelectElement);
+
+this._elementStateButton = document.createElement("button");
+this._elementStateButton.className = "pane-title-button element-state";
+this._elementStateButton.title = WebInspector.UIString("Toggle Element State");
+this._elementStateButton.addEventListener("click", this._toggleElementStatePane.bind(this), false);
+this.titleElement.appendChild(this._elementStateButton);
+
+var addButton = document.createElement("button");
+addButton.className = "pane-title-button add";
+addButton.id = "add-style-button-test-id";
+addButton.title = WebInspector.UIString("New Style Rule");
+addButton.addEventListener("click", this._createNewRule.bind(this), false);
+this.titleElement.appendChild(addButton);
+
 this._computedStylePane = computedStylePane;
 this.element.addEventListener("contextmenu", this._contextMenuEventFired.bind(this), true);
+WebInspector.settings.colorFormat.addChangeListener(this._colorFormatSettingChanged.bind(this));
+
+this._createElementStatePane();
+this.bodyElement.appendChild(this._elementStatePane);
+this._sectionsContainer = document.createElement("div");
+this.bodyElement.appendChild(this._sectionsContainer);
+
+WebInspector.cssModel.addEventListener(WebInspector.CSSStyleModel.Events.StyleSheetChanged, this._styleSheetChanged, this);
+WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.AttrModified, this._attributesUpdated, this);
+WebInspector.settings.showUserAgentStyles.addChangeListener(this._showUserAgentStylesSettingChanged.bind(this));
+}
+
+WebInspector.StylesSidebarPane.ColorFormat = {
+Original: "original",
+Nickname: "nickname",
+HEX: "hex",
+ShortHEX: "shorthex",
+RGB: "rgb",
+RGBA: "rgba",
+HSL: "hsl",
+HSLA: "hsla"
 }
 
 WebInspector.StylesSidebarPane.StyleValueDelimiters = " \t\n\"':;,/()";
@@ -19037,23 +20070,19 @@ return resultString;
 WebInspector.StylesSidebarPane.prototype = {
 _contextMenuEventFired: function(event)
 {
-var href = event.target.enclosingNodeOrSelfWithClass("webkit-html-resource-link") || event.target.enclosingNodeOrSelfWithClass("webkit-html-external-link");
-if (href) {
 var contextMenu = new WebInspector.ContextMenu();
-var filled = WebInspector.panels.elements.populateHrefContextMenu(contextMenu, event, href);
-if (filled)
+if (WebInspector.populateHrefContextMenu(contextMenu, this.node, event))
 contextMenu.show(event);
-}
 },
 
-update: function(node, editedSection, forceUpdate, callback)
+update: function(node, forceUpdate)
 {
 var refresh = false;
 
 if (forceUpdate)
 delete this.node;
 
-if (!forceUpdate && (!node || node === this.node))
+if (!forceUpdate && (node === this.node))
 refresh = true;
 
 if (node && node.nodeType() === Node.TEXT_NODE && node.parentNode)
@@ -19067,12 +20096,18 @@ this.node = node;
 else
 node = this.node;
 
+this._innerUpdate(refresh, null);
+},
+
+_innerUpdate: function(refresh, editedSection, userCallback)
+{
+var node = this.node;
 if (!node) {
-this.bodyElement.removeChildren();
+this._sectionsContainer.removeChildren();
 this._computedStylePane.bodyElement.removeChildren();
 this.sections = {};
-if (callback)
-callback();
+if (userCallback)
+userCallback();
 return;
 }
 
@@ -19080,22 +20115,40 @@ function stylesCallback(styles)
 {
 if (this.node === node && styles)
 this._rebuildUpdate(node, styles);
-if (callback)
-callback();
+if (userCallback)
+userCallback();
 }
 
 function computedStyleCallback(computedStyle)
 {
 if (this.node === node && computedStyle)
 this._refreshUpdate(node, computedStyle, editedSection);
-if (callback)
-callback();
+if (userCallback)
+userCallback();
 }
 
 if (refresh)
 WebInspector.cssModel.getComputedStyleAsync(node.id, computedStyleCallback.bind(this));
 else
-WebInspector.cssModel.getStylesAsync(node.id, undefined, stylesCallback.bind(this));
+WebInspector.cssModel.getStylesAsync(node.id, this._forcedPseudoClasses, stylesCallback.bind(this));
+},
+
+_styleSheetChanged: function()
+{
+if (this._userOperation || this._isEditingStyle)
+return;
+
+this._innerUpdate(false);
+},
+
+_attributesUpdated: function(event)
+{
+if (this.node !== event.data)
+return;
+
+
+if (!this._isEditingStyle && !this._userOperation)
+this._innerUpdate(false);
 },
 
 _refreshUpdate: function(node, computedStyle, editedSection)
@@ -19109,11 +20162,13 @@ this._refreshSectionsForStyleRules(styleRules, usedProperties, disabledComputedP
 }
 
 this.sections[0][0].rebuildComputedTrace(this.sections[0]);
+
+this._nodeStylesUpdatedForTest(node, true);
 },
 
 _rebuildUpdate: function(node, styles)
 {
-this.bodyElement.removeChildren();
+this._sectionsContainer.removeChildren();
 this._computedStylePane.bodyElement.removeChildren();
 
 var styleRules = this._rebuildStyleRules(node, styles);
@@ -19144,6 +20199,13 @@ disabledComputedProperties = {};
 this._markUsedProperties(styleRules, usedProperties, disabledComputedProperties);
 this.sections[pseudoId] = this._rebuildSectionsForStyleRules(styleRules, usedProperties, disabledComputedProperties, pseudoId, anchorElement);
 }
+
+this._nodeStylesUpdatedForTest(node, false);
+},
+
+_nodeStylesUpdatedForTest: function(node, refresh)
+{
+
 },
 
 _refreshStyleRules: function(sections, computedStyle)
@@ -19169,9 +20231,8 @@ this.sections = {};
 
 var styleRules = [];
 
-styleRules.push({ computedStyle: true, selectorText: "", style: nodeComputedStyle, editable: false });
-
-var styleAttributes = {};
+function addStyleAttributes()
+{
 for (var name in styles.styleAttributes) {
 var attrStyle = { style: styles.styleAttributes[name], editable: false };
 attrStyle.selectorText = WebInspector.panels.elements.treeOutline.nodeNameToCorrectCase(node.nodeName()) + "[" + name;
@@ -19180,6 +20241,9 @@ attrStyle.selectorText += "=" + node.getAttribute(name);
 attrStyle.selectorText += "]";
 styleRules.push(attrStyle);
 }
+}
+
+styleRules.push({ computedStyle: true, selectorText: "", style: nodeComputedStyle, editable: false });
 
 
 if (styles.inlineStyle && node.nodeType() === Node.ELEMENT_NODE) {
@@ -19190,10 +20254,21 @@ styleRules.push(inlineStyle);
 
 if (styles.matchedCSSRules.length)
 styleRules.push({ isStyleSeparator: true, text: WebInspector.UIString("Matched CSS Rules") });
+var addedStyleAttributes;
 for (var i = styles.matchedCSSRules.length - 1; i >= 0; --i) {
 var rule = styles.matchedCSSRules[i];
+if (!WebInspector.settings.showUserAgentStyles.get() && (rule.isUser || rule.isUserAgent))
+continue;
+if ((rule.isUser || rule.isUserAgent) && !addedStyleAttributes) {
+
+addedStyleAttributes = true;
+addStyleAttributes();
+}
 styleRules.push({ style: rule.style, selectorText: rule.selectorText, sourceURL: rule.sourceURL, rule: rule, editable: !!(rule.style && rule.style.id) });
 }
+
+if (!addedStyleAttributes)
+addStyleAttributes();
 
 
 var parentNode = node.parentNode;
@@ -19224,6 +20299,9 @@ var rulePayload = parentStyles.matchedCSSRules[i];
 if (!this._containsInherited(rulePayload.style))
 continue;
 var rule = rulePayload;
+if (!WebInspector.settings.showUserAgentStyles.get() && (rule.isUser || rule.isUserAgent))
+continue;
+
 if (!separatorInserted) {
 insertInheritedNodeSeparator(parentNode);
 separatorInserted = true;
@@ -19289,7 +20367,8 @@ if (priorityUsed) {
 var foundPriorityProperties = [];
 
 
-for (var i = (styleRules.length - 1); i >= 0; --i) {
+
+for (var i = 0; i < styleRules.length; ++i) {
 if (styleRules[i].computedStyle || styleRules[i].isStyleSeparator)
 continue;
 
@@ -19354,7 +20433,7 @@ else
 separatorElement.textContent = WebInspector.UIString("Pseudo element");
 } else
 separatorElement.textContent = styleRule.text;
-this.bodyElement.insertBefore(separatorElement, anchorElement);
+this._sectionsContainer.insertBefore(separatorElement, anchorElement);
 lastWasSeparator = true;
 continue;
 }
@@ -19376,7 +20455,7 @@ if (computedStyle) {
 this._computedStylePane.bodyElement.appendChild(section.element);
 lastWasSeparator = true;
 } else {
-this.bodyElement.insertBefore(section.element, anchorElement);
+this._sectionsContainer.insertBefore(section.element, anchorElement);
 lastWasSeparator = false;
 }
 sections.push(section);
@@ -19396,29 +20475,9 @@ return true;
 return false;
 },
 
-_changeSetting: function(event)
+_colorFormatSettingChanged: function(event)
 {
-var options = this.settingsSelectElement.options;
-var selectedOption = options[this.settingsSelectElement.selectedIndex];
-selectedOption.action(event);
-
-
-var selectedIndex = 0;
-for (var i = 0; i < options.length; ++i) {
-if (options[i].value === WebInspector.settings.colorFormat) {
-selectedIndex = i;
-break;
-}
-}
-
-this.settingsSelectElement.selectedIndex = selectedIndex;
-},
-
-_changeColorFormat: function(event)
-{
-var selectedOption = this.settingsSelectElement[this.settingsSelectElement.selectedIndex];
-WebInspector.settings.colorFormat = selectedOption.value;
-
+this._updateColorFormatFilter();
 for (var pseudoId in this.sections) {
 var sections = this.sections[pseudoId];
 for (var i = 0; i < sections.length; ++i)
@@ -19426,8 +20485,34 @@ sections[i].update(true);
 }
 },
 
+_updateColorFormatFilter: function()
+{
+
+var selectedIndex = 0;
+var value = WebInspector.settings.colorFormat.get();
+var options = this.settingsSelectElement.options;
+for (var i = 0; i < options.length; ++i) {
+if (options[i].value === value) {
+selectedIndex = i;
+break;
+}
+}
+this.settingsSelectElement.selectedIndex = selectedIndex;
+},
+
+_changeSetting: function(event)
+{
+var options = this.settingsSelectElement.options;
+var selectedOption = options[this.settingsSelectElement.selectedIndex];
+WebInspector.settings.colorFormat.set(selectedOption.value);
+},
+
 _createNewRule: function(event)
 {
+event.stopPropagation();
+if (WebInspector.isEditingAnyField())
+return;
+
 this.expanded = true;
 this.addBlankSection().startEditingSelector();
 },
@@ -19438,7 +20523,7 @@ var blankSection = new WebInspector.BlankStylePropertiesSection(this, this.node 
 blankSection.pane = this;
 
 var elementStyleSection = this.sections[0][1];
-this.bodyElement.insertBefore(blankSection.element, elementStyleSection.element.nextSibling);
+this._sectionsContainer.insertBefore(blankSection.element, elementStyleSection.element.nextSibling);
 
 this.sections[0].splice(2, 0, blankSection);
 
@@ -19460,7 +20545,7 @@ section.element.parentNode.removeChild(section.element);
 
 registerShortcuts: function()
 {
-var section = WebInspector.shortcutsHelp.section(WebInspector.UIString("Styles Pane"));
+var section = WebInspector.shortcutsScreen.section(WebInspector.UIString("Styles Pane"));
 var shortcut = WebInspector.KeyboardShortcut;
 var keys = [
 shortcut.shortcutToString(shortcut.Keys.Tab),
@@ -19492,6 +20577,79 @@ shortcut.shortcutToString(shortcut.Keys.PageUp, shortcut.Modifiers.Alt),
 shortcut.shortcutToString(shortcut.Keys.PageDown, shortcut.Modifiers.Alt)
 ];
 section.addRelatedKeys(keys, WebInspector.UIString("Increment/decrement by %f", 0.1));
+},
+
+_toggleElementStatePane: function(event)
+{
+event.stopPropagation();
+if (!this._elementStateButton.hasStyleClass("toggled")) {
+this.expand();
+this._elementStateButton.addStyleClass("toggled");
+this._elementStatePane.addStyleClass("expanded");
+} else {
+this._elementStateButton.removeStyleClass("toggled");
+this._elementStatePane.removeStyleClass("expanded");
+
+if (this._forcedPseudoClasses) {
+for (var i = 0; i < this._elementStatePane.inputs.length; ++i)
+this._elementStatePane.inputs[i].checked = false;
+delete this._forcedPseudoClasses;
+this._innerUpdate(false);
+}
+}
+},
+
+_createElementStatePane: function()
+{
+this._elementStatePane = document.createElement("div");
+this._elementStatePane.className = "styles-element-state-pane source-code";
+var table = document.createElement("table");
+
+var inputs = [];
+this._elementStatePane.inputs = inputs;
+
+function clickListener(event)
+{
+var pseudoClasses = [];
+for (var i = 0; i < inputs.length; ++i) {
+if (inputs[i].checked)
+pseudoClasses.push(inputs[i].state);
+}
+this._forcedPseudoClasses = pseudoClasses.length ? pseudoClasses : undefined;
+this._innerUpdate(false);
+}
+
+function createCheckbox(state)
+{
+var td = document.createElement("td");
+var label = document.createElement("label");
+var input = document.createElement("input");
+input.type = "checkbox";
+input.state = state;
+input.addEventListener("click", clickListener.bind(this), false);
+inputs.push(input);
+label.appendChild(input);
+label.appendChild(document.createTextNode(":" + state));
+td.appendChild(label);
+return td;
+}
+
+var tr = document.createElement("tr");
+tr.appendChild(createCheckbox.call(this, "active"));
+tr.appendChild(createCheckbox.call(this, "hover"));
+table.appendChild(tr);
+
+tr = document.createElement("tr");
+tr.appendChild(createCheckbox.call(this, "focus"));
+tr.appendChild(createCheckbox.call(this, "visited"));
+table.appendChild(tr);
+
+this._elementStatePane.appendChild(table);
+},
+
+_showUserAgentStylesSettingChanged: function()
+{
+this._innerUpdate(false);
 }
 }
 
@@ -19503,15 +20661,15 @@ WebInspector.SidebarPane.call(this, WebInspector.UIString("Computed Style"));
 var showInheritedCheckbox = new WebInspector.Checkbox(WebInspector.UIString("Show inherited"), "sidebar-pane-subtitle");
 this.titleElement.appendChild(showInheritedCheckbox.element);
 
-if (WebInspector.settings.showInheritedComputedStyleProperties) {
+if (WebInspector.settings.showInheritedComputedStyleProperties.get()) {
 this.bodyElement.addStyleClass("show-inherited");
 showInheritedCheckbox.checked = true;
 }
 
 function showInheritedToggleFunction(event)
 {
-WebInspector.settings.showInheritedComputedStyleProperties = showInheritedCheckbox.checked;
-if (WebInspector.settings.showInheritedComputedStyleProperties)
+WebInspector.settings.showInheritedComputedStyleProperties.set(showInheritedCheckbox.checked);
+if (WebInspector.settings.showInheritedComputedStyleProperties.get())
 this.bodyElement.addStyleClass("show-inherited");
 else
 this.bodyElement.removeStyleClass("show-inherited");
@@ -19565,7 +20723,7 @@ this.titleElement.addStyleClass("styles-selector");
 
 function linkifyUncopyable(url, line)
 {
-var link = WebInspector.linkifyResourceAsNode(url, "resources", line + 1);
+var link = WebInspector.linkifyResourceAsNode(url, line);
 return link;
 }
 
@@ -19643,7 +20801,13 @@ do {
 curSection = curSection.nextSibling;
 } while (curSection && !curSection.editable);
 
-return curSection;
+if (!curSection) {
+curSection = this.firstSibling;
+while (curSection && !curSection.editable)
+curSection = curSection.nextSibling;
+}
+
+return (curSection && curSection.editable) ? curSection : null;
 },
 
 previousEditableSibling: function()
@@ -19653,7 +20817,13 @@ do {
 curSection = curSection.previousSibling;
 } while (curSection && !curSection.editable);
 
-return curSection;
+if (!curSection) {
+curSection = this.lastSibling;
+while (curSection && !curSection.editable)
+curSection = curSection.previousSibling;
+}
+
+return (curSection && curSection.editable) ? curSection : null;
 },
 
 update: function(full)
@@ -19828,6 +20998,7 @@ var element = this._selectorElement;
 if (WebInspector.isBeingEdited(element))
 return;
 
+this._selectorElement.scrollIntoViewIfNeeded(false);
 WebInspector.startEditing(this._selectorElement, {
 context: null,
 commitHandler: this.editingSelectorCommitted.bind(this),
@@ -19836,20 +21007,18 @@ cancelHandler: this.editingSelectorCancelled.bind(this)
 window.getSelection().setBaseAndExtent(element, 0, element, 1);
 },
 
-editingSelectorCommitted: function(element, newContent, oldContent, context, moveDirection)
+_moveEditorFromSelector: function(moveDirection)
 {
-function moveToNextIfNeeded() {
 if (!moveDirection)
 return;
 
 if (moveDirection === "forward") {
 this.expand();
-if (this.propertiesTreeOutline.children.length === 0)
+var firstChild = this.propertiesTreeOutline.children[0];
+if (!firstChild)
 this.addNewBlankProperty().startEditing();
-else {
-var item = this.propertiesTreeOutline.children[0]
-item.startEditing(item.nameElement);
-}
+else
+firstChild.startEditing(firstChild.nameElement);
 } else {
 var previousSection = this.previousEditableSibling();
 if (!previousSection)
@@ -19858,10 +21027,12 @@ return;
 previousSection.expand();
 previousSection.addNewBlankProperty().startEditing();
 }
-}
+},
 
+editingSelectorCommitted: function(element, newContent, oldContent, context, moveDirection)
+{
 if (newContent === oldContent)
-return moveToNextIfNeeded.call(this);
+return this._moveEditorFromSelector(moveDirection);
 
 var self = this;
 
@@ -19885,11 +21056,11 @@ self.pane.update();
 
 WebInspector.panels.elements.renameSelector(oldIdentifier, this.identifier, oldContent, newContent);
 
-moveToNextIfNeeded.call(self);
+self._moveEditorFromSelector(moveDirection);
 }
 
-var focusedNode = WebInspector.panels.elements.focusedDOMNode;
-WebInspector.cssModel.setRuleSelector(this.rule.id, focusedNode ? focusedNode.id : 0, newContent, successCallback, moveToNextIfNeeded.bind(this));
+var selectedNode = WebInspector.panels.elements.selectedDOMNode();
+WebInspector.cssModel.setRuleSelector(this.rule.id, selectedNode ? selectedNode.id : 0, newContent, successCallback, moveToNextIfNeeded.bind(this));
 },
 
 editingSelectorCancelled: function()
@@ -20016,24 +21187,23 @@ expand: function()
 
 editingSelectorCommitted: function(element, newContent, oldContent, context)
 {
-var self = this;
 function successCallback(newRule, doesSelectorAffectSelectedNode)
 {
-var styleRule = { section: self, style: newRule.style, selectorText: newRule.selectorText, sourceURL: newRule.sourceURL, rule: newRule };
-self.makeNormal(styleRule);
+var styleRule = { section: this, style: newRule.style, selectorText: newRule.selectorText, sourceURL: newRule.sourceURL, rule: newRule };
+this.makeNormal(styleRule);
 
 if (!doesSelectorAffectSelectedNode) {
-self.noAffect = true;
-self.element.addStyleClass("no-affect");
+this.noAffect = true;
+this.element.addStyleClass("no-affect");
 }
 
-self.subtitleElement.textContent = WebInspector.UIString("via inspector");
-self.expand();
-
-self.addNewBlankProperty().startEditing();
+this.subtitleElement.textContent = WebInspector.UIString("via inspector");
+this.expand();
+if (this.element.parentElement)  
+this.addNewBlankProperty().startEditing();
 }
 
-WebInspector.cssModel.addRule(this.pane.node.id, newContent, successCallback, this.editingSelectorCancelled.bind(this));
+WebInspector.cssModel.addRule(this.pane.node.id, newContent, successCallback.bind(this), this.editingSelectorCancelled.bind(this));
 },
 
 editingSelectorCancelled: function()
@@ -20170,6 +21340,8 @@ var valueElement = document.createElement("span");
 valueElement.className = "value";
 this.valueElement = valueElement;
 
+var cf = WebInspector.StylesSidebarPane.ColorFormat;
+
 if (value) {
 var self = this;
 
@@ -20204,11 +21376,11 @@ var container = document.createDocumentFragment();
 container.appendChild(document.createTextNode("url("));
 if (self._styleRule.sourceURL)
 hrefUrl = WebInspector.completeURL(self._styleRule.sourceURL, hrefUrl);
-else if (WebInspector.panels.elements.focusedDOMNode)
-hrefUrl = WebInspector.resourceURLForRelatedNode(WebInspector.panels.elements.focusedDOMNode, hrefUrl);
+else if (WebInspector.panels.elements.selectedDOMNode())
+hrefUrl = WebInspector.resourceURLForRelatedNode(WebInspector.panels.elements.selectedDOMNode(), hrefUrl);
 var hasResource = !!WebInspector.resourceForURL(hrefUrl);
 
-container.appendChild(WebInspector.linkifyURLAsNode(hrefUrl, url, null, hasResource));
+container.appendChild(WebInspector.linkifyURLAsNode(hrefUrl, url, null, !hasResource));
 container.appendChild(document.createTextNode(")"));
 return container;
 }
@@ -20230,18 +21402,19 @@ swatchElement.addEventListener("click", changeColorDisplay, false);
 swatchElement.addEventListener("dblclick", function(event) { event.stopPropagation() }, false);
 
 var format;
-if (WebInspector.settings.colorFormat === "original")
-format = "original";
+var formatSetting = WebInspector.settings.colorFormat.get();
+if (formatSetting === cf.Original)
+format = cf.Original;
 else if (Preferences.showColorNicknames && color.nickname)
-format = "nickname";
-else if (WebInspector.settings.colorFormat === "rgb")
-format = (color.simple ? "rgb" : "rgba");
-else if (WebInspector.settings.colorFormat === "hsl")
-format = (color.simple ? "hsl" : "hsla");
+format = cf.Nickname;
+else if (formatSetting === cf.RGB)
+format = (color.simple ? cf.RGB : cf.RGBA);
+else if (formatSetting === cf.HSL)
+format = (color.simple ? cf.HSL : cf.HSLA);
 else if (color.simple)
-format = (color.hasShortHex() ? "shorthex" : "hex");
+format = (color.hasShortHex() ? cf.ShortHEX : cf.HEX);
 else
-format = "rgba";
+format = cf.RGBA;
 
 var colorValueElement = document.createElement("span");
 colorValueElement.textContent = color.toString(format);
@@ -20257,33 +21430,33 @@ function nextFormat(curFormat)
 
 
 switch (curFormat) {
-case "original":
-return color.simple ? "rgb" : "rgba";
+case cf.Original:
+return color.simple ? cf.RGB : cf.RGBA;
 
-case "rgb":
-case "rgba":
-return color.simple ? "hsl" : "hsla";
+case cf.RGB:
+case cf.RGBA:
+return color.simple ? cf.HSL : cf.HSLA;
 
-case "hsl":
-case "hsla":
+case cf.HSL:
+case cf.HSLA:
 if (color.nickname)
-return "nickname";
+return cf.Nickname;
 if (color.simple)
-return color.hasShortHex() ? "shorthex" : "hex";
+return color.hasShortHex() ? cf.ShortHEX : cf.HEX;
 else
-return "original";
+return cf.Original;
 
-case "shorthex":
-return "hex";
+case cf.ShortHEX:
+return cf.HEX;
 
-case "hex":
-return "original";
+case cf.HEX:
+return cf.Original;
 
-case "nickname":
+case cf.Nickname:
 if (color.simple)
-return color.hasShortHex() ? "shorthex" : "hex";
+return color.hasShortHex() ? cf.ShortHEX : cf.HEX;
 else
-return "original";
+return cf.Original;
 
 default:
 return null;
@@ -20295,7 +21468,7 @@ function changeColorDisplay(event)
 do {
 format = nextFormat(format);
 var currentValue = color.toString(format || "");
-} while (format && currentValue === color.value && format !== "original");
+} while (format && currentValue === color.value && format !== cf.Original);
 
 if (format)
 colorValueElement.textContent = currentValue;
@@ -20339,16 +21512,14 @@ this.listItemElement.addStyleClass("inactive");
 this.tooltip = this.property.propertyText;
 },
 
-updateAll: function(updateAllRules)
+_updatePane: function(userCallback)
 {
-if (!this.treeOutline)
-return;
-if (updateAllRules && this.treeOutline.section && this.treeOutline.section.pane)
-this.treeOutline.section.pane.update(null, this.treeOutline.section);
-else if (this.treeOutline.section)
-this.treeOutline.section.update(true);
-else
-this.updateTitle(); 
+if (this.treeOutline && this.treeOutline.section && this.treeOutline.section.pane)
+this.treeOutline.section.pane._innerUpdate(true, this.treeOutline.section, userCallback);
+else  {
+if (userCallback)
+userCallback();
+}
 },
 
 toggleEnabled: function(event)
@@ -20366,7 +21537,7 @@ this._styleRule.style = newStyle;
 if (this.treeOutline.section && this.treeOutline.section.pane)
 this.treeOutline.section.pane.dispatchEventToListeners("style property toggled");
 
-this.updateAll(true);
+this._updatePane();
 }
 
 this.property.setDisabled(disabled, callback.bind(this));
@@ -20543,7 +21714,10 @@ return "move-forward";
 }
 
 delete this.originalPropertyText;
-WebInspector.panels.elements.startEditingStyle();
+
+this._parentPane._isEditingStyle = true;
+if (selectElement.parentElement)
+selectElement.parentElement.scrollIntoViewIfNeeded(false);
 WebInspector.startEditing(selectElement, {
 context: context,
 commitHandler: this.editingCommitted.bind(this),
@@ -20665,7 +21839,7 @@ editedElement.removeEventListener("keydown", context.keyDownListener, false);
 if (editedElement.parentElement)
 editedElement.parentElement.removeStyleClass("child-editing");
 
-WebInspector.panels.elements.endEditingStyle();
+delete this._parentPane._isEditingStyle;
 },
 
 editingCancelled: function(element, context)
@@ -20687,7 +21861,7 @@ this.treeOutline.removeChild(this);
 else
 this.updateTitle();
 }
-}, 
+},
 
 editingCommitted: function(element, userInput, previousContent, context, moveDirection)
 {
@@ -20709,7 +21883,7 @@ if (moveTo)
 moveToPropertyName = moveTo.name;
 else if (moveDirection === "forward" && (!this._newProperty || userInput))
 createNewProperty = true;
-else if (moveDirection === "backward" && this.treeOutline.section.rule)
+else if (moveDirection === "backward")
 moveToSelector = true;
 }
 
@@ -20719,7 +21893,6 @@ var isDataPasted = "originalName" in context;
 var isDirtyViaPaste = isDataPasted && (this.nameElement.textContent !== context.originalName || this.valueElement.textContent !== context.originalValue);
 var shouldCommitNewProperty = this._newProperty && (moveToOther || (!moveDirection && !isEditingName) || (isEditingName && blankInput));
 if (((userInput !== previousContent || isDirtyViaPaste) && !this._newProperty) || shouldCommitNewProperty) {
-WebInspector.panels.elements.startEditingStyle();
 this.treeOutline.section._afterUpdate = moveToNextCallback.bind(this, this._newProperty, !blankInput, this.treeOutline.section);
 var propertyText;
 if (blankInput || (this._newProperty && /^\s*$/.test(this.valueElement.textContent)))
@@ -20742,8 +21915,6 @@ var moveToIndex = moveTo && this.treeOutline ? this.treeOutline.children.indexOf
 
 function moveToNextCallback(alreadyNew, valueChanged, section)
 {
-WebInspector.panels.elements.endEditingStyle();
-
 if (!moveDirection)
 return;
 
@@ -20782,13 +21953,21 @@ return;
 
 if (abandonNewProperty) {
 var sectionToEdit = moveDirection === "backward" ? section : section.nextEditableSibling();
-if (sectionToEdit && sectionToEdit.rule)
+if (sectionToEdit) {
+if (sectionToEdit.rule)
 sectionToEdit.startEditingSelector();
+else
+sectionToEdit._moveEditorFromSelector(moveDirection);
+}
 return;
 }
 
-if (moveToSelector)
+if (moveToSelector) {
+if (section.rule)
 section.startEditingSelector();
+else
+section._moveEditorFromSelector(moveDirection);
+}
 }
 },
 
@@ -20810,6 +21989,12 @@ return typeof this.originalPropertyText === "string";
 
 applyStyleText: function(styleText, updateInterface, majorChange, isRevert)
 {
+function userOperationFinishedCallback(parentPane, updateInterface)
+{
+if (updateInterface)
+delete parentPane._userOperation;
+}
+
 
 if (!isRevert && !updateInterface && !this._hasBeenModifiedIncrementally()) {
 
@@ -20828,13 +22013,18 @@ section.afterUpdate();
 return;
 }
 
-function callback(originalPropertyText, newStyle)
+var currentNode = this._parentPane.node;
+if (updateInterface)
+this._parentPane._userOperation = true;
+
+function callback(userCallback, originalPropertyText, newStyle)
 {
 if (!newStyle) {
 if (updateInterface) {
 
 this._revertStyleUponEditingCanceled(originalPropertyText);
 }
+userCallback();
 return;
 }
 
@@ -20845,15 +22035,19 @@ this._styleRule.style = this.style;
 if (section && section.pane)
 section.pane.dispatchEventToListeners("style edited");
 
-if (updateInterface)
-this.updateAll(true);
+if (updateInterface && currentNode === section.pane.node) {
+this._updatePane(userCallback);
+return;
+}
+
+userCallback();
 }
 
 
 
 if (styleText.length && !/;\s*$/.test(styleText))
 styleText += ";";
-this.property.setText(styleText, majorChange, callback.bind(this, this.originalPropertyText));
+this.property.setText(styleText, majorChange, callback.bind(this, userOperationFinishedCallback.bind(null, this._parentPane, updateInterface), this.originalPropertyText));
 }
 }
 
@@ -20998,10 +22192,10 @@ show: function(parentElement)
 {
 WebInspector.View.prototype.show.call(this, parentElement);
 
-setTimeout(this.resize.bind(this), 0);
+setTimeout(this.doResize.bind(this), 0);
 },
 
-resize: function()
+onResize: function()
 {
 this.imageElement.removeStyleClass("hidden");
 
@@ -21148,7 +22342,7 @@ this.element.removeStyleClass("toggled-on");
 if (x !== 0) {
 this.element.removeStyleClass("toggled-" + this._state);
 this.element.addStyleClass("toggled-" + x);
-} else 
+} else
 this.element.removeStyleClass("toggled-" + this._state);
 }
 this._state = x;
@@ -21192,345 +22386,6 @@ WebInspector.StatusBarButton.prototype.__proto__ = WebInspector.Object.prototype
 
 
 
-WebInspector.SummaryBar = function(categories)
-{
-this.categories = categories;
-
-this.element = document.createElement("div");
-this.element.className = "summary-bar";
-
-this.graphElement = document.createElement("canvas");
-this.graphElement.setAttribute("width", "450");
-this.graphElement.setAttribute("height", "38");
-this.graphElement.className = "summary-graph";
-this.element.appendChild(this.graphElement);
-
-this.legendElement = document.createElement("div");
-this.legendElement.className = "summary-graph-legend";
-this.element.appendChild(this.legendElement);
-}
-
-WebInspector.SummaryBar.prototype = {
-
-get calculator() {
-return this._calculator;
-},
-
-set calculator(x) {
-this._calculator = x;
-},
-
-reset: function()
-{
-this.legendElement.removeChildren();
-this._drawSummaryGraph();
-},
-
-update: function(data)
-{
-var graphInfo = this.calculator.computeSummaryValues(data);
-
-var fillSegments = [];
-
-this.legendElement.removeChildren();
-
-for (var category in this.categories) {
-var size = graphInfo.categoryValues[category];
-if (!size)
-continue;
-
-var colorString = this.categories[category].color;
-
-var fillSegment = {color: colorString, value: size};
-fillSegments.push(fillSegment);
-
-var legendLabel = this._makeLegendElement(this.categories[category].title, this.calculator.formatValue(size), colorString);
-this.legendElement.appendChild(legendLabel);
-}
-
-if (graphInfo.total) {
-var totalLegendLabel = this._makeLegendElement(WebInspector.UIString("Total"), this.calculator.formatValue(graphInfo.total));
-totalLegendLabel.addStyleClass("total");
-this.legendElement.appendChild(totalLegendLabel);
-}
-
-this._drawSummaryGraph(fillSegments);
-},
-
-_drawSwatch: function(canvas, color)
-{
-var ctx = canvas.getContext("2d");
-
-function drawSwatchSquare() {
-ctx.fillStyle = color;
-ctx.fillRect(0, 0, 13, 13);
-
-var gradient = ctx.createLinearGradient(0, 0, 13, 13);
-gradient.addColorStop(0.0, "rgba(255, 255, 255, 0.2)");
-gradient.addColorStop(1.0, "rgba(255, 255, 255, 0.0)");
-
-ctx.fillStyle = gradient;
-ctx.fillRect(0, 0, 13, 13);
-
-gradient = ctx.createLinearGradient(13, 13, 0, 0);
-gradient.addColorStop(0.0, "rgba(0, 0, 0, 0.2)");
-gradient.addColorStop(1.0, "rgba(0, 0, 0, 0.0)");
-
-ctx.fillStyle = gradient;
-ctx.fillRect(0, 0, 13, 13);
-
-ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
-ctx.strokeRect(0.5, 0.5, 12, 12);
-}
-
-ctx.clearRect(0, 0, 13, 24);
-
-drawSwatchSquare();
-
-ctx.save();
-
-ctx.translate(0, 25);
-ctx.scale(1, -1);
-
-drawSwatchSquare();
-
-ctx.restore();
-
-this._fadeOutRect(ctx, 0, 13, 13, 13, 0.5, 0.0);
-},
-
-_drawSummaryGraph: function(segments)
-{
-if (!segments || !segments.length) {
-segments = [{color: "white", value: 1}];
-this._showingEmptySummaryGraph = true;
-} else
-delete this._showingEmptySummaryGraph;
-
-
-var total = 0;
-for (var i = 0; i < segments.length; ++i)
-total += segments[i].value;
-
-
-var percents = segments.map(function(s) { return Math.max(Math.round(100 * s.value / total), 1) });
-
-
-var percentTotal = 0;
-for (var i = 0; i < percents.length; ++i)
-percentTotal += percents[i];
-
-
-
-while (percentTotal > 100) {
-for (var i = 0; i < percents.length && percentTotal > 100; ++i) {
-if (percents[i] > 1) {
---percents[i];
---percentTotal;
-}
-}
-}
-
-
-
-while (percentTotal < 100) {
-for (var i = 0; i < percents.length && percentTotal < 100; ++i) {
-++percents[i];
-++percentTotal;
-}
-}
-
-var ctx = this.graphElement.getContext("2d");
-
-var x = 0;
-var y = 0;
-var w = 450;
-var h = 19;
-var r = (h / 2);
-
-function drawPillShadow()
-{
-
-
-
-
-
-ctx.beginPath();
-ctx.moveTo(x + 4, y + h - 3 - 0.5);
-ctx.lineTo(x + w - 4, y + h - 3 - 0.5);
-ctx.closePath();
-
-ctx.save();
-
-ctx.shadowBlur = 2;
-ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
-ctx.shadowOffsetX = 3;
-ctx.shadowOffsetY = 5;
-
-ctx.strokeStyle = "white";
-ctx.lineWidth = 1;
-
-ctx.stroke();
-
-ctx.shadowOffsetX = -3;
-
-ctx.stroke();
-
-ctx.restore();
-
-ctx.save();
-
-ctx.globalCompositeOperation = "destination-out";
-ctx.strokeStyle = "rgba(0, 0, 0, 1)";
-ctx.lineWidth = 1;
-
-ctx.stroke();
-
-ctx.restore();
-}
-
-function drawPill()
-{
-
-ctx.beginPath();
-ctx.moveTo(x, y + r);
-ctx.lineTo(x, y + h - r);
-ctx.arc(x + r, y + h - r, r, Math.PI, Math.PI / 2, true);
-ctx.lineTo(x + w - r, y + h);
-ctx.arc(x + w - r, y + h - r, r, Math.PI / 2, 0, true);
-ctx.lineTo(x + w, y + r);
-ctx.arc(x + w - r, y + r, r, 0, 3 * Math.PI / 2, true);
-ctx.lineTo(x + r, y);
-ctx.arc(x + r, y + r, r, Math.PI / 2, Math.PI, true);
-ctx.closePath();
-
-
-ctx.save();
-ctx.clip();
-
-
-var previousSegmentsWidth = 0;
-for (var i = 0; i < segments.length; ++i) {
-var segmentWidth = Math.round(w * percents[i] / 100);
-ctx.fillStyle = segments[i].color;
-ctx.fillRect(x + previousSegmentsWidth, y, segmentWidth, h);
-previousSegmentsWidth += segmentWidth;
-}
-
-
-ctx.lineWidth = 1;
-for (var i = 1; i < 20; ++i) {
-ctx.beginPath();
-ctx.moveTo(x + (i * Math.round(w / 20)) + 0.5, y);
-ctx.lineTo(x + (i * Math.round(w / 20)) + 0.5, y + h);
-ctx.closePath();
-
-ctx.strokeStyle = "rgba(0, 0, 0, 0.2)";
-ctx.stroke();
-
-ctx.beginPath();
-ctx.moveTo(x + (i * Math.round(w / 20)) + 1.5, y);
-ctx.lineTo(x + (i * Math.round(w / 20)) + 1.5, y + h);
-ctx.closePath();
-
-ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-ctx.stroke();
-}
-
-
-var lightGradient = ctx.createLinearGradient(x, y, x, y + (h / 1.5));
-lightGradient.addColorStop(0.0, "rgba(220, 220, 220, 0.6)");
-lightGradient.addColorStop(0.4, "rgba(220, 220, 220, 0.2)");
-lightGradient.addColorStop(1.0, "rgba(255, 255, 255, 0.0)");
-
-var darkGradient = ctx.createLinearGradient(x, y + (h / 3), x, y + h);
-darkGradient.addColorStop(0.0, "rgba(0, 0, 0, 0.0)");
-darkGradient.addColorStop(0.8, "rgba(0, 0, 0, 0.2)");
-darkGradient.addColorStop(1.0, "rgba(0, 0, 0, 0.5)");
-
-ctx.fillStyle = darkGradient;
-ctx.fillRect(x, y, w, h);
-
-ctx.fillStyle = lightGradient;
-ctx.fillRect(x, y, w, h);
-
-ctx.restore();
-}
-
-ctx.clearRect(x, y, w, (h * 2));
-
-drawPillShadow();
-drawPill();
-
-ctx.save();
-
-ctx.translate(0, (h * 2) + 1);
-ctx.scale(1, -1);
-
-drawPill();
-
-ctx.restore();
-
-this._fadeOutRect(ctx, x, y + h + 1, w, h, 0.5, 0.0);
-},
-
-_fadeOutRect: function(ctx, x, y, w, h, a1, a2)
-{
-ctx.save();
-
-var gradient = ctx.createLinearGradient(x, y, x, y + h);
-gradient.addColorStop(0.0, "rgba(0, 0, 0, " + (1.0 - a1) + ")");
-gradient.addColorStop(0.8, "rgba(0, 0, 0, " + (1.0 - a2) + ")");
-gradient.addColorStop(1.0, "rgba(0, 0, 0, 1.0)");
-
-ctx.globalCompositeOperation = "destination-out";
-
-ctx.fillStyle = gradient;
-ctx.fillRect(x, y, w, h);
-
-ctx.restore();
-},
-
-_makeLegendElement: function(label, value, color)
-{
-var legendElement = document.createElement("label");
-legendElement.className = "summary-graph-legend-item";
-
-if (color) {
-var swatch = document.createElement("canvas");
-swatch.className = "summary-graph-legend-swatch";
-swatch.setAttribute("width", "13");
-swatch.setAttribute("height", "24");
-
-legendElement.appendChild(swatch);
-
-this._drawSwatch(swatch, color);
-}
-
-var labelElement = document.createElement("div");
-labelElement.className = "summary-graph-legend-label";
-legendElement.appendChild(labelElement);
-
-var headerElement = document.createElement("div");
-headerElement.className = "summary-graph-legend-header";
-headerElement.textContent = label;
-labelElement.appendChild(headerElement);
-
-var valueElement = document.createElement("div");
-valueElement.className = "summary-graph-legend-value";
-valueElement.textContent = value;
-labelElement.appendChild(valueElement);
-
-return legendElement;
-}
-}
-
-WebInspector.SummaryBar.prototype.__proto__ = WebInspector.Object.prototype;
-
-
-
-
-
 WebInspector.ElementsPanel = function()
 {
 WebInspector.Panel.call(this, "elements");
@@ -21538,8 +22393,9 @@ WebInspector.Panel.call(this, "elements");
 this.contentElement = document.createElement("div");
 this.contentElement.id = "elements-content";
 this.contentElement.className = "outline-disclosure source-code";
-if (!WebInspector.settings.domWordWrap)
+if (!WebInspector.settings.domWordWrap.get())
 this.contentElement.classList.add("nowrap");
+WebInspector.settings.domWordWrap.addChangeListener(this._domWordWrapSettingChanged.bind(this));
 
 this.contentElement.addEventListener("contextmenu", this._contextMenuEventFired.bind(this), true);
 
@@ -21548,11 +22404,8 @@ this.treeOutline.panel = this;
 this.treeOutline.includeRootDOMNode = false;
 this.treeOutline.selectEnabled = true;
 
-this.treeOutline.focusedNodeChanged = function(forceUpdate)
+this.treeOutline.selectedNodeChanged = function(forceUpdate)
 {
-if (this.panel.visible && WebInspector.currentFocusElement !== document.getElementById("search"))
-WebInspector.currentFocusElement = this.element;
-
 this.panel.updateBreadcrumb(forceUpdate);
 
 for (var pane in this.panel.sidebarPanes)
@@ -21563,8 +22416,8 @@ this.panel.updateMetrics();
 this.panel.updateProperties();
 this.panel.updateEventListeners();
 
-if (this._focusedDOMNode) {
-ConsoleAgent.addInspectedNode(this._focusedDOMNode.id);
+if (this._selectedDOMNode) {
+ConsoleAgent.addInspectedNode(this._selectedDOMNode.id);
 WebInspector.extensionServer.notifyObjectSelected(this.panel.name);
 }
 };
@@ -21595,7 +22448,6 @@ this.sidebarPanes.styles.expanded = true;
 this.sidebarPanes.styles.addEventListener("style edited", this._stylesPaneEdited, this);
 this.sidebarPanes.styles.addEventListener("style property toggled", this._stylesPaneEdited, this);
 this.sidebarPanes.metrics.addEventListener("metrics edited", this._metricsPaneEdited, this);
-WebInspector.cssModel.addEventListener(WebInspector.CSSStyleModel.Events.StyleSheetChanged, this._styleSheetChanged, this);
 
 this.sidebarElement = document.createElement("div");
 this.sidebarElement.id = "elements-sidebar";
@@ -21625,7 +22477,7 @@ WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.AttrModified
 WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.CharacterDataModified, this._characterDataModified, this);
 WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.DocumentUpdated, this._documentUpdated, this);
 WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.ChildNodeCountUpdated, this._childNodeCountUpdated, this);
-
+WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.InspectElementRequested, this._inspectElementRequested, this);
 this.recentlyModifiedNodes = [];
 }
 
@@ -21674,7 +22526,7 @@ WebInspector.highlightDOMNode(0);
 this.setSearchingForNode(false);
 },
 
-resize: function()
+onResize: function()
 {
 this.treeOutline.updateSelection();
 this.updateBreadcrumbSizes();
@@ -21682,11 +22534,11 @@ this.updateBreadcrumbSizes();
 
 _reset: function()
 {
-if (this.focusedDOMNode)
-this._selectedPathOnReset = this.focusedDOMNode.path();
+if (this.selectedDOMNode())
+this._selectedPathOnReset = this.selectedDOMNode().path();
 
 this.rootDOMNode = null;
-this.focusedDOMNode = null;
+this.selectDOMNode(null);
 
 WebInspector.highlightDOMNode(0);
 
@@ -21721,14 +22573,14 @@ candidateFocusNode = inspectedRootDocument.body || inspectedRootDocument.documen
 if (!candidateFocusNode)
 return;
 
-this.focusedDOMNode = candidateFocusNode;
+this.selectDOMNode(candidateFocusNode);
 if (this.treeOutline.selectedTreeElement)
 this.treeOutline.selectedTreeElement.expand();
 }
 
 function selectLastSelectedNode(nodeId)
 {
-if (this.focusedDOMNode) {
+if (this.selectedDOMNode()) {
 
 return;
 }
@@ -21773,53 +22625,38 @@ WebInspector.domAgent.performSearch(whitespaceTrimmedQuery, this._addNodesToSear
 
 _contextMenuEventFired: function(event)
 {
-function isTextWrapped()
-{
-return !this.contentElement.hasStyleClass("nowrap");
-}
-
 function toggleWordWrap()
 {
-this.contentElement.classList.toggle("nowrap");
-WebInspector.settings.domWordWrap = !this.contentElement.classList.contains("nowrap");
-
-var treeElement = this.treeOutline.findTreeElement(this.focusedDOMNode);
-if (treeElement)
-treeElement.updateSelection(); 
+WebInspector.settings.domWordWrap.set(!WebInspector.settings.domWordWrap.get());
 }
 
 var contextMenu = new WebInspector.ContextMenu();
-
 var populated = this.treeOutline.populateContextMenu(contextMenu, event);
 if (populated)
 contextMenu.appendSeparator();
-contextMenu.appendCheckboxItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Word wrap" : "Word Wrap"), toggleWordWrap.bind(this), isTextWrapped.call(this));
+contextMenu.appendCheckboxItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Word wrap" : "Word Wrap"), toggleWordWrap.bind(this), WebInspector.settings.domWordWrap.get());
 
 contextMenu.show(event);
 },
 
-populateHrefContextMenu: function(contextMenu, event, anchorElement)
+_domWordWrapSettingChanged: function(event)
 {
-if (!anchorElement.href)
-return false;
+if (event.data)
+this.contentElement.removeStyleClass("nowrap");
+else
+this.contentElement.addStyleClass("nowrap");
 
-var resourceURL = WebInspector.resourceURLForRelatedNode(this.focusedDOMNode, anchorElement.href);
-if (!resourceURL)
-return false;
-
-
-contextMenu.appendItem(WebInspector.openLinkExternallyLabel(), WebInspector.openResource.bind(WebInspector, resourceURL, false));
-if (WebInspector.resourceForURL(resourceURL))
-contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Open link in Resources panel" : "Open Link in Resources Panel"), WebInspector.openResource.bind(null, resourceURL, true));
-return true;
+var treeElement = this.treeOutline.findTreeElement(this.selectedDOMNode());
+if (treeElement)
+treeElement.updateSelection(); 
 },
 
 switchToAndFocus: function(node)
 {
 
 WebInspector.searchController.cancelSearch();
-WebInspector.currentPanel = this;
-this.focusedDOMNode = node;
+WebInspector.setCurrentPanel(this);
+this.selectDOMNode(node, true);
 },
 
 _updateMatchesCount: function()
@@ -21917,24 +22754,14 @@ set rootDOMNode(x)
 this.treeOutline.rootDOMNode = x;
 },
 
-get focusedDOMNode()
+selectedDOMNode: function()
 {
-return this.treeOutline.focusedDOMNode;
+return this.treeOutline.selectedDOMNode();
 },
 
-set focusedDOMNode(x)
+selectDOMNode: function(node, focus)
 {
-this.treeOutline.focusedDOMNode = x;
-},
-
-startEditingStyle: function()
-{
-this._isEditingStyle = true;
-},
-
-endEditingStyle: function()
-{
-delete this._isEditingStyle;
+this.treeOutline.selectDOMNode(node, focus);
 },
 
 _attributesUpdated: function(event)
@@ -21942,9 +22769,6 @@ _attributesUpdated: function(event)
 this.recentlyModifiedNodes.push({node: event.data, updated: true});
 if (this.visible)
 this._updateModifiedNodesSoon();
-
-if (!this._isEditingStyle && event.data === this.focusedDOMNode)
-this._styleSheetChanged();
 },
 
 _characterDataModified: function(event)
@@ -21973,6 +22797,11 @@ _childNodeCountUpdated: function(event)
 var treeElement = this.treeOutline.findTreeElement(event.data);
 if (treeElement)
 treeElement.hasChildren = event.data.hasChildNodes();
+},
+
+_inspectElementRequested: function(node)
+{
+WebInspector.updateFocusedNode(node.id);
 },
 
 _updateModifiedNodesSoon: function()
@@ -22013,7 +22842,7 @@ parentNodeItem.alreadyUpdatedChildren = true;
 updatedParentTreeElements.push(parentNodeItem);
 }
 
-if (!updateBreadcrumbs && (this.focusedDOMNode === parent || isAncestorNode(this.focusedDOMNode, parent)))
+if (!updateBreadcrumbs && (this.selectedDOMNode() === parent || (this.selectedDOMNode() && this.selectedDOMNode().isAncestor(parent))))
 updateBreadcrumbs = true;
 }
 
@@ -22038,12 +22867,6 @@ _metricsPaneEdited: function()
 
 this.sidebarPanes.styles.needsUpdate = true;
 this.updateStyles(true);
-},
-
-_styleSheetChanged: function()
-{
-this._metricsPaneEdited();
-this._stylesPaneEdited();
 },
 
 _mouseMovedInCrumbs: function(event)
@@ -22089,7 +22912,7 @@ crumb.addStyleClass("dimmed");
 else
 crumb.removeStyleClass("dimmed");
 
-if (crumb.representedObject === this.focusedDOMNode) {
+if (crumb.representedObject === this.selectedDOMNode()) {
 crumb.addStyleClass("selected");
 handled = true;
 } else {
@@ -22135,14 +22958,14 @@ panel.updateBreadcrumbSizes(crumb);
 
 if (event.detail >= 2 || crumb.hasStyleClass("dimmed"))
 panel.rootDOMNode = crumb.representedObject.parentNode;
-panel.focusedDOMNode = crumb.representedObject;
+panel.selectDOMNode(crumb.representedObject, true);
 }
 
 event.preventDefault();
 }
 
 foundRoot = false;
-for (var current = this.focusedDOMNode; current; current = current.parentNode) {
+for (var current = this.selectedDOMNode(); current; current = current.parentNode) {
 if (current.nodeType() === Node.DOCUMENT_NODE)
 continue;
 
@@ -22161,7 +22984,7 @@ this.decorateNodeLabel(current, crumb);
 break;
 
 case Node.TEXT_NODE:
-if (isNodeWhitespace.call(current))
+if (current.isWhitespace())
 crumbTitle = WebInspector.UIString("(whitespace)");
 else
 crumbTitle = WebInspector.UIString("(text)");
@@ -22188,7 +23011,7 @@ crumb.title = crumbTitle;
 
 if (foundRoot)
 crumb.addStyleClass("dimmed");
-if (current === this.focusedDOMNode)
+if (current === this.selectedDOMNode())
 crumb.addStyleClass("selected");
 if (!crumbs.childNodes.length)
 crumb.addStyleClass("end");
@@ -22323,7 +23146,7 @@ var rightPadding = 20;
 var errorWarningElement = document.getElementById("error-warning-count");
 if (!WebInspector.drawer.visible && errorWarningElement)
 rightPadding += errorWarningElement.offsetWidth;
-return ((crumbs.totalOffsetLeft + crumbs.offsetWidth + rightPadding) < window.innerWidth);
+return ((crumbs.totalOffsetLeft() + crumbs.offsetWidth + rightPadding) < window.innerWidth);
 }
 
 if (crumbsAreSmallerThanContainer())
@@ -22518,16 +23341,11 @@ updateStyles: function(forceUpdate)
 {
 var stylesSidebarPane = this.sidebarPanes.styles;
 var computedStylePane = this.sidebarPanes.computedStyle;
-if ((!stylesSidebarPane.expanded && !computedStylePane.expanded) || !stylesSidebarPane.needsUpdate || this._isEditingStyle)
+if ((!stylesSidebarPane.expanded && !computedStylePane.expanded) || !stylesSidebarPane.needsUpdate)
 return;
 
-stylesSidebarPane.update(this.focusedDOMNode, null, forceUpdate, this._stylesUpdated.bind(this, this.focusedDOMNode));
+stylesSidebarPane.update(this.selectedDOMNode(), forceUpdate);
 stylesSidebarPane.needsUpdate = false;
-},
-
-_stylesUpdated: function(node)
-{
-
 },
 
 updateMetrics: function()
@@ -22536,7 +23354,7 @@ var metricsSidebarPane = this.sidebarPanes.metrics;
 if (!metricsSidebarPane.expanded || !metricsSidebarPane.needsUpdate)
 return;
 
-metricsSidebarPane.update(this.focusedDOMNode);
+metricsSidebarPane.update(this.selectedDOMNode());
 metricsSidebarPane.needsUpdate = false;
 },
 
@@ -22546,7 +23364,7 @@ var propertiesSidebarPane = this.sidebarPanes.properties;
 if (!propertiesSidebarPane.expanded || !propertiesSidebarPane.needsUpdate)
 return;
 
-propertiesSidebarPane.update(this.focusedDOMNode);
+propertiesSidebarPane.update(this.selectedDOMNode());
 propertiesSidebarPane.needsUpdate = false;
 },
 
@@ -22556,14 +23374,14 @@ var eventListenersSidebarPane = this.sidebarPanes.eventListeners;
 if (!eventListenersSidebarPane.expanded || !eventListenersSidebarPane.needsUpdate)
 return;
 
-eventListenersSidebarPane.update(this.focusedDOMNode);
+eventListenersSidebarPane.update(this.selectedDOMNode());
 eventListenersSidebarPane.needsUpdate = false;
 },
 
 _registerShortcuts: function()
 {
 var shortcut = WebInspector.KeyboardShortcut;
-var section = WebInspector.shortcutsHelp.section(WebInspector.UIString("Elements Panel"));
+var section = WebInspector.shortcutsScreen.section(WebInspector.UIString("Elements Panel"));
 var keys = [
 shortcut.shortcutToString(shortcut.Keys.Up),
 shortcut.shortcutToString(shortcut.Keys.Down)
@@ -22604,7 +23422,7 @@ if (!window.getSelection().isCollapsed)
 return;
 event.clipboardData.clearData();
 event.preventDefault();
-this.focusedDOMNode.copyNode();
+this.selectedDOMNode().copyNode();
 },
 
 rightSidebarResizerDragStart: function(event)
@@ -22640,7 +23458,7 @@ var node = WebInspector.domAgent.nodeForId(nodeId);
 if (!node)
 return;
 
-this.focusedDOMNode = node;
+this.selectDOMNode(node, true);
 if (this.nodeSearchButton.toggled) {
 InspectorFrontendHost.bringToFront();
 this.nodeSearchButton.toggled = false;
@@ -22654,7 +23472,7 @@ this.nodeSearchButton.toggled = enabled;
 
 setSearchingForNode: function(enabled)
 {
-DOMAgent.setInspectModeEnabled(enabled, this._setSearchingForNode.bind(this, enabled));
+DOMAgent.setInspectModeEnabled(enabled, WebInspector.buildHighlightConfig(), this._setSearchingForNode.bind(this, enabled));
 },
 
 toggleSearchingForNode: function()
@@ -22674,19 +23492,17 @@ WebInspector.ElementsPanel.prototype.__proto__ = WebInspector.Panel.prototype;
 
 
 
-WebInspector.NetworkPanel = function()
+WebInspector.NetworkLogView = function(parentElement)
 {
-function eventsCollectionEnabled(error, enabled)
-{
-this._backgroundCollectionEnabled = enabled;
-}
-NetworkAgent.isBackgroundEventsCollectionEnabled(eventsCollectionEnabled.bind(this));
 
-WebInspector.Panel.call(this, "network");
+var styles = [
+"inspectorCommon.css",
+"dataGrid.css",
+"networkLogView.css"
+];
+WebInspector.IFrameView.call(this, parentElement, styles);
 
-this.createSidebar();
-this.sidebarElement.className = "network-sidebar";
-
+this._allowResourceSelection = false;
 this._resources = [];
 this._resourcesById = {};
 this._resourcesByURL = {};
@@ -22696,41 +23512,14 @@ this._lastResourceGridNodeId = 0;
 this._mainResourceLoadTime = -1;
 this._mainResourceDOMContentTime = -1;
 this._hiddenCategories = {};
+this._matchedResources = [];
+this._matchedResourcesMap = {};
+this._currentMatchedResourceIndex = -1;
 
 this._categories = WebInspector.resourceCategories;
 
-this.containerElement = document.createElement("div");
-this.containerElement.id = "network-container";
-this.sidebarElement.appendChild(this.containerElement);
-
-this._viewsContainerElement = document.createElement("div");
-this._viewsContainerElement.id = "network-views";
-this._viewsContainerElement.className = "hidden";
-this.element.appendChild(this._viewsContainerElement);
-
-this._closeButtonElement = document.createElement("button");
-this._closeButtonElement.id = "network-close-button";
-this._closeButtonElement.addEventListener("click", this._toggleGridMode.bind(this), false);
-this._viewsContainerElement.appendChild(this._closeButtonElement);
-
-this._createSortingFunctions();
-this._createTable();
-this._createTimelineGrid();
 this._createStatusbarButtons();
 this._createFilterStatusBarItems();
-this._createSummaryBar();
-
-if (!WebInspector.settings.resourcesLargeRows)
-this._setLargerResources(WebInspector.settings.resourcesLargeRows);
-
-this._popoverHelper = new WebInspector.PopoverHelper(this.element, this._getPopoverAnchor.bind(this), this._showPopover.bind(this), true);
-
-this._popoverHelper.setTimeout(100);
-
-this.calculator = new WebInspector.NetworkTransferTimeCalculator();
-this._filter(this._filterAllElement, false);
-
-this._toggleGridMode();
 
 WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceStarted, this._onResourceStarted, this);
 WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceUpdated, this._onResourceUpdated, this);
@@ -22739,14 +23528,30 @@ WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTy
 WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.FrameNavigated, this._frameNavigated, this);
 WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.OnLoad, this._onLoadEventFired, this);
 WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.DOMContentLoaded, this._domContentLoadedEventFired, this);
-
-this.registerShortcuts();
 }
 
-WebInspector.NetworkPanel.prototype = {
-get toolbarItemLabel()
+WebInspector.NetworkLogView.prototype = {
+initializeView: function()
 {
-return WebInspector.UIString("Network");
+this.element.id = "network-container";
+
+this._createSortingFunctions();
+this._createTable();
+this._createTimelineGrid();
+this._createSummaryBar();
+
+if (!this.useLargeRows)
+this._setLargerResources(this.useLargeRows);
+
+this._allowPopover = true;
+this._popoverHelper = new WebInspector.PopoverHelper(this.element, this._getPopoverAnchor.bind(this), this._showPopover.bind(this));
+
+this._popoverHelper.setTimeout(100);
+
+this.calculator = new WebInspector.NetworkTransferTimeCalculator();
+this._filter(this._filterAllElement, false);
+
+this.switchToDetailedView();
 },
 
 get statusBarItems()
@@ -22754,39 +23559,37 @@ get statusBarItems()
 return [this._largerResourcesButton.element, this._preserveLogToggle.element, this._clearButton.element, this._filterBarElement];
 },
 
+get useLargeRows()
+{
+return WebInspector.settings.resourcesLargeRows.get();
+},
+
+set allowPopover(flag)
+{
+this._allowPopover = flag;
+},
+
+get allowResourceSelection()
+{
+return this._allowResourceSelection;
+},
+
+set allowResourceSelection(flag)
+{
+this._allowResourceSelection = !!flag;
+},
+
 elementsToRestoreScrollPositionsFor: function()
 {
-return [this.containerElement, this._dataGrid.scrollContainer];
+if (!this._dataGrid) 
+return [];
+return [this._dataGrid.scrollContainer];
 },
 
-resize: function()
+onResize: function()
 {
-WebInspector.Panel.prototype.resize.call(this);
 this._dataGrid.updateWidths();
 this._updateOffscreenRows();
-},
-
-updateSidebarWidth: function(width)
-{
-if (!this._viewingResourceMode)
-return;
-WebInspector.Panel.prototype.updateSidebarWidth.call(this, width);
-},
-
-updateMainViewWidth: function(width)
-{
-this._viewsContainerElement.style.left = width + "px";
-},
-
-handleShortcut: function(event)
-{
-if (this._viewingResourceMode && event.keyCode === WebInspector.KeyboardShortcut.Keys.Esc.code) {
-this._toggleGridMode();
-event.handled = true;
-return;
-}
-
-WebInspector.Panel.prototype.handleShortcut.call(this, event);
 },
 
 _createTimelineGrid: function()
@@ -22798,7 +23601,11 @@ this._dataGrid.element.appendChild(this._timelineGrid.element);
 
 _createTable: function()
 {
-var columns = {name: {}, method: {}, status: {}, type: {}, size: {}, time: {}, timeline: {}};
+var columns;
+if (Preferences.showNetworkPanelInitiatorColumn)
+columns = {name: {}, method: {}, status: {}, type: {}, initiator: {}, size: {}, time: {}, timeline: {}};
+else
+columns = {name: {}, method: {}, status: {}, type: {}, size: {}, time: {}, timeline: {}};
 columns.name.titleDOMFragment = this._makeHeaderFragment(WebInspector.UIString("Name"), WebInspector.UIString("Path"));
 columns.name.sortable = true;
 columns.name.width = "20%";
@@ -22816,6 +23623,12 @@ columns.type.title = WebInspector.UIString("Type");
 columns.type.sortable = true;
 columns.type.width = "6%";
 
+if (Preferences.showNetworkPanelInitiatorColumn) {
+columns.initiator.title = WebInspector.UIString("Initiator");
+columns.initiator.sortable = true;
+columns.initiator.width = "10%";
+}
+
 columns.size.titleDOMFragment = this._makeHeaderFragment(WebInspector.UIString("Size"), WebInspector.UIString("Content"));
 columns.size.sortable = true;
 columns.size.width = "6%";
@@ -22828,13 +23641,20 @@ columns.time.aligned = "right";
 
 columns.timeline.title = "";
 columns.timeline.sortable = false;
+if (Preferences.showNetworkPanelInitiatorColumn)
+columns.timeline.width = "40%";
+else
 columns.timeline.width = "50%";
 columns.timeline.sort = "ascending";
 
 this._dataGrid = new WebInspector.DataGrid(columns);
 this._dataGrid.resizeMethod = WebInspector.DataGrid.ResizeMethod.Last;
+this._dataGrid.element.addStyleClass("network-log-grid");
 this._dataGrid.element.addEventListener("contextmenu", this._contextMenu.bind(this), true);
-this.containerElement.appendChild(this._dataGrid.element);
+
+this.element.appendChild(this._dataGrid.element);
+
+
 this._dataGrid.addEventListener("sorting changed", this._sortItems, this);
 this._dataGrid.addEventListener("width changed", this._updateDividersIfNeeded, this);
 this._dataGrid.scrollContainer.addEventListener("scroll", this._updateOffscreenRows.bind(this));
@@ -22902,6 +23722,7 @@ this._sortingFunctions.name = WebInspector.NetworkDataGridNode.NameComparator;
 this._sortingFunctions.method = WebInspector.NetworkDataGridNode.ResourcePropertyComparator.bind(null, "method", false);
 this._sortingFunctions.status = WebInspector.NetworkDataGridNode.ResourcePropertyComparator.bind(null, "statusCode", false);
 this._sortingFunctions.type = WebInspector.NetworkDataGridNode.ResourcePropertyComparator.bind(null, "mimeType", false);
+this._sortingFunctions.initiator = WebInspector.NetworkDataGridNode.InitiatorComparator;
 this._sortingFunctions.size = WebInspector.NetworkDataGridNode.SizeComparator;
 this._sortingFunctions.time = WebInspector.NetworkDataGridNode.ResourcePropertyComparator.bind(null, "duration", false);
 this._sortingFunctions.timeline = WebInspector.NetworkDataGridNode.ResourcePropertyComparator.bind(null, "startTime", false);
@@ -22925,6 +23746,7 @@ this._calculators.latency = durationCalculator;
 
 _sortItems: function()
 {
+this._removeAllNodeHighlights();
 var columnIdentifier = this._dataGrid.sortColumnIdentifier;
 if (columnIdentifier === "timeline") {
 this._sortByTimeline();
@@ -22937,10 +23759,13 @@ return;
 this._dataGrid.sortNodes(sortingFunction, this._dataGrid.sortOrder === "descending");
 this._timelineSortSelector.selectedIndex = 0;
 this._updateOffscreenRows();
+
+this.performSearch(null, true);
 },
 
 _sortByTimeline: function()
 {
+this._removeAllNodeHighlights();
 var selectedIndex = this._timelineSortSelector.selectedIndex;
 if (!selectedIndex)
 selectedIndex = 1; 
@@ -23001,9 +23826,9 @@ this._summaryBarElement = td;
 
 _updateSummaryBar: function()
 {
-var numRequests = this._resources.length;
+var requestsNumber = this._resources.length;
 
-if (!numRequests) {
+if (!requestsNumber) {
 if (this._summaryBarElement._isDisplayingWarning)
 return;
 this._summaryBarElement._isDisplayingWarning = true;
@@ -23019,18 +23844,31 @@ return;
 delete this._summaryBarElement._isDisplayingWarning;
 
 var transferSize = 0;
+var selectedRequestsNumber = 0;
+var selectedTransferSize = 0;
 var baseTime = -1;
 var maxTime = -1;
 for (var i = 0; i < this._resources.length; ++i) {
 var resource = this._resources[i];
-transferSize += (resource.cached || !resource.transferSize) ? 0 : resource.transferSize;
+var resourceTransferSize = (resource.cached || !resource.transferSize) ? 0 : resource.transferSize;
+transferSize += resourceTransferSize;
+if (!this._hiddenCategories.all || !this._hiddenCategories[resource.category.name]) {
+selectedRequestsNumber++;
+selectedTransferSize += resourceTransferSize;
+}
 if (resource === WebInspector.mainResource)
 baseTime = resource.startTime;
 if (resource.endTime > maxTime)
 maxTime = resource.endTime;
 }
-var text = String.sprintf(WebInspector.UIString("%d requests"), numRequests);
+var text = "";
+if (this._hiddenCategories.all) {
+text += String.sprintf(WebInspector.UIString("%d / %d requests"), selectedRequestsNumber, requestsNumber);
+text += "  \u2758  " + String.sprintf(WebInspector.UIString("%s / %s transferred"), Number.bytesToString(selectedTransferSize), Number.bytesToString(transferSize));
+} else {
+text += String.sprintf(WebInspector.UIString("%d requests"), requestsNumber);
 text += "  \u2758  " + String.sprintf(WebInspector.UIString("%s transferred"), Number.bytesToString(transferSize));
+}
 if (baseTime !== -1 && this._mainResourceLoadTime !== -1 && this._mainResourceDOMContentTime !== -1 && this._mainResourceDOMContentTime > baseTime) {
 text += "  \u2758  " + String.sprintf(WebInspector.UIString("%s (onload: %s, DOMContentLoaded: %s)"),
 Number.secondsToString(maxTime - baseTime),
@@ -23054,6 +23892,7 @@ this._hiddenCategories[category] = true;
 
 _updateFilter: function(e)
 {
+this._removeAllNodeHighlights();
 var isMac = WebInspector.isMac();
 var selectMultiple = false;
 if (isMac && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey)
@@ -23062,6 +23901,8 @@ if (!isMac && e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey)
 selectMultiple = true;
 
 this._filter(e.target, selectMultiple);
+this.performSearch(null, true);
+this._updateSummaryBar();
 },
 
 _filter: function(target, selectMultiple)
@@ -23132,6 +23973,8 @@ this._refreshTimeout = setTimeout(this.refresh.bind(this), 500);
 
 _updateDividersIfNeeded: function(force)
 {
+if (!this._dataGrid)
+return;
 var timelineColumn = this._dataGrid.columns.timeline;
 for (var i = 0; i < this._dataGrid.resizers.length; ++i) {
 if (timelineColumn.ordinal === this._dataGrid.resizers[i].rightNeighboringColumnID) {
@@ -23232,20 +24075,6 @@ this._resourceGridNodes[resource.__gridNodeId] = node;
 return node;
 },
 
-revealAndSelectItem: function(resource)
-{
-var node = this._resourceGridNode(resource);
-if (node) {
-node.reveal();
-node.select(true);
-}
-},
-
-addEventDivider: function(divider)
-{
-this._timelineGrid.addEventDivider(divider);
-},
-
 _createStatusbarButtons: function()
 {
 this._preserveLogToggle = new WebInspector.StatusBarButton(WebInspector.UIString("Preserve Log upon Navigation"), "record-profile-status-bar-item");
@@ -23255,7 +24084,7 @@ this._clearButton = new WebInspector.StatusBarButton(WebInspector.UIString("Clea
 this._clearButton.addEventListener("click", this._reset.bind(this), false);
 
 this._largerResourcesButton = new WebInspector.StatusBarButton(WebInspector.UIString("Use small resource rows."), "network-larger-resources-status-bar-item");
-this._largerResourcesButton.toggled = WebInspector.settings.resourcesLargeRows;
+this._largerResourcesButton.toggled = WebInspector.settings.resourcesLargeRows.get();
 this._largerResourcesButton.addEventListener("click", this._toggleLargerResources.bind(this), false);
 },
 
@@ -23263,30 +24092,26 @@ _onLoadEventFired: function(event)
 {
 this._mainResourceLoadTime = event.data || -1;
 
-this._updateDividersIfNeeded(true);
+this._scheduleRefresh(true);
 },
 
 _domContentLoadedEventFired: function(event)
 {
 this._mainResourceDOMContentTime = event.data || -1;
-this._updateDividersIfNeeded(true);
+
+this._scheduleRefresh(true);
 },
 
-show: function()
+wasShown: function()
 {
-WebInspector.Panel.prototype.show.call(this);
+WebInspector.IFrameView.prototype.wasShown.call(this);
 this._refreshIfNeeded();
-
-if (this.visibleView)
-this.visibleView.show(this._viewsContainerElement);
-
-this._dataGrid.updateWidths();
 },
 
-hide: function()
+willHide: function()
 {
-WebInspector.Panel.prototype.hide.call(this);
-this._popoverHelper.hidePopup();
+WebInspector.IFrameView.prototype.willHide.call(this);
+this._popoverHelper.hidePopover();
 },
 
 refresh: function()
@@ -23297,9 +24122,14 @@ clearTimeout(this._refreshTimeout);
 delete this._refreshTimeout;
 }
 
+this._removeAllNodeHighlights();
 var wasScrolledToLastRow = this._dataGrid.isScrolledToLastRow();
 var staleItemsLength = this._staleResources.length;
 var boundariesChanged = false;
+if (this.calculator.updateBoundariesForEventTime) {
+boundariesChanged = this.calculator.updateBoundariesForEventTime(this._mainResourceLoadTime) || boundariesChanged;
+boundariesChanged = this.calculator.updateBoundariesForEventTime(this._mainResourceDOMContentTime) || boundariesChanged;
+}
 
 for (var i = 0; i < staleItemsLength; ++i) {
 var resource = this._staleResources[i];
@@ -23313,6 +24143,9 @@ node.refreshResource();
 
 if (this.calculator.updateBoundaries(resource))
 boundariesChanged = true;
+
+if (!node.isFilteredOut())
+this._updateHighlightIfMatched(resource);
 }
 
 if (boundariesChanged) {
@@ -23341,11 +24174,11 @@ this._preserveLogToggle.toggled = !this._preserveLogToggle.toggled;
 
 _reset: function()
 {
-this._popoverHelper.hidePopup();
-this._closeVisibleResource();
+this.dispatchEventToListeners(WebInspector.NetworkLogView.EventTypes.ViewCleared);
 
-this._toggleGridMode();
-
+this._clearSearchMatchedList();
+if (this._popoverHelper)
+this._popoverHelper.hidePopover();
 
 if (this._calculator)
 this._calculator.reset();
@@ -23356,17 +24189,15 @@ this._resourcesByURL = {};
 this._staleResources = [];
 this._resourceGridNodes = {};
 
+if (this._dataGrid) {
 this._dataGrid.removeChildren();
 this._updateDividersIfNeeded(true);
-
+this._updateSummaryBar();
+}
 
 this._mainResourceLoadTime = -1;
 this._mainResourceDOMContentTime = -1;
 
-this._viewsContainerElement.removeChildren();
-this._viewsContainerElement.appendChild(this._closeButtonElement);
-this._updateSummaryBar();
-WebInspector.extensionServer.resetResources();
 },
 
 get resources()
@@ -23387,8 +24218,17 @@ this._appendResource(event.data);
 _appendResource: function(resource)
 {
 this._resources.push(resource);
-if (resource.identifier)
-this._resourcesById[resource.identifier] = resource;
+
+
+
+if (this._resourcesById[resource.requestId]) {
+var oldResource = resource.redirects[resource.redirects.length - 1];
+this._resourcesById[oldResource.requestId] = oldResource;
+
+this._updateSearchMatchedListAfterRequestIdChanged(resource.requestId, oldResource.requestId);
+}
+this._resourcesById[resource.requestId] = resource;
+
 this._resourcesByURL[resource.url] = resource;
 
 
@@ -23425,14 +24265,8 @@ return;
 
 var loaderId = event.data.loaderId;
 
-if (this._preserveLogToggle.toggled) {
-for (var i = 0; i < this._resources.length; ++i) {
-var resource = this._resources[i];
-if (resource.loaderId !== loaderId)
-resource.identifier = null;
-}
+if (this._preserveLogToggle.toggled)
 return;
-}
 
 
 var resourcesToPreserve = [];
@@ -23449,56 +24283,66 @@ for (var i = 0; i < resourcesToPreserve.length; ++i)
 this._appendResource(resourcesToPreserve[i]);
 },
 
-canShowAnchorLocation: function(anchor)
+switchToDetailedView: function()
 {
-return !!this._resourcesByURL[anchor.href];
-},
-
-showAnchorLocation: function(anchor)
-{
-this._showResource(this._resourcesByURL[anchor.href]);
-},
-
-_showResource: function(resource)
-{
-if (!resource)
+if (!this._dataGrid)
 return;
+if (this._dataGrid.selectedNode)
+this._dataGrid.selectedNode.selected = false;
 
-this._popoverHelper.hidePopup();
+this.element.removeStyleClass("brief-mode");
 
-this._toggleViewingResourceMode();
+this._dataGrid.showColumn("method");
+this._dataGrid.showColumn("status");
+this._dataGrid.showColumn("type");
+if (Preferences.showNetworkPanelInitiatorColumn)
+this._dataGrid.showColumn("initiator");
+this._dataGrid.showColumn("size");
+this._dataGrid.showColumn("time");
+this._dataGrid.showColumn("timeline");
 
-if (this.visibleView) {
-this.visibleView.detach();
-delete this.visibleView;
-}
+var widths = {};
+widths.name = 20;
+widths.method = 6;
+widths.status = 6;
+widths.type = 6;
+if (Preferences.showNetworkPanelInitiatorColumn)
+widths.initiator = 10;
+widths.size = 6;
+widths.time = 6;
+if (Preferences.showNetworkPanelInitiatorColumn)
+widths.timeline = 40;
+else
+widths.timeline = 50;
 
-var view = new WebInspector.NetworkItemView(resource);
-view.show(this._viewsContainerElement);
-this.visibleView = view;
-
-this.updateSidebarWidth();
+this._dataGrid.applyColumnWidthsMap(widths);
 },
 
-_closeVisibleResource: function()
+switchToBriefView: function()
 {
-this.element.removeStyleClass("viewing-resource");
+this.element.addStyleClass("brief-mode");
+this._removeAllNodeHighlights();
 
-if (this.visibleView) {
-this.visibleView.detach();
-delete this.visibleView;
-}
+this._dataGrid.hideColumn("method");
+this._dataGrid.hideColumn("status");
+this._dataGrid.hideColumn("type");
+if (Preferences.showNetworkPanelInitiatorColumn)
+this._dataGrid.hideColumn("initiator");
+this._dataGrid.hideColumn("size");
+this._dataGrid.hideColumn("time");
+this._dataGrid.hideColumn("timeline");
 
-if (this._lastSelectedGraphTreeElement)
-this._lastSelectedGraphTreeElement.select(true);
+var widths = {};
+widths.name = 100;
+this._dataGrid.applyColumnWidthsMap(widths);
 
-this.updateSidebarWidth();
+this._popoverHelper.hidePopover();
 },
 
 _toggleLargerResources: function()
 {
-WebInspector.settings.resourcesLargeRows = !WebInspector.settings.resourcesLargeRows;
-this._setLargerResources(WebInspector.settings.resourcesLargeRows);
+WebInspector.settings.resourcesLargeRows.set(!WebInspector.settings.resourcesLargeRows.get());
+this._setLargerResources(WebInspector.settings.resourcesLargeRows.get());
 },
 
 _setLargerResources: function(enabled)
@@ -23508,18 +24352,19 @@ if (!enabled) {
 this._largerResourcesButton.title = WebInspector.UIString("Use large resource rows.");
 this._dataGrid.element.addStyleClass("small");
 this._timelineGrid.element.addStyleClass("small");
-this._viewsContainerElement.addStyleClass("small");
 } else {
 this._largerResourcesButton.title = WebInspector.UIString("Use small resource rows.");
 this._dataGrid.element.removeStyleClass("small");
 this._timelineGrid.element.removeStyleClass("small");
-this._viewsContainerElement.removeStyleClass("small");
 }
+this.dispatchEventToListeners(WebInspector.NetworkLogView.EventTypes.RowSizeChanged, { largeRows: enabled });
 this._updateOffscreenRows();
 },
 
 _getPopoverAnchor: function(element)
 {
+if (!this._allowPopover)
+return;
 var anchor = element.enclosingNodeOrSelfWithClass("network-graph-bar") || element.enclosingNodeOrSelfWithClass("network-graph-label");
 if (!anchor)
 return null;
@@ -23527,13 +24372,11 @@ var resource = anchor.parentElement.resource;
 return resource && resource.timing ? anchor : null;
 },
 
-_showPopover: function(anchor)
+_showPopover: function(anchor, popover)
 {
 var resource = anchor.parentElement.resource;
 var tableElement = WebInspector.ResourceTimingView.createTimingTable(resource);
-var popover = new WebInspector.Popover(tableElement);
-popover.show(anchor);
-return popover;
+popover.show(tableElement, anchor);
 },
 
 _toggleGridMode: function()
@@ -23541,7 +24384,6 @@ _toggleGridMode: function()
 if (this._viewingResourceMode) {
 this._viewingResourceMode = false;
 this.element.removeStyleClass("viewing-resource");
-this._dataGrid.element.removeStyleClass("viewing-resource-mode");
 this._viewsContainerElement.addStyleClass("hidden");
 this.sidebarElement.style.right = 0;
 this.sidebarElement.style.removeProperty("width");
@@ -23549,26 +24391,11 @@ if (this._dataGrid.selectedNode)
 this._dataGrid.selectedNode.selected = false;
 }
 
-if (this._briefGrid) {
-this._dataGrid.element.removeStyleClass("full-grid-mode");
-this._dataGrid.element.addStyleClass("brief-grid-mode");
-
-this._dataGrid.hideColumn("method");
-this._dataGrid.hideColumn("status");
-this._dataGrid.hideColumn("type");
-this._dataGrid.hideColumn("size");
-this._dataGrid.hideColumn("time");
-
-var widths = {};
-widths.name = 20;
-widths.timeline = 80;
-} else {
-this._dataGrid.element.addStyleClass("full-grid-mode");
-this._dataGrid.element.removeStyleClass("brief-grid-mode");
-
 this._dataGrid.showColumn("method");
 this._dataGrid.showColumn("status");
 this._dataGrid.showColumn("type");
+if (Preferences.showNetworkPanelInitiatorColumn)
+this._dataGrid.showColumn("initiator");
 this._dataGrid.showColumn("size");
 this._dataGrid.showColumn("time");
 
@@ -23577,14 +24404,17 @@ widths.name = 20;
 widths.method = 6;
 widths.status = 6;
 widths.type = 6;
+if (Preferences.showNetworkPanelInitiatorColumn)
+widths.initiator = 10;
 widths.size = 6;
 widths.time = 6;
+if (Preferences.showNetworkPanelInitiatorColumn)
+widths.timeline = 40;
+else
 widths.timeline = 50;
-}
 
 this._dataGrid.showColumn("timeline");
 this._dataGrid.applyColumnWidthsMap(widths);
-
 },
 
 _toggleViewingResourceMode: function()
@@ -23592,22 +24422,20 @@ _toggleViewingResourceMode: function()
 if (this._viewingResourceMode)
 return;
 this._viewingResourceMode = true;
-this._preservedColumnWidths = this._dataGrid.columnWidthsMap();
 
 this.element.addStyleClass("viewing-resource");
-this._dataGrid.element.addStyleClass("viewing-resource-mode");
-this._dataGrid.element.removeStyleClass("full-grid-mode");
-this._dataGrid.element.removeStyleClass("brief-grid-mode");
 
 this._dataGrid.hideColumn("method");
 this._dataGrid.hideColumn("status");
 this._dataGrid.hideColumn("type");
+if (Preferences.showNetworkPanelInitiatorColumn)
+this._dataGrid.hideColumn("initiator");
 this._dataGrid.hideColumn("size");
 this._dataGrid.hideColumn("time");
 this._dataGrid.hideColumn("timeline");
 
 this._viewsContainerElement.removeStyleClass("hidden");
-this.updateSidebarWidth(200);
+this.restoreSidebarWidth();
 
 var widths = {};
 widths.name = 100;
@@ -23623,7 +24451,7 @@ var resource = gridNode && gridNode._resource;
 if (resource) {
 contextMenu.appendItem(WebInspector.openLinkExternallyLabel(), WebInspector.openResource.bind(WebInspector, resource.url, false));
 contextMenu.appendSeparator();
-contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Copy location" : "Copy Location"), this._copyLocation.bind(this, resource));
+contextMenu.appendItem(WebInspector.copyLinkAddressLabel(), this._copyLocation.bind(this, resource));
 if (resource.requestHeadersText)
 contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Copy request headers" : "Copy Request Headers"), this._copyRequestHeaders.bind(this, resource));
 if (resource.responseHeadersText)
@@ -23639,13 +24467,19 @@ contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles
 contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Save all as HAR" : "Save All as HAR"), this._exportAll.bind(this));
 }
 
+if (Preferences.canClearCacheAndCookies) {
+contextMenu.appendSeparator();
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Clear browser cache" : "Clear Browser Cache"), this._clearBrowserCache.bind(this));
+contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Clear browser cookies" : "Clear Browser Cookies"), this._clearBrowserCookies.bind(this));
+}
+
 contextMenu.show(event);
 },
 
 _copyAll: function()
 {
 var harArchive = {
-log: (new WebInspector.HARLog()).build()
+log: (new WebInspector.HARLog(this._resources)).build()
 };
 InspectorFrontendHost.copyText(JSON.stringify(harArchive));
 },
@@ -23674,7 +24508,7 @@ InspectorFrontendHost.copyText(resource.responseHeadersText);
 _exportAll: function()
 {
 var harArchive = {
-log: (new WebInspector.HARLog()).build()
+log: (new WebInspector.HARLog(this._resources)).build()
 };
 InspectorFrontendHost.saveAs(WebInspector.mainResource.domain + ".har", JSON.stringify(harArchive));
 },
@@ -23685,10 +24519,16 @@ var har = (new WebInspector.HAREntry(resource)).build();
 InspectorFrontendHost.saveAs(resource.displayName + ".har", JSON.stringify(har));
 },
 
-_toggleBackgroundEventsCollection: function(resource)
+_clearBrowserCache: function(event)
 {
-this._backgroundCollectionEnabled = !this._backgroundCollectionEnabled;
-NetworkAgent.setBackgroundEventsCollectionEnabled(this._backgroundCollectionEnabled);
+if (confirm(WebInspector.UIString("Are you sure you want to clear browser cache?")))
+NetworkAgent.clearBrowserCache();
+},
+
+_clearBrowserCookies: function(event)
+{
+if (confirm(WebInspector.UIString("Are you sure you want to clear browser cookies?")))
+NetworkAgent.clearBrowserCookies();
 },
 
 _updateOffscreenRows: function(e)
@@ -23728,6 +24568,403 @@ row.rowIsVisible = rowIsVisible;
 }
 unfilteredRowIndex++;
 }
+},
+
+_matchResource: function(resource)
+{
+if (!this._searchRegExp)
+return -1;
+
+if ((!resource.displayName || !resource.displayName.match(this._searchRegExp)) && !resource.folder.match(this._searchRegExp))
+return -1;
+
+if (resource.requestId in this._matchedResourcesMap)
+return this._matchedResourcesMap[resource.requestId];
+
+var matchedResourceIndex = this._matchedResources.length;
+this._matchedResourcesMap[resource.requestId] = matchedResourceIndex;
+this._matchedResources.push(resource.requestId);
+
+return matchedResourceIndex;
+},
+
+_clearSearchMatchedList: function()
+{
+this._matchedResources = [];
+this._matchedResourcesMap = {};
+this._highlightNthMatchedResource(-1, false);
+},
+
+_updateSearchMatchedListAfterRequestIdChanged: function(oldRequestId, newRequestId)
+{
+var resourceIndex = this._matchedResourcesMap[oldRequestId];
+if (resourceIndex) {
+delete this._matchedResourcesMap[oldRequestId];
+this._matchedResourcesMap[newRequestId] = resourceIndex;
+this._matchedResources[resourceIndex] = newRequestId;
+}
+},
+
+_updateHighlightIfMatched: function(resource)
+{
+var matchedResourceIndex = this._matchResource(resource);
+if (matchedResourceIndex === -1)
+return;
+
+this.dispatchEventToListeners(WebInspector.NetworkLogView.EventTypes.SearchCountUpdated, this._matchedResources.length);
+
+if (this._currentMatchedResourceIndex !== -1 && this._currentMatchedResourceIndex !== matchedResourceIndex)
+return;
+
+this._highlightNthMatchedResource(matchedResourceIndex, false);
+},
+
+_highlightNthMatchedResource: function(matchedResourceIndex, reveal)
+{
+if (this._highlightedSubstringChanges) {
+revertDomChanges(this._highlightedSubstringChanges);
+this._highlightedSubstringChanges = null;
+}
+
+if (matchedResourceIndex === -1) {
+this._currentMatchedResourceIndex = matchedResourceIndex;
+return;
+}
+
+var resource = this._resourcesById[this._matchedResources[matchedResourceIndex]];
+if (!resource)
+return;
+
+var nameMatched = resource.displayName && resource.displayName.match(this._searchRegExp);
+var pathMatched = resource.path && resource.folder.match(this._searchRegExp);
+if (!nameMatched && pathMatched && !this._largerResourcesButton.toggled)
+this._toggleLargerResources();
+
+var node = this._resourceGridNode(resource);
+if (node) {
+this._highlightedSubstringChanges = node._highlightMatchedSubstring(this._searchRegExp);
+if (reveal)
+node.reveal();
+this._currentMatchedResourceIndex = matchedResourceIndex;
+}
+this.dispatchEventToListeners(WebInspector.NetworkLogView.EventTypes.SearchIndexUpdated, this._currentMatchedResourceIndex + 1);
+},
+
+performSearch: function(searchQuery, sortOrFilterApplied)
+{
+var newMatchedResourceIndex = 0;
+var currentMatchedRequestId;
+if (this._currentMatchedResourceIndex !== -1)
+currentMatchedRequestId = this._matchedResources[this._currentMatchedResourceIndex];
+
+if (!sortOrFilterApplied)
+this._searchRegExp = createSearchRegex(searchQuery);
+
+this._clearSearchMatchedList();
+
+var childNodes = this._dataGrid.dataTableBody.childNodes;
+var resourceNodes = Array.prototype.slice.call(childNodes, 0, childNodes.length - 1); 
+
+for (var i = 0; i < resourceNodes.length; ++i) {
+var dataGridNode = this._dataGrid.dataGridNodeFromNode(resourceNodes[i]);
+if (dataGridNode.isFilteredOut())
+continue;
+
+if (this._matchResource(dataGridNode._resource) !== -1 && dataGridNode._resource.requestId === currentMatchedRequestId)
+newMatchedResourceIndex = this._matchedResources.length - 1;
+}
+
+this.dispatchEventToListeners(WebInspector.NetworkLogView.EventTypes.SearchCountUpdated, this._matchedResources.length);
+this._highlightNthMatchedResource(newMatchedResourceIndex, !sortOrFilterApplied);
+},
+
+jumpToPreviousSearchResult: function()
+{
+if (!this._matchedResources.length)
+return;
+this._highlightNthMatchedResource((this._currentMatchedResourceIndex + this._matchedResources.length - 1) % this._matchedResources.length, true);
+},
+
+jumpToNextSearchResult: function()
+{
+if (!this._matchedResources.length)
+return;
+this._highlightNthMatchedResource((this._currentMatchedResourceIndex + 1) % this._matchedResources.length, true);
+},
+
+searchCanceled: function()
+{
+this._clearSearchMatchedList();
+this.dispatchEventToListeners(WebInspector.NetworkLogView.EventTypes.SearchCountUpdated, 0);
+},
+
+revealAndHighlightResource: function(resource)
+{
+this._removeAllNodeHighlights();
+
+var node = this._resourceGridNode(resource);
+if (node) {
+this._dataGrid.element.focus();
+node.reveal();
+this._highlightNode(node);
+}
+},
+
+_removeAllNodeHighlights: function(node, decoration)
+{
+if (this._highlightedNode) {
+this._highlightedNode.element.removeStyleClass("highlighted-row");
+delete this._highlightedNode;
+}
+},
+
+_highlightNode: function(node)
+{
+node.element.addStyleClass("highlighted-row");
+this._highlightedNode = node;
+}
+};
+
+WebInspector.NetworkLogView.prototype.__proto__ = WebInspector.IFrameView.prototype;
+
+WebInspector.NetworkLogView.EventTypes = {
+ViewCleared: "ViewCleared",
+RowSizeChanged: "RowSizeChanged",
+ResourceSelected: "ResourceSelected",
+SearchCountUpdated: "SearchCountUpdated",
+SearchIndexUpdated: "SearchIndexUpdated"
+};
+
+WebInspector.NetworkPanel = function()
+{
+WebInspector.Panel.call(this, "network");
+
+this.createSidebar();
+this._networkLogView = new WebInspector.NetworkLogView(this.sidebarElement);
+this.addChildView(this._networkLogView);
+
+this._viewsContainerElement = document.createElement("div");
+this._viewsContainerElement.id = "network-views";
+this._viewsContainerElement.className = "hidden";
+if (!this._networkLogView.useLargeRows)
+this._viewsContainerElement.addStyleClass("small");
+
+this.element.appendChild(this._viewsContainerElement);
+
+this._networkLogView.addEventListener(WebInspector.NetworkLogView.EventTypes.ViewCleared, this._onViewCleared, this);
+this._networkLogView.addEventListener(WebInspector.NetworkLogView.EventTypes.RowSizeChanged, this._onRowSizeChanged, this);
+this._networkLogView.addEventListener(WebInspector.NetworkLogView.EventTypes.ResourceSelected, this._onResourceSelected, this);
+this._networkLogView.addEventListener(WebInspector.NetworkLogView.EventTypes.SearchCountUpdated, this._onSearchCountUpdated, this);
+this._networkLogView.addEventListener(WebInspector.NetworkLogView.EventTypes.SearchIndexUpdated, this._onSearchIndexUpdated, this);
+
+this._closeButtonElement = document.createElement("button");
+this._closeButtonElement.id = "network-close-button";
+this._closeButtonElement.addEventListener("click", this._toggleGridMode.bind(this), false);
+this._viewsContainerElement.appendChild(this._closeButtonElement);
+
+this.registerShortcuts();
+}
+
+WebInspector.NetworkPanel.prototype = {
+get toolbarItemLabel()
+{
+return WebInspector.UIString("Network");
+},
+
+get statusBarItems()
+{
+return this._networkLogView.statusBarItems;
+},
+
+elementsToRestoreScrollPositionsFor: function()
+{
+return this._networkLogView.elementsToRestoreScrollPositionsFor();
+},
+
+
+_reset: function()
+{
+this._networkLogView._reset();
+},
+
+restoreSidebarWidth: function()
+{
+if (!this._viewingResourceMode)
+return;
+
+var preferredWidth = WebInspector.Panel.prototype.preferredSidebarWidth.call(this);
+if (typeof(preferredWidth) === "undefined")
+preferredWidth = 200;
+WebInspector.Panel.prototype.updateSidebarWidth.call(this, preferredWidth);
+},
+
+updateMainViewWidth: function(width)
+{
+this._viewsContainerElement.style.left = width + "px";
+},
+
+handleShortcut: function(event)
+{
+if (this._viewingResourceMode && event.keyCode === WebInspector.KeyboardShortcut.Keys.Esc.code) {
+this._toggleGridMode();
+event.handled = true;
+return;
+}
+
+WebInspector.Panel.prototype.handleShortcut.call(this, event);
+},
+
+show: function()
+{
+WebInspector.Panel.prototype.show.call(this);
+this._networkLogView.show();
+},
+
+get resources()
+{
+return this._networkLogView.resources;
+},
+
+resourceById: function(id)
+{
+return this._networkLogView.resourceById(id);
+},
+
+_resourceByAnchor: function(anchor)
+{
+var resource;
+if (anchor.getAttribute("request_id"))
+resource = this.resourceById(anchor.getAttribute("request_id"));
+if (!resource)
+resource = this._resourcesByURL[anchor.href];
+
+return resource;
+},
+
+canShowAnchorLocation: function(anchor)
+{
+return !!this._resourceByAnchor(anchor);
+},
+
+showAnchorLocation: function(anchor)
+{
+var resource = this._resourceByAnchor(anchor);
+
+this._toggleGridMode();
+if (resource)
+this._networkLogView.revealAndHighlightResource(resource);
+},
+
+_onViewCleared: function(event)
+{
+this._closeVisibleResource();
+this._toggleGridMode();
+this._viewsContainerElement.removeChildren();
+this._viewsContainerElement.appendChild(this._closeButtonElement);
+},
+
+_onRowSizeChanged: function(event)
+{
+if (event.data.largeRows)
+this._viewsContainerElement.removeStyleClass("small");
+else
+this._viewsContainerElement.addStyleClass("small");
+},
+
+_onSearchCountUpdated: function(event)
+{
+WebInspector.searchController.updateSearchMatchesCount(event.data, this);
+},
+
+_onSearchIndexUpdated: function(event)
+{
+WebInspector.searchController.updateCurrentMatchIndex(event.data, this);
+},
+
+_onResourceSelected: function(event)
+{
+this._showResource(event.data);
+},
+
+_showResource: function(resource)
+{
+if (!resource)
+return;
+
+this._toggleViewingResourceMode();
+
+if (this.visibleView) {
+this.removeChildView(this.visibleView);
+delete this.visibleView;
+}
+
+var view = new WebInspector.NetworkItemView(resource);
+this.addChildView(view);
+view.show(this._viewsContainerElement);
+this.visibleView = view;
+
+this.restoreSidebarWidth();
+},
+
+_closeVisibleResource: function()
+{
+this.element.removeStyleClass("viewing-resource");
+
+if (this.visibleView) {
+this.removeChildView(this.visibleView);
+delete this.visibleView;
+}
+
+this.restoreSidebarWidth();
+},
+
+_toggleGridMode: function()
+{
+if (this._viewingResourceMode) {
+this._viewingResourceMode = false;
+this.element.removeStyleClass("viewing-resource");
+this._viewsContainerElement.addStyleClass("hidden");
+this.sidebarElement.style.right = 0;
+this.sidebarElement.style.removeProperty("width");
+}
+
+this._networkLogView.switchToDetailedView();
+this._networkLogView.allowPopover = true;
+this._networkLogView.allowResourceSelection = false;
+},
+
+_toggleViewingResourceMode: function()
+{
+if (this._viewingResourceMode)
+return;
+this._viewingResourceMode = true;
+
+this.element.addStyleClass("viewing-resource");
+this._viewsContainerElement.removeStyleClass("hidden");
+this.restoreSidebarWidth();
+this._networkLogView.allowPopover = false;
+this._networkLogView.allowResourceSelection = true;
+this._networkLogView.switchToBriefView();
+},
+
+performSearch: function(searchQuery, sortOrFilterApplied)
+{
+this._networkLogView.performSearch(searchQuery, sortOrFilterApplied);
+},
+
+jumpToPreviousSearchResult: function()
+{
+this._networkLogView.jumpToPreviousSearchResult();
+},
+
+jumpToNextSearchResult: function()
+{
+this._networkLogView.jumpToNextSearchResult();
+},
+
+searchCanceled: function()
+{
+this._networkLogView.searchCanceled();
 }
 }
 
@@ -23902,6 +25139,18 @@ return ((eventTime - this.minimumBoundary) / this.boundarySpan) * 100;
 return 0;
 },
 
+updateBoundariesForEventTime: function(eventTime)
+{
+if (eventTime === -1 || this.startAtZero)
+return false;
+
+if (typeof this.maximumBoundary === "undefined" || eventTime > this.maximumBoundary) {
+this.maximumBoundary = eventTime;
+return true;
+}
+return false;
+},
+
 computeBarGraphLabels: function(resource)
 {
 var rightLabel = "";
@@ -24015,10 +25264,10 @@ return resource.duration;
 
 WebInspector.NetworkTransferDurationCalculator.prototype.__proto__ = WebInspector.NetworkTimeCalculator.prototype;
 
-WebInspector.NetworkDataGridNode = function(panel, resource)
+WebInspector.NetworkDataGridNode = function(parentView, resource)
 {
 WebInspector.DataGridNode.call(this, {});
-this._panel = panel;
+this._parentView = parentView;
 this._resource = resource;
 }
 
@@ -24029,6 +25278,8 @@ this._nameCell = this._createDivInTD("name");
 this._methodCell = this._createDivInTD("method");
 this._statusCell = this._createDivInTD("status");
 this._typeCell = this._createDivInTD("type");
+if (Preferences.showNetworkPanelInitiatorColumn)
+this._initiatorCell = this._createDivInTD("initiator");
 this._sizeCell = this._createDivInTD("size");
 this._timeCell = this._createDivInTD("time");
 this._createTimelineCell();
@@ -24038,15 +25289,23 @@ this._nameCell.addEventListener("dblclick", this._openInNewTab.bind(this), false
 
 isFilteredOut: function()
 {
-if (!this._panel._hiddenCategories.all)
+if (!this._parentView._hiddenCategories.all)
 return false;
-return this._resource.category.name in this._panel._hiddenCategories;
+return this._resource.category.name in this._parentView._hiddenCategories;
 },
 
 select: function()
 {
-this._panel._showResource(this._resource);
+this._parentView.dispatchEventToListeners(WebInspector.NetworkLogView.EventTypes.ResourceSelected, this._resource);
 WebInspector.DataGridNode.prototype.select.apply(this, arguments);
+},
+
+_highlightMatchedSubstring: function(regexp)
+{
+var domChanges = [];
+var matchInfo = this._nameCell.textContent.match(regexp);
+highlightSearchResult(this._nameCell, matchInfo.index, matchInfo[0].length, domChanges);
+return domChanges;
 },
 
 _openInNewTab: function()
@@ -24056,9 +25315,7 @@ PageAgent.open(this._resource.url, true);
 
 get selectable()
 {
-if (!this._panel._viewingResourceMode)
-return false;
-return !this.isFilteredOut();
+return this._parentView.allowResourceSelection && !this.isFilteredOut();
 },
 
 _createDivInTD: function(columnIdentifier)
@@ -24115,6 +25372,8 @@ this._methodCell.setTextAndTitle(this._resource.requestMethod);
 
 this._refreshStatusCell();
 this._refreshTypeCell();
+if (Preferences.showNetworkPanelInitiatorColumn)
+this._refreshInitiatorCell();
 this._refreshSizeCell();
 this._refreshTimeCell();
 
@@ -24150,11 +25409,8 @@ this._nameCell.appendChild(document.createTextNode(this._fileName()));
 
 var subtitle = this._resource.displayDomain;
 
-if (this._resource.path && this._resource.lastPathComponent) {
-var lastPathComponentIndex = this._resource.path.lastIndexOf("/" + this._resource.lastPathComponent);
-if (lastPathComponentIndex != -1)
-subtitle += this._resource.path.substring(0, lastPathComponentIndex);
-}
+if (this._resource.path)
+subtitle += this._resource.folder;
 
 this._appendSubtitle(this._nameCell, subtitle);
 this._nameCell.title = this._resource.url;
@@ -24178,29 +25434,28 @@ this._statusCell.setTextAndTitle(WebInspector.UIString("(canceled)"));
 else
 this._statusCell.setTextAndTitle(WebInspector.UIString("(failed)"));
 this._statusCell.addStyleClass("network-dim-cell");
-return;
-}
-
-var fromCache = this._resource.cached;
-if (fromCache) {
-this._statusCell.setTextAndTitle(WebInspector.UIString("(from cache)"));
-this._statusCell.addStyleClass("network-dim-cell");
+this.element.addStyleClass("network-error-row");
 return;
 }
 
 this._statusCell.removeStyleClass("network-dim-cell");
+this.element.removeStyleClass("network-error-row");
+
 if (this._resource.statusCode) {
 this._statusCell.appendChild(document.createTextNode(this._resource.statusCode));
-this._statusCell.removeStyleClass("network-dim-cell");
 this._appendSubtitle(this._statusCell, this._resource.statusText);
 this._statusCell.title = this._resource.statusCode + " " + this._resource.statusText;
+if (this._resource.statusCode >= 400)
+this.element.addStyleClass("network-error-row");
+if (this._resource.cached)
+this._statusCell.addStyleClass("network-dim-cell");
 } else {
-if (this._resource.isDataURL() && this._resource.finished)
-this._statusCell.setTextAndTitle(WebInspector.UIString("(data url)"));
+if (!this._resource.isHttpFamily() && this._resource.finished)
+this._statusCell.setTextAndTitle(WebInspector.UIString("Success"));
 else if (this._resource.isPingRequest())
 this._statusCell.setTextAndTitle(WebInspector.UIString("(ping)"));
 else
-this._statusCell.setTextAndTitle(WebInspector.UIString("(Pending)"));
+this._statusCell.setTextAndTitle(WebInspector.UIString("(pending)"));
 this._statusCell.addStyleClass("network-dim-cell");
 }
 },
@@ -24216,6 +25471,43 @@ this._typeCell.setTextAndTitle(this._resource.requestContentType());
 } else {
 this._typeCell.addStyleClass("network-dim-cell");
 this._typeCell.setTextAndTitle(WebInspector.UIString("Pending"));
+}
+},
+
+_refreshInitiatorCell: function()
+{
+var initiator = this._resource.initiator;
+if ((initiator && initiator.type !== "other") || this._resource.redirectSource) {
+this._initiatorCell.removeStyleClass("network-dim-cell");
+this._initiatorCell.removeChildren();
+if (this._resource.redirectSource) {
+var redirectSource = this._resource.redirectSource;
+var anchor = WebInspector.linkifyURLAsNode(redirectSource.url, redirectSource.url, null, false);
+anchor.setAttribute("request_id", redirectSource.requestId);
+anchor.setAttribute("preferred_panel", "network");
+this._initiatorCell.title = redirectSource.url;
+this._initiatorCell.appendChild(anchor);
+this._appendSubtitle(this._initiatorCell, WebInspector.UIString("Redirect"));
+} else if (initiator.type === "script") {
+var topFrame = initiator.stackTrace[0];
+
+if (!topFrame.url) {
+this._initiatorCell.addStyleClass("network-dim-cell");
+this._initiatorCell.setTextAndTitle(WebInspector.UIString("Other"));
+return;
+}
+this._initiatorCell.title = topFrame.url + ":" + topFrame.lineNumber;
+var urlElement = WebInspector.debuggerPresentationModel.linkifyLocation(topFrame.url, topFrame.lineNumber - 1, 0);
+this._initiatorCell.appendChild(urlElement);
+this._appendSubtitle(this._initiatorCell, WebInspector.UIString("Script"));
+} else { 
+this._initiatorCell.title = initiator.url + ":" + initiator.lineNumber;
+this._initiatorCell.appendChild(WebInspector.linkifyResourceAsNode(initiator.url, initiator.lineNumber - 1));
+this._appendSubtitle(this._initiatorCell, WebInspector.UIString("Parser"));
+}
+} else {
+this._initiatorCell.addStyleClass("network-dim-cell");
+this._initiatorCell.setTextAndTitle(WebInspector.UIString("Other"));
 }
 },
 
@@ -24373,6 +25665,21 @@ if (a._resource.resourceSize === b._resource.resourceSize)
 return 0;
 
 return a._resource.resourceSize - b._resource.resourceSize;
+}
+
+WebInspector.NetworkDataGridNode.InitiatorComparator = function(a, b)
+{
+if (!a._resource.initiator || a._resource.initiator.type === "Other")
+return -1;
+if (!b._resource.initiator || b._resource.initiator.type === "Other")
+return 1;
+
+if (a._resource.initiator.url < b._resource.initiator.url)
+return -1;
+if (a._resource.initiator.url > b._resource.initiator.url)
+return 1;
+
+return a._resource.initiator.lineNumber - b._resource.initiator.lineNumber;
 }
 
 WebInspector.NetworkDataGridNode.ResourcePropertyComparator = function(propertyName, revert, a, b)
@@ -24539,7 +25846,7 @@ _removeEventListener: function(type, callback, useCapture)
 var listeners = this._listeners;
 for (var i = 0; i < listeners.length; ++i) {
 if (listeners[i].originalCallback === callback &&
-listeners[i].type === type && 
+listeners[i].type === type &&
 listeners[i].useCapture === Boolean(useCapture)) {
 this.channel.port2.removeEventListener(type, listeners[i], useCapture);
 listeners[i] = listeners[listeners.length - 1];
@@ -24734,9 +26041,17 @@ this.element.appendChild(this._mainPanel.element);
 this.element.appendChild(this._gutterPanel.element);
 
 
-this._gutterPanel.element.addEventListener("mousewheel", function(e) {
-this._mainPanel.element.dispatchEvent(e);
-}.bind(this), false);
+function forwardWheelEvent(event)
+{
+var clone = document.createEvent("WheelEvent");
+clone.initWebKitWheelEvent(event.wheelDeltaX, event.wheelDeltaY,
+event.view,
+event.screenX, event.screenY,
+event.clientX, event.clientY,
+event.ctrlKey, event.altKey, event.shiftKey, event.metaKey);
+this._mainPanel.element.dispatchEvent(clone);
+}
+this._gutterPanel.element.addEventListener("mousewheel", forwardWheelEvent.bind(this), false);
 
 this.element.addEventListener("dblclick", this._doubleClick.bind(this), true);
 this.element.addEventListener("keydown", this._handleKeyDown.bind(this), false);
@@ -24810,24 +26125,15 @@ this._mainPanel.freeCachedElements();
 this._gutterPanel.freeCachedElements();
 },
 
-get scrollTop()
+elementsToRestoreScrollPositionsFor: function()
 {
-return this._mainPanel.element.scrollTop;
+return [this._mainPanel.element];
 },
 
-set scrollTop(scrollTop)
+inheritScrollPositions: function(textViewer)
 {
-this._mainPanel.element.scrollTop = scrollTop;
-},
-
-get scrollLeft()
-{
-return this._mainPanel.element.scrollLeft;
-},
-
-set scrollLeft(scrollLeft)
-{
-this._mainPanel.element.scrollLeft = scrollLeft;
+this._mainPanel.element._scrollTop = textViewer._mainPanel.element.scrollTop;
+this._mainPanel.element._scrollLeft = textViewer._mainPanel.element.scrollLeft;
 },
 
 beginUpdates: function()
@@ -24843,7 +26149,7 @@ this._gutterPanel.endUpdates();
 this._updatePanelOffsets();
 },
 
-resize: function()
+onResize: function()
 {
 this._mainPanel.resize();
 this._gutterPanel.resize();
@@ -24883,14 +26189,11 @@ this._mainPanel.element.style.removeProperty("left");
 
 _syncScroll: function()
 {
-
-setTimeout(function() {
 var mainElement = this._mainPanel.element;
 var gutterElement = this._gutterPanel.element;
 
 this._gutterPanel.syncClientHeight(mainElement.clientHeight);
 gutterElement.scrollTop = mainElement.scrollTop;
-}.bind(this), 0);
 },
 
 _syncDecorationsForLine: function(lineNumber)
@@ -25040,7 +26343,7 @@ cancelEditing: function()
 
 },
 
-populateLineGutterContextMenu: function(contextMenu)
+populateLineGutterContextMenu: function(lineNumber, contextMenu)
 {
 
 },
@@ -25592,14 +26895,34 @@ this.beginDomUpdates();
 this._readOnly = readOnly;
 if (this._readOnly)
 this._container.removeStyleClass("text-editor-editable");
-else
+else {
 this._container.addStyleClass("text-editor-editable");
+this._updateSelectionOnStartEditing();
+}
 this.endDomUpdates();
 },
 
 get readOnly()
 {
 return this._readOnly;
+},
+
+_updateSelectionOnStartEditing: function()
+{
+
+
+
+
+this._container.focus();
+var selection = window.getSelection();
+if (selection.rangeCount && this._container.isAncestor(selection.getRangeAt(0).commonAncestorContainer))
+return;
+
+selection.removeAllRanges();
+var range = document.createRange();
+range.setStart(this._container, 0);
+range.setEnd(this._container, 0);
+selection.addRange(range);
 },
 
 setEditableRange: function(startLine, endLine)
@@ -26736,17 +28059,21 @@ this.element.appendChild(document.createElement("br"));
 
 WebInspector.SourceFrame = function(delegate, url)
 {
-WebInspector.TextViewerDelegate.call(this);
+WebInspector.View.call(this);
+this.element.addStyleClass("script-view");
 
 this._delegate = delegate;
 this._url = url;
 
 this._textModel = new WebInspector.TextEditorModel();
-this._textModel.replaceTabsWithSpaces = true;
 
-this._textViewer = new WebInspector.TextViewer(this._textModel, WebInspector.platform, this._url, this);
-this._textViewer.element.addStyleClass("script-view");
-this._visible = false;
+var textViewerDelegate = new WebInspector.TextViewerDelegateForSourceFrame(this);
+this._textViewer = new WebInspector.TextViewer(this._textModel, WebInspector.platform, this._url, textViewerDelegate);
+this.addChildView(this._textViewer);
+this.element.appendChild(this._textViewer.element);
+
+this._editButton = new WebInspector.StatusBarButton(WebInspector.UIString("Edit"), "edit-source-status-bar-item");
+this._editButton.addEventListener("click", this._editButtonClicked.bind(this), this);
 
 this._currentSearchResultIndex = -1;
 this._searchResults = [];
@@ -26775,7 +28102,7 @@ regex = new RegExp(query.substring(1, query.length - 1));
 }
 
 
-if (!regex) 
+if (!regex)
 regex = createSearchRegex(query);
 
 return regex;
@@ -26783,53 +28110,27 @@ return regex;
 
 
 WebInspector.SourceFrame.prototype = {
-get visible()
-{
-return this._textViewer.visible;
-},
-
-set visible(x)
-{
-this._textViewer.visible = x;
-},
-
 show: function(parentElement)
 {
+WebInspector.View.prototype.show.call(this, parentElement);
 this._ensureContentLoaded();
-
-this._textViewer.show(parentElement);
-
-if (this.loaded) {
-if (this._scrollTop)
-this._textViewer.scrollTop = this._scrollTop;
-if (this._scrollLeft)
-this._textViewer.scrollLeft = this._scrollLeft;
-}
-
-this._textViewer.resize();
+this._textViewer.show();
 },
 
-hide: function()
+willHide: function()
 {
-if (this.loaded) {
-this._scrollTop = this._textViewer.scrollTop;
-this._scrollLeft = this._textViewer.scrollLeft;
+WebInspector.View.prototype.willHide.call(this);
+if (this.loaded)
 this._textViewer.freeCachedElements();
-}
 
-this._textViewer.hide();
-this._hidePopup();
+if (this._popoverHelper)
+this._popoverHelper.hidePopover();
 this._clearLineHighlight();
 },
 
-detach: function()
+get statusBarItems()
 {
-this._textViewer.detach();
-},
-
-get element()
-{
-return this._textViewer.element;
+return [this._editButton.element];
 },
 
 get loaded()
@@ -26883,24 +28184,12 @@ this._messages = [];
 this._rowMessages = {};
 this._messageBubbles = {};
 
-this._textViewer.resize();
+this._textViewer.doResize();
 },
 
 get textModel()
 {
 return this._textModel;
-},
-
-get scrollTop()
-{
-return this.loaded ? this._textViewer.scrollTop : this._scrollTop;
-},
-
-set scrollTop(scrollTop)
-{
-this._scrollTop = scrollTop;
-if (this.loaded)
-this._textViewer.scrollTop = scrollTop;
 },
 
 highlightLine: function(line)
@@ -27029,8 +28318,9 @@ this._textModel.setText(null, content);
 
 var element = this._textViewer.element;
 if (this._delegate.debuggingSupported()) {
+this._popoverHelper = new WebInspector.PopoverHelper(element,
+this._getPopoverAnchor.bind(this), this._onShowPopover.bind(this), this._onHidePopover.bind(this), true);
 element.addEventListener("mousedown", this._mouseDown.bind(this), true);
-element.addEventListener("mousemove", this._mouseMove.bind(this), true);
 element.addEventListener("scroll", this._scroll.bind(this), true);
 }
 
@@ -27055,8 +28345,8 @@ this.dispatchEventToListeners(WebInspector.SourceFrame.Events.Loaded);
 
 this._textViewer.endUpdates();
 
-if (this._parentElement)
-this.show(this._parentElement)
+if (!this.canEditSource())
+this._editButton.disabled = true;
 },
 
 _setTextViewerDecorations: function()
@@ -27069,7 +28359,7 @@ this._textViewer.beginUpdates();
 this._addExistingMessagesToSource();
 this._updateDiffDecorations();
 
-this._textViewer.resize();
+this._textViewer.doResize();
 
 this._textViewer.endUpdates();
 },
@@ -27144,6 +28434,11 @@ showingLastSearchResult: function()
 return this._searchResults.length && this._currentSearchResultIndex === (this._searchResults.length - 1);
 },
 
+get currentSearchResultIndex()
+{
+return this._currentSearchResultIndex;
+},
+
 jumpToSearchResult: function(index)
 {
 if (!this.loaded || !this._searchResults.length)
@@ -27169,21 +28464,6 @@ line = line.substring(match.index + 1);
 } while (match && line);
 }
 return ranges;
-},
-
-_incrementMessageRepeatCount: function(msg, repeatDelta)
-{
-if (!msg._resourceMessageLineElement)
-return;
-
-if (!msg._resourceMessageRepeatCountElement) {
-var repeatedElement = document.createElement("span");
-msg._resourceMessageLineElement.appendChild(repeatedElement);
-msg._resourceMessageRepeatCountElement = repeatedElement;
-}
-
-msg.repeatCount += repeatDelta;
-msg._resourceMessageRepeatCountElement.textContent = WebInspector.UIString(" (repeated %d times)", msg.repeatCount);
 },
 
 setExecutionLine: function(lineNumber, skipRevealLine)
@@ -27259,13 +28539,15 @@ this._rowMessages[lineNumber] = rowMessages;
 }
 
 for (var i = 0; i < rowMessages.length; ++i) {
-if (rowMessages[i].isEqual(msg)) {
-this._incrementMessageRepeatCount(rowMessages[i], msg.repeatDelta);
+if (rowMessages[i].consoleMessage.isEqual(msg)) {
+rowMessages[i].repeatCount = msg.totalRepeatCount;
+this._updateMessageRepeatCount(rowMessages[i]);
 return;
 }
 }
 
-rowMessages.push(msg);
+var rowMessage = { consoleMessage: msg };
+rowMessages.push(rowMessage);
 
 var imageURL;
 switch (msg.level) {
@@ -27290,7 +28572,23 @@ image.className = "webkit-html-message-icon";
 messageLineElement.appendChild(image);
 messageLineElement.appendChild(document.createTextNode(msg.message));
 
-msg._resourceMessageLineElement = messageLineElement;
+rowMessage.element = messageLineElement;
+rowMessage.repeatCount = msg.totalRepeatCount;
+this._updateMessageRepeatCount(rowMessage);
+},
+
+_updateMessageRepeatCount: function(rowMessage)
+{
+if (rowMessage.repeatCount < 2)
+return;
+
+if (!rowMessage.repeatCountElement) {
+var repeatCountElement = document.createElement("span");
+rowMessage.element.appendChild(repeatCountElement);
+rowMessage.repeatCountElement = repeatCountElement;
+}
+
+rowMessage.repeatCountElement.textContent = WebInspector.UIString(" (repeated %d times)", rowMessage.repeatCount);
 },
 
 addBreakpoint: function(lineNumber, resolved, conditional, enabled)
@@ -27375,13 +28673,14 @@ return this._delegate.suggestedFileName();
 
 _scroll: function(event)
 {
-this._hidePopup();
+if (this._popoverHelper)
+this._popoverHelper.hidePopover();
 },
 
 _mouseDown: function(event)
 {
-this._resetHoverTimer();
-this._hidePopup();
+if (this._popoverHelper)
+this._popoverHelper.hidePopover();
 if (event.button != 0 || event.altKey || event.ctrlKey || event.metaKey)
 return;
 var target = event.target.enclosingNodeOrSelfWithClass("webkit-line-number");
@@ -27400,78 +28699,47 @@ this._delegate.setBreakpoint(lineNumber, "", true);
 event.preventDefault();
 },
 
-_mouseMove: function(event)
+_onHidePopover: function()
 {
 
-if (this._hoverElement === event.target || event.target.hasStyleClass("source-frame-eval-expression"))
+var highlightElement = this._highlightElement;
+if (!highlightElement)
 return;
-
-this._resetHoverTimer();
-
-if (this._popup) {
-var self = this;
-function doHide()
-{
-self._hidePopup();
-delete self._hidePopupTimer;
-}
-if (!("_hidePopupTimer" in this))
-this._hidePopupTimer = setTimeout(doHide, 500);
-}
-
-this._hoverElement = event.target;
-
-
-if (!this._delegate.debuggerPaused())
-return;
-
-
-if (this._hoverElement.hasStyleClass("webkit-javascript-keyword")) {
-if (this._hoverElement.textContent !== "this")
-return;
-} else if (!this._hoverElement.hasStyleClass("webkit-javascript-ident"))
-return;
-
-const toolTipDelay = this._popup ? 600 : 1000;
-this._hoverTimer = setTimeout(this._mouseHover.bind(this, this._hoverElement), toolTipDelay);
-},
-
-_resetHoverTimer: function()
-{
-if (this._hoverTimer) {
-clearTimeout(this._hoverTimer);
-delete this._hoverTimer;
-}
-},
-
-_hidePopup: function()
-{
-if (!this._popup)
-return;
-
-
-var parentElement = this._popup.highlightElement.parentElement;
-var child = this._popup.highlightElement.firstChild;
+var parentElement = highlightElement.parentElement;
+var child = highlightElement.firstChild;
 while (child) {
 var nextSibling = child.nextSibling;
-parentElement.insertBefore(child, this._popup.highlightElement);
+parentElement.insertBefore(child, highlightElement);
 child = nextSibling;
 }
-parentElement.removeChild(this._popup.highlightElement);
-
-this._popup.hide();
-delete this._popup;
+parentElement.removeChild(highlightElement);
+delete this._highlightElement;
 this._delegate.releaseEvaluationResult();
 },
 
-_mouseHover: function(element)
+_shouldShowPopover: function(element)
 {
-delete this._hoverTimer;
+if (!this._delegate.debuggerPaused())
+return false;
+if (!element.enclosingNodeOrSelfWithClass("webkit-line-content"))
+return false;
 
-var lineRow = element.enclosingNodeOrSelfWithClass("webkit-line-content");
-if (!lineRow)
+
+if (element.hasStyleClass("webkit-javascript-keyword"))
+return element.textContent === "this";
+
+return element.hasStyleClass("webkit-javascript-ident");
+},
+
+_getPopoverAnchor: function(element)
+{
+if (!this._shouldShowPopover(element))
 return;
+return element;
+},
 
+_highlightExpression: function(element)
+{
 
 var tokens = [ element ];
 var token = element.previousSibling;
@@ -27488,66 +28756,56 @@ var container = document.createElement("span");
 for (var i = 0; i < tokens.length; ++i)
 container.appendChild(tokens[i]);
 parentElement.insertBefore(container, nextElement);
-this._showPopup(container);
+return container;
 },
 
-_showPopup: function(element)
+_onShowPopover: function(element, popover)
 {
-if (!this._delegate.debuggerPaused())
+if (!this._textViewer.readOnly) {
+this._popoverHelper.hidePopover();
 return;
-
-function killHidePopupTimer()
-{
-if (this._hidePopupTimer) {
-clearTimeout(this._hidePopupTimer);
-delete this._hidePopupTimer;
-
-
-
-this._resetHoverTimer();
 }
-}
+this._highlightElement = this._highlightExpression(element);
 
-function showObjectPopup(result, wasThrown)
+function showObjectPopover(result, wasThrown)
 {
-if (wasThrown || !this._delegate.debuggerPaused())
+if (popover.disposed)
 return;
-
-var popupContentElement = null;
-if (result.type !== "object" && result.type !== "node" && result.type !== "array") {
-popupContentElement = document.createElement("span");
-popupContentElement.className = "monospace console-formatted-" + result.type;
-popupContentElement.style.whiteSpace = "pre";
-popupContentElement.textContent = result.description;
+if (wasThrown || !this._delegate.debuggerPaused()) {
+this._popoverHelper.hidePopover();
+return;
+}
+var popoverContentElement = null;
+if (result.type !== "object") {
+popoverContentElement = document.createElement("span");
+popoverContentElement.className = "monospace console-formatted-" + result.type;
+popoverContentElement.style.whiteSpace = "pre";
+popoverContentElement.textContent = result.description;
 if (result.type === "string")
-popupContentElement.textContent = "\"" + popupContentElement.textContent + "\"";
-this._popup = new WebInspector.Popover(popupContentElement);
-this._popup.show(element);
+popoverContentElement.textContent = "\"" + popoverContentElement.textContent + "\"";
+popover.show(popoverContentElement, element);
 } else {
-var popupContentElement = document.createElement("div");
+var popoverContentElement = document.createElement("div");
 
 var titleElement = document.createElement("div");
 titleElement.className = "source-frame-popover-title monospace";
 titleElement.textContent = result.description;
-popupContentElement.appendChild(titleElement);
+popoverContentElement.appendChild(titleElement);
 
 var section = new WebInspector.ObjectPropertiesSection(result);
 section.expanded = true;
 section.element.addStyleClass("source-frame-popover-tree");
 section.headerElement.addStyleClass("hidden");
-popupContentElement.appendChild(section.element);
+popoverContentElement.appendChild(section.element);
 
-this._popup = new WebInspector.Popover(popupContentElement);
-const popupWidth = 300;
-const popupHeight = 250;
-this._popup.show(element, popupWidth, popupHeight);
+const popoverWidth = 300;
+const popoverHeight = 250;
+popover.show(popoverContentElement, element, popoverWidth, popoverHeight);
 }
-this._popup.highlightElement = element;
-this._popup.highlightElement.addStyleClass("source-frame-eval-expression");
-popupContentElement.addEventListener("mousemove", killHidePopupTimer.bind(this), true);
+this._highlightElement.addStyleClass("source-frame-eval-expression");
 }
 
-this._delegate.evaluateInSelectedCallFrame(element.textContent, showObjectPopup.bind(this));
+this._delegate.evaluateInSelectedCallFrame(this._highlightElement.textContent, showObjectPopover.bind(this));
 },
 
 _editBreakpointCondition: function(lineNumber, condition, callback)
@@ -27593,20 +28851,38 @@ this._conditionEditorElement = editorElement;
 return conditionElement;
 },
 
-resize: function()
+inheritScrollPositions: function(sourceFrame)
 {
-this._textViewer.resize();
+this._textViewer.inheritScrollPositions(sourceFrame._textViewer);
 },
 
-doubleClick: function(lineNumber)
+_editButtonClicked: function()
 {
-if (!this._delegate.canEditScriptSource())
+if (!this.canEditSource())
 return;
+
+const shouldStartEditing = !this._editButton.toggled;
+if (shouldStartEditing)
+this.startEditing();
+else
+this.commitEditing();
+},
+
+canEditSource: function()
+{
+return this._delegate.canEditScriptSource();
+},
+
+startEditing: function(lineNumber)
+{
+if (!this.canEditSource())
+return false;
 
 if (this._commitEditingInProgress)
-return;
+return false;
 
 this._setReadOnly(false);
+return true;
 },
 
 commitEditing: function()
@@ -27623,8 +28899,8 @@ this._commitEditingInProgress = false;
 this._textViewer.readOnly = false;
 
 if (error) {
-if (error.data && error.data[0]) {
-WebInspector.log(error.data[0], WebInspector.ConsoleMessage.MessageLevel.Error);
+if (error.message) {
+WebInspector.log(error.message, WebInspector.ConsoleMessage.MessageLevel.Error);
 WebInspector.showConsole();
 }
 return;
@@ -27649,6 +28925,7 @@ this._delegate.setScriptSourceIsBeingEdited(false);
 }
 this._commitEditingInProgress = true;
 this._textViewer.readOnly = true;
+this._editButton.toggled = false;
 this.editContent(this._textModel.text, didEditContent.bind(this));
 },
 
@@ -27665,14 +28942,68 @@ this._setReadOnly(true);
 
 _setReadOnly: function(readOnly)
 {
+if (!readOnly && this._popoverHelper)
+this._popoverHelper.hidePopover();
+
 this._textViewer.readOnly = readOnly;
+this._editButton.toggled = !readOnly;
 WebInspector.markBeingEdited(this._textViewer.element, !readOnly);
 if (readOnly)
 this._delegate.setScriptSourceIsBeingEdited(false);
 }
 }
 
-WebInspector.SourceFrame.prototype.__proto__ = WebInspector.TextViewerDelegate.prototype;
+WebInspector.SourceFrame.prototype.__proto__ = WebInspector.View.prototype;
+
+
+WebInspector.TextViewerDelegateForSourceFrame = function(sourceFrame)
+{
+this._sourceFrame = sourceFrame;
+}
+
+WebInspector.TextViewerDelegateForSourceFrame.prototype = {
+doubleClick: function(lineNumber)
+{
+this._sourceFrame.startEditing(lineNumber);
+},
+
+beforeTextChanged: function()
+{
+this._sourceFrame.beforeTextChanged();
+},
+
+afterTextChanged: function(oldRange, newRange)
+{
+this._sourceFrame.afterTextChanged(oldRange, newRange);
+},
+
+commitEditing: function()
+{
+this._sourceFrame.commitEditing();
+},
+
+cancelEditing: function()
+{
+this._sourceFrame.cancelEditing();
+},
+
+populateLineGutterContextMenu: function(lineNumber, contextMenu)
+{
+this._sourceFrame.populateLineGutterContextMenu(lineNumber, contextMenu);
+},
+
+populateTextAreaContextMenu: function(contextMenu)
+{
+this._sourceFrame.populateTextAreaContextMenu(contextMenu);
+},
+
+suggestedFileName: function()
+{
+return this._sourceFrame.suggestedFileName();
+}
+};
+
+WebInspector.TextViewerDelegateForSourceFrame.prototype.__proto__ = WebInspector.TextViewerDelegate.prototype;
 
 
 WebInspector.SourceFrameDelegate = function()
@@ -27779,6 +29110,8 @@ case WebInspector.resourceCategories.scripts:
 case WebInspector.resourceCategories.xhr:
 case WebInspector.resourceCategories.stylesheets:
 return true;
+case WebInspector.resourceCategories.other:
+return resource.content && !resource.contentEncoded;
 default:
 return false;
 }
@@ -27845,16 +29178,9 @@ WebInspector.ResourceSourceFrame.call(this, resource);
 }
 
 WebInspector.EditableResourceSourceFrame.prototype = {
-doubleClick: function(lineNumber)
+canEditSource: function()
 {
-if (!this.resource.isEditable())
-return;
-
-if (this._commitEditingInProgress)
-return;
-
-this._textViewer.readOnly = false;
-WebInspector.markBeingEdited(this._textViewer.element, true);
+return this.resource.isEditable() && !this._commitEditingInProgress;
 },
 
 editContent: function(newText, callback)
@@ -27868,6 +29194,7 @@ cancelEditing: function()
 {
 this._clearIncrementalUpdateTimer();
 const majorChange = false;
+if (this._viewerState)
 this.resource.setContent(this._viewerState.textModelContent, majorChange);
 WebInspector.SourceFrame.prototype.cancelEditing.call(this);
 },
@@ -27923,11 +29250,13 @@ WebInspector.ResourceRevisionSourceFrame.prototype.__proto__ = WebInspector.Reso
 
 
 
-WebInspector.ScriptsPanel = function()
+WebInspector.ScriptsPanel = function(presentationModel)
 {
 WebInspector.Panel.call(this, "scripts");
 
-this._presentationModel = new WebInspector.DebuggerPresentationModel();
+WebInspector.settings.pauseOnExceptionStateString = WebInspector.settings.createSetting("pauseOnExceptionStateString", WebInspector.ScriptsPanel.PauseOnExceptionsState.DontPauseOnExceptions);
+
+this._presentationModel = presentationModel;
 
 this.registerShortcuts();
 
@@ -28007,7 +29336,7 @@ this.sidebarPanes.eventListenerBreakpoints = new WebInspector.EventListenerBreak
 
 if (Preferences.canInspectWorkers && WebInspector.workerManager)
 this.sidebarElement.addEventListener("contextmenu", this._contextMenu.bind(this), false);
-if (Preferences.canInspectWorkers && WebInspector.workerManager && WebInspector.settings.workerInspectionEnabled) {
+if (Preferences.canInspectWorkers && WebInspector.workerManager && WebInspector.settings.workerInspectionEnabled.get()) {
 WorkerAgent.setWorkerInspectionEnabled(true);
 this.sidebarPanes.workerList = new WebInspector.WorkerListSidebarPane(WebInspector.workerManager);
 } else
@@ -28021,7 +29350,7 @@ this.sidebarPanes.callstack.expanded = true;
 this.sidebarPanes.scopechain.expanded = true;
 this.sidebarPanes.jsBreakpoints.expanded = true;
 
-var helpSection = WebInspector.shortcutsHelp.section(WebInspector.UIString("Scripts Panel"));
+var helpSection = WebInspector.shortcutsScreen.section(WebInspector.UIString("Scripts Panel"));
 this.sidebarPanes.callstack.registerShortcuts(helpSection, this.registerShortcut.bind(this));
 
 var panelEnablerHeading = WebInspector.UIString("You need to enable debugging before you can use the Scripts panel.");
@@ -28044,9 +29373,12 @@ this.enableToggleButton.element.addStyleClass("hidden");
 this._pauseOnExceptionButton = new WebInspector.StatusBarButton("", "scripts-pause-on-exceptions-status-bar-item", 3);
 this._pauseOnExceptionButton.addEventListener("click", this._togglePauseOnExceptions.bind(this), false);
 
-this._toggleFormatSourceFilesButton = new WebInspector.StatusBarButton(WebInspector.UIString("Pretty print"), "scripts-toggle-pretty-print-status-bar-item");
-this._toggleFormatSourceFilesButton.toggled = false;
-this._toggleFormatSourceFilesButton.addEventListener("click", this._toggleFormatSourceFiles.bind(this), false);
+this._toggleFormatSourceButton = new WebInspector.StatusBarButton(WebInspector.UIString("Pretty print"), "scripts-toggle-pretty-print-status-bar-item");
+this._toggleFormatSourceButton.toggled = false;
+this._toggleFormatSourceButton.addEventListener("click", this._toggleFormatSource.bind(this), false);
+
+this._scriptViewStatusBarItemsContainer = document.createElement("div");
+this._scriptViewStatusBarItemsContainer.style.display = "inline-block";
 
 this._debuggerEnabled = Preferences.debuggerAlwaysEnabled;
 
@@ -28055,8 +29387,8 @@ this.reset();
 WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.DebuggerWasEnabled, this._debuggerWasEnabled, this);
 WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.DebuggerWasDisabled, this._debuggerWasDisabled, this);
 
-this._presentationModel.addEventListener(WebInspector.DebuggerPresentationModel.Events.SourceFileAdded, this._sourceFileAdded, this)
-this._presentationModel.addEventListener(WebInspector.DebuggerPresentationModel.Events.SourceFileChanged, this._sourceFileChanged, this);
+this._presentationModel.addEventListener(WebInspector.DebuggerPresentationModel.Events.UISourceCodeAdded, this._uiSourceCodeAdded, this)
+this._presentationModel.addEventListener(WebInspector.DebuggerPresentationModel.Events.UISourceCodeReplaced, this._uiSourceCodeReplaced, this);
 this._presentationModel.addEventListener(WebInspector.DebuggerPresentationModel.Events.ConsoleMessageAdded, this._consoleMessageAdded, this);
 this._presentationModel.addEventListener(WebInspector.DebuggerPresentationModel.Events.ConsoleMessagesCleared, this._consoleMessagesCleared, this);
 this._presentationModel.addEventListener(WebInspector.DebuggerPresentationModel.Events.BreakpointAdded, this._breakpointAdded, this);
@@ -28065,9 +29397,11 @@ this._presentationModel.addEventListener(WebInspector.DebuggerPresentationModel.
 this._presentationModel.addEventListener(WebInspector.DebuggerPresentationModel.Events.DebuggerResumed, this._debuggerResumed, this);
 this._presentationModel.addEventListener(WebInspector.DebuggerPresentationModel.Events.CallFrameSelected, this._callFrameSelected, this);
 
-var enableDebugger = Preferences.debuggerAlwaysEnabled || WebInspector.settings.debuggerEnabled;
-if (enableDebugger || InspectorFrontendHost.loadSessionSetting("debugger-enabled") === "true")
+var enableDebugger = Preferences.debuggerAlwaysEnabled || WebInspector.settings.debuggerEnabled.get();
+if (enableDebugger)
 WebInspector.debuggerModel.enableDebugger();
+
+WebInspector.settings.showScriptFolders.addChangeListener(this._showScriptFoldersSettingChanged.bind(this));
 }
 
 
@@ -28077,10 +29411,11 @@ PauseOnAllExceptions : "all",
 PauseOnUncaughtExceptions: "uncaught"
 };
 
-WebInspector.ScriptsPanel.BrowserBreakpointTypes = {
+WebInspector.ScriptsPanel.BreakReason = {
 DOM: "DOM",
 EventListener: "EventListener",
-XHR: "XHR"
+XHR: "XHR",
+Exception: "exception"
 }
 
 WebInspector.ScriptsPanel.prototype = {
@@ -28091,7 +29426,7 @@ return WebInspector.UIString("Scripts");
 
 get statusBarItems()
 {
-return [this.enableToggleButton.element, this._pauseOnExceptionButton.element, this._toggleFormatSourceFilesButton.element];
+return [this.enableToggleButton.element, this._pauseOnExceptionButton.element, this._toggleFormatSourceButton.element, this._scriptViewStatusBarItemsContainer];
 },
 
 get defaultFocusedElement()
@@ -28110,16 +29445,7 @@ WebInspector.Panel.prototype.show.call(this);
 this.sidebarResizeElement.style.right = (this.sidebarElement.offsetWidth - 3) + "px";
 if (Preferences.nativeInstrumentationEnabled)
 this.sidebarElement.insertBefore(this.sidebarPanes.domBreakpoints.element, this.sidebarPanes.xhrBreakpoints.element);
-
-if (this.visibleView)
-this.visibleView.show(this.viewsContainerElement);
-},
-
-hide: function()
-{
-if (this.visibleView)
-this.visibleView.hide();
-WebInspector.Panel.prototype.hide.call(this);
+this.sidebarPanes.watchExpressions.show();
 },
 
 get breakpointsActivated()
@@ -28127,90 +29453,156 @@ get breakpointsActivated()
 return this.toggleBreakpointsButton.toggled;
 },
 
-_sourceFileAdded: function(event)
+_uiSourceCodeAdded: function(event)
 {
-var sourceFile = event.data;
+var uiSourceCode = event.data;
 
-if (!sourceFile.url) {
+if (!uiSourceCode.url) {
 
 return;
 }
 
-this._addOptionToFilesSelect(sourceFile);
+this._addOptionToFilesSelect(uiSourceCode);
 
-var lastViewedURL = WebInspector.settings.lastViewedScriptFile;
-if (this._filesSelectElement.length === 1) {
-
-
-this._showSourceFrameAndAddToHistory(sourceFile.id);
+var lastViewedURL = WebInspector.settings.lastViewedScriptFile.get();
+if (!this._filesSelectElement.initialSelectionProcessed) {
+this._filesSelectElement.initialSelectionProcessed = true;
 
 
-WebInspector.settings.lastViewedScriptFile = lastViewedURL;
-} else if (sourceFile.url === lastViewedURL)
-this._showSourceFrameAndAddToHistory(sourceFile.id);
+this._showSourceFrameAndAddToHistory(uiSourceCode);
+
+
+WebInspector.settings.lastViewedScriptFile.set(lastViewedURL);
+} else if (uiSourceCode.url === lastViewedURL)
+this._showSourceFrameAndAddToHistory(uiSourceCode);
 },
 
-_addOptionToFilesSelect: function(sourceFile)
+_showScriptFoldersSettingChanged: function()
 {
-var select = this._filesSelectElement;
-var option = document.createElement("option");
-option.text = this._displayNameForScriptURL(sourceFile.url) || WebInspector.UIString("(program)");
-option.title = sourceFile.url;
-option.isContentScript = sourceFile.isContentScript;
-if (sourceFile.isContentScript)
-option.addStyleClass("extension-script");
-function compare(a, b)
-{
-return a < b ? -1 : (a > b ? 1 : 0);
+var selectedOption = this._filesSelectElement[this._filesSelectElement.selectedIndex];
+var uiSourceCode = selectedOption ? selectedOption._uiSourceCode : null;
+
+var options = Array.prototype.slice.call(this._filesSelectElement);
+this._resetFilesSelect();
+for (var i = 0; i < options.length; ++i) {
+if (options[i]._uiSourceCode)
+this._addOptionToFilesSelect(options[i]._uiSourceCode);
 }
+
+if (uiSourceCode) {
+var index = uiSourceCode._option.index;
+if (typeof index === "number")
+this._filesSelectElement.selectedIndex = index;
+}
+},
+
+_addOptionToFilesSelect: function(uiSourceCode)
+{
+var showScriptFolders = WebInspector.settings.showScriptFolders.get();
+
+var select = this._filesSelectElement;
+if (!select.domainOptions)
+select.domainOptions = {};
+if (!select.folderOptions)
+select.folderOptions = {};
+
+var option = document.createElement("option");
+option._uiSourceCode = uiSourceCode;
+var parsedURL = uiSourceCode.url.asParsedURL();
+
+var names = this._folderAndDisplayNameForScriptURL(uiSourceCode.url);
+const indent = (!showScriptFolders || WebInspector.isMac()) ? "" : "\u00a0\u00a0\u00a0\u00a0";
+option.text = indent + (names.displayName ? names.displayName : WebInspector.UIString("(program)"));
+option.displayName = names.displayName;
+
+var folderNameForSorting;
+if (uiSourceCode.isContentScript)
+folderNameForSorting = "2:" + names.folderName;
+else
+folderNameForSorting = "0:" + (names.domain ? names.domain + "\t\t" : "") + names.folderName;
+
+option.nameForSorting = folderNameForSorting + "\t/\t" + names.displayName; 
+option.title = uiSourceCode.url;
+if (uiSourceCode.isContentScript)
+option.addStyleClass("extension-script");
+
+function insertOrdered(option)
+{
 function optionCompare(a, b)
 {
-if (a === select.contentScriptSection)
-return b.isContentScript ? -1 : 1;
-if (b === select.contentScriptSection)
-return a.isContentScript ? 1 : -1;
-
-if (a.isContentScript && !b.isContentScript)
-return 1;
-if (!a.isContentScript && b.isContentScript)
-return -1;
-
-return compare(a.text, b.text) || compare(a.title, b.title);
+if (showScriptFolders)
+return a.nameForSorting.localeCompare(b.nameForSorting);
+else
+return a.displayName.localeCompare(b.displayName);
 }
-
 var insertionIndex = insertionIndexForObjectInListSortedByFunction(option, select.childNodes, optionCompare);
 select.insertBefore(option, insertionIndex < 0 ? null : select.childNodes.item(insertionIndex));
-
-if (sourceFile.isContentScript && !select.contentScriptSection) {
-var contentScriptSection = document.createElement("option");
-contentScriptSection.text = WebInspector.UIString("Content scripts");
-contentScriptSection.disabled = true;
-select.contentScriptSection = contentScriptSection;
-
-var insertionIndex = insertionIndexForObjectInListSortedByFunction(contentScriptSection, select.childNodes, optionCompare);
-select.insertBefore(contentScriptSection, insertionIndex < 0 ? null : select.childNodes.item(insertionIndex));
 }
-option._sourceFileId = sourceFile.id;
-this._sourceFileIdToFilesSelectOption[sourceFile.id] = option;
+
+insertOrdered(option);
+
+if (uiSourceCode.isContentScript && !select.contentScriptSection) {
+var contentScriptSection = document.createElement("option");
+contentScriptSection.text = "\u2014 " + WebInspector.UIString("Content scripts") + " \u2014";
+contentScriptSection.disabled = true;
+contentScriptSection.nameForSorting = "1/ContentScriptSeparator";
+select.contentScriptSection = contentScriptSection;
+insertOrdered(contentScriptSection);
+}
+
+if (showScriptFolders && !uiSourceCode.isContentScript && names.domain && !select.domainOptions[names.domain]) {
+var domainOption = document.createElement("option");
+domainOption.text = "\u2014 " + names.domain + " \u2014";
+domainOption.nameForSorting = "0:" + names.domain;
+domainOption.disabled = true;
+select.domainOptions[names.domain] = domainOption;
+insertOrdered(domainOption);
+}
+
+if (showScriptFolders && names.folderName && !select.folderOptions[names.folderName]) {
+var folderOption = document.createElement("option");
+folderOption.text = names.folderName;
+folderOption.nameForSorting = folderNameForSorting;
+folderOption.disabled = true;
+select.folderOptions[names.folderName] = folderOption;
+insertOrdered(folderOption);
+}
+
+option._uiSourceCode = uiSourceCode;
+uiSourceCode._option = option;
 },
 
-_displayNameForScriptURL: function(url)
+_folderAndDisplayNameForScriptURL: function(url)
 {
+var parsedURL = url.asParsedURL();
+if (parsedURL)
+url = parsedURL.path;
+
+var folderName = "";
 var displayName = url;
-var indexOfQuery = displayName.indexOf("?");
-if (indexOfQuery > 0)
-displayName = displayName.substring(0, indexOfQuery);
-var fromIndex = displayName.lastIndexOf("/", displayName.length - 2);
-if (fromIndex !== -1)
+
+var pathLength = displayName.indexOf("?");
+if (pathLength === -1)
+pathLength = displayName.length;
+
+var fromIndex = displayName.lastIndexOf("/", pathLength - 2);
+if (fromIndex !== -1) {
+folderName = displayName.substring(0, fromIndex);
 displayName = displayName.substring(fromIndex + 1);
-if (displayName.length > 100)
-displayName = displayName.substring(0, 80) + "...";
-return displayName;
+}
+
+if (displayName.length > 80)
+displayName = "\u2026" + displayName.substring(displayName.length - 80);
+
+if (folderName.length > 80)
+folderName = "\u2026" + folderName.substring(folderName.length - 80);
+
+return { domain: (parsedURL ? parsedURL.host : ""), folderName: folderName, displayName: displayName };
 },
 
-setScriptSourceIsBeingEdited: function(sourceFileId, inEditMode)
+setScriptSourceIsBeingEdited: function(uiSourceCode, inEditMode)
 {
-var option = this._sourceFileIdToFilesSelectOption[sourceFileId];
+var option = uiSourceCode._option;
 if (!option)
 return;
 if (inEditMode)
@@ -28221,15 +29613,18 @@ option.text = option.text.replace(/[*]$/, "");
 
 _consoleMessagesCleared: function()
 {
-for (var sourceFileId in this._sourceFileIdToSourceFrame)
-this._sourceFileIdToSourceFrame[sourceFileId].clearMessages();
+for (var i = 0; i < this._filesSelectElement.length; ++i) {
+var option = this._filesSelectElement[i];
+if (option._uiSourceCode && option._uiSourceCode._sourceFrame)
+option._uiSourceCode._sourceFrame.clearMessages();
+}
 },
 
 _consoleMessageAdded: function(event)
 {
 var message = event.data;
 
-var sourceFrame = this._sourceFileIdToSourceFrame[message.sourceFileId];
+var sourceFrame = message.uiSourceCode._sourceFrame;
 if (sourceFrame && sourceFrame.loaded)
 sourceFrame.addMessageToSource(message.lineNumber, message.originalMessage);
 },
@@ -28238,7 +29633,7 @@ _breakpointAdded: function(event)
 {
 var breakpoint = event.data;
 
-var sourceFrame = this._sourceFileIdToSourceFrame[breakpoint.sourceFileId];
+var sourceFrame = breakpoint.uiSourceCode._sourceFrame;
 if (sourceFrame && sourceFrame.loaded)
 sourceFrame.addBreakpoint(breakpoint.lineNumber, breakpoint.resolved, breakpoint.condition, breakpoint.enabled);
 
@@ -28249,17 +29644,23 @@ _breakpointRemoved: function(event)
 {
 var breakpoint = event.data;
 
-var sourceFrame = this._sourceFileIdToSourceFrame[breakpoint.sourceFileId];
+var sourceFrame = breakpoint.uiSourceCode._sourceFrame;
 if (sourceFrame && sourceFrame.loaded)
 sourceFrame.removeBreakpoint(breakpoint.lineNumber);
 
-this.sidebarPanes.jsBreakpoints.removeBreakpoint(breakpoint.sourceFileId, breakpoint.lineNumber);
+this.sidebarPanes.jsBreakpoints.removeBreakpoint(breakpoint.uiSourceCode, breakpoint.lineNumber);
 },
 
-evaluateInSelectedCallFrame: function(code, objectGroup, includeCommandLineAPI, callback)
+evaluateInSelectedCallFrame: function(code, objectGroup, includeCommandLineAPI, returnByValue, callback)
 {
+function didEvaluate()
+{
+if (objectGroup === "console")
+this.sidebarPanes.scopechain.update(this._presentationModel.selectedCallFrame);
+callback.apply(null, arguments);
+}
 var selectedCallFrame = this._presentationModel.selectedCallFrame;
-selectedCallFrame.evaluate(code, objectGroup, includeCommandLineAPI, callback);
+selectedCallFrame.evaluate(code, objectGroup, includeCommandLineAPI, returnByValue, didEvaluate.bind(this));
 },
 
 getSelectedCallFrameVariables: function(callback)
@@ -28299,40 +29700,34 @@ this._stepping = false;
 
 this._updateDebuggerButtons();
 
-WebInspector.currentPanel = this;
+WebInspector.setCurrentPanel(this);
 
 this.sidebarPanes.callstack.update(callFrames, details);
 this.sidebarPanes.callstack.selectedCallFrame = this._presentationModel.selectedCallFrame;
 
-if (details.eventType === WebInspector.DebuggerEventTypes.NativeBreakpoint) {
-if (details.eventData.breakpointType === WebInspector.ScriptsPanel.BrowserBreakpointTypes.DOM) {
-this.sidebarPanes.domBreakpoints.highlightBreakpoint(details.eventData);
+if (details.reason === WebInspector.ScriptsPanel.BreakReason.DOM) {
+this.sidebarPanes.domBreakpoints.highlightBreakpoint(details.auxData);
 function didCreateBreakpointHitStatusMessage(element)
 {
 this.sidebarPanes.callstack.setStatus(element);
 }
-this.sidebarPanes.domBreakpoints.createBreakpointHitStatusMessage(details.eventData, didCreateBreakpointHitStatusMessage.bind(this));
-} else if (details.eventData.breakpointType === WebInspector.ScriptsPanel.BrowserBreakpointTypes.EventListener) {
-var eventName = details.eventData.eventName;
-this.sidebarPanes.eventListenerBreakpoints.highlightBreakpoint(details.eventData.eventName);
+this.sidebarPanes.domBreakpoints.createBreakpointHitStatusMessage(details.auxData, didCreateBreakpointHitStatusMessage.bind(this));
+} else if (details.reason === WebInspector.ScriptsPanel.BreakReason.EventListener) {
+var eventName = details.auxData.eventName;
+this.sidebarPanes.eventListenerBreakpoints.highlightBreakpoint(details.auxData.eventName);
 var eventNameForUI = WebInspector.EventListenerBreakpointsSidebarPane.eventNameForUI(eventName);
 this.sidebarPanes.callstack.setStatus(WebInspector.UIString("Paused on a \"%s\" Event Listener.", eventNameForUI));
-} else if (details.eventData.breakpointType === WebInspector.ScriptsPanel.BrowserBreakpointTypes.XHR) {
-this.sidebarPanes.xhrBreakpoints.highlightBreakpoint(details.eventData.breakpointURL);
+} else if (details.reason === WebInspector.ScriptsPanel.BreakReason.XHR) {
+this.sidebarPanes.xhrBreakpoints.highlightBreakpoint(details.auxData.breakpointURL);
 this.sidebarPanes.callstack.setStatus(WebInspector.UIString("Paused on a XMLHttpRequest."));
-}
+} else if (details.reason === WebInspector.ScriptsPanel.BreakReason.Exception) {
+this.sidebarPanes.callstack.setStatus(WebInspector.UIString("Paused on exception: '%s'.", details.auxData.description));
 } else {
-function didGetSourceLocation(sourceFileId, lineNumber)
+function didGetSourceLocation(uiSourceCode, lineNumber)
 {
-var exception = WebInspector.debuggerModel.debuggerPausedDetails.exception;
-if (exception) {
-this.sidebarPanes.callstack.setStatus(WebInspector.UIString("Paused on exception: '%s'.", exception.description));
+if (!uiSourceCode || !this._presentationModel.findBreakpoint(uiSourceCode, lineNumber))
 return;
-}
-
-if (!sourceFileId || !this._presentationModel.findBreakpoint(sourceFileId, lineNumber))
-return;
-this.sidebarPanes.jsBreakpoints.highlightBreakpoint(sourceFileId, lineNumber);
+this.sidebarPanes.jsBreakpoints.highlightBreakpoint(uiSourceCode, lineNumber);
 this.sidebarPanes.callstack.setStatus(WebInspector.UIString("Paused on a JavaScript breakpoint."));
 }
 callFrames[0].sourceLine(didGetSourceLocation.bind(this));
@@ -28353,12 +29748,11 @@ this._clearInterface();
 
 _debuggerWasEnabled: function()
 {
-this._setPauseOnExceptions(WebInspector.settings.pauseOnExceptionStateString);
+this._setPauseOnExceptions(WebInspector.settings.pauseOnExceptionStateString.get());
 
 if (this._debuggerEnabled)
 return;
 
-InspectorFrontendHost.saveSessionSetting("debugger-enabled", "true");
 this._debuggerEnabled = true;
 this.reset(true);
 },
@@ -28368,7 +29762,6 @@ _debuggerWasDisabled: function()
 if (!this._debuggerEnabled)
 return;
 
-InspectorFrontendHost.saveSessionSetting("debugger-enabled", "false");
 this._debuggerEnabled = false;
 this.reset(true);
 },
@@ -28386,21 +29779,24 @@ this._backForwardList = [];
 this._currentBackForwardIndex = -1;
 this._updateBackAndForwardButtons();
 
-for (var id in this._sourceFileIdToSourceFrame) {
-var sourceFrame = this._sourceFileIdToSourceFrame[id];
-sourceFrame.removeEventListener(WebInspector.SourceFrame.Events.Loaded, this._sourceFrameLoaded, this);
-}
+this._resetFilesSelect();
+delete this._filesSelectElement.initialSelectionProcessed;
 
-this._sourceFileIdToSourceFrame = {};
-this._sourceFileIdToFilesSelectOption = {};
-this._filesSelectElement.removeChildren();
 this.functionsSelectElement.removeChildren();
 this.viewsContainerElement.removeChildren();
 
 this.sidebarPanes.jsBreakpoints.reset();
-this.sidebarPanes.watchExpressions.refreshExpressions();
+this.sidebarPanes.watchExpressions.reset();
 if (!preserveItems && this.sidebarPanes.workers)
 this.sidebarPanes.workers.reset();
+},
+
+_resetFilesSelect: function()
+{
+this._filesSelectElement.removeChildren();
+this._filesSelectElement.domainOptions = {};
+this._filesSelectElement.folderOptions = {};
+delete this._filesSelectElement.contentScriptSection;
 },
 
 get visibleView()
@@ -28418,51 +29814,37 @@ this._visibleView.hide();
 
 this._visibleView = x;
 
-if (x)
+if (x) {
 x.show(this.viewsContainerElement);
-},
-
-createAnchor: function(url, lineNumber, columnNumber, classes, tooltipText)
-{
-var anchor = WebInspector.Panel.prototype.createAnchor.call(this, url, lineNumber, columnNumber, classes, tooltipText);
-if (lineNumber !== undefined)
-this._presentationModel.registerAnchor(url, null, lineNumber, columnNumber, this._updateAnchor.bind(this, anchor));
-return anchor;
+this._scriptViewStatusBarItemsContainer.removeChildren();
+var statusBarItems = x.statusBarItems || [];
+for (var i = 0; i < statusBarItems.length; ++i)
+this._scriptViewStatusBarItemsContainer.appendChild(statusBarItems[i]);
+}
 },
 
 canShowAnchorLocation: function(anchor)
 {
-return this._debuggerEnabled && this._presentationModel.sourceFileForScriptURL(anchor.href);
+return this._debuggerEnabled && WebInspector.debuggerModel.scriptsForURL(anchor.href).length;
 },
 
 showAnchorLocation: function(anchor)
 {
-this._showSourceLine(anchor.getAttribute("source_file_id"), parseInt(anchor.getAttribute("line_number")));
+this._showSourceLine(anchor.uiSourceCode, anchor.lineNumber);
 },
 
-_updateAnchor: function(anchor, sourceFileId, lineNumber)
+_showSourceLine: function(uiSourceCode, lineNumber)
 {
-var sourceFile = this._presentationModel.sourceFile(sourceFileId);
-var url = sourceFile.url || WebInspector.UIString("(program)");
-anchor.textContent = this.formatAnchorText(url, lineNumber)
-
-anchor.setAttribute("preferred_panel", "scripts");
-anchor.setAttribute("source_file_id", sourceFileId);
-anchor.setAttribute("line_number", lineNumber);
-},
-
-_showSourceLine: function(sourceFileId, lineNumber)
-{
-var sourceFrame = this._showSourceFrameAndAddToHistory(sourceFileId);
+var sourceFrame = this._showSourceFrameAndAddToHistory(uiSourceCode);
 sourceFrame.highlightLine(lineNumber);
 },
 
-_showSourceFrameAndAddToHistory: function(sourceFileId)
+_showSourceFrameAndAddToHistory: function(uiSourceCode)
 {
-if (!(sourceFileId in this._sourceFileIdToFilesSelectOption))
+if (!uiSourceCode._option)
 return;
 
-var sourceFrame = this._showSourceFrame(sourceFileId);
+var sourceFrame = this._showSourceFrame(uiSourceCode);
 
 var oldIndex = this._currentBackForwardIndex;
 if (oldIndex >= 0)
@@ -28470,11 +29852,11 @@ this._backForwardList.splice(oldIndex + 1, this._backForwardList.length - oldInd
 
 
 
-var previousEntryIndex = this._backForwardList.indexOf(sourceFileId);
+var previousEntryIndex = this._backForwardList.indexOf(uiSourceCode);
 if (previousEntryIndex !== -1)
 this._backForwardList.splice(previousEntryIndex, 1);
 
-this._backForwardList.push(sourceFileId);
+this._backForwardList.push(uiSourceCode);
 this._currentBackForwardIndex = this._backForwardList.length - 1;
 
 this._updateBackAndForwardButtons();
@@ -28482,68 +29864,70 @@ this._updateBackAndForwardButtons();
 return sourceFrame;
 },
 
-_showSourceFrame: function(sourceFileId)
+_showSourceFrame: function(uiSourceCode)
 {
-var index = this._sourceFileIdToFilesSelectOption[sourceFileId].index;
-this._filesSelectElement.selectedIndex = index;
+this._filesSelectElement.selectedIndex = uiSourceCode._option.index;
 
-var sourceFrame = this._sourceFrameForSourceFileId(sourceFileId);
+var sourceFrame = uiSourceCode._sourceFrame || this._createSourceFrame(uiSourceCode);
 this.visibleView = sourceFrame;
 
-var sourceFile = this._presentationModel.sourceFile(sourceFileId);
-if (sourceFile.url)
-WebInspector.settings.lastViewedScriptFile = sourceFile.url;
+if (uiSourceCode.url)
+WebInspector.settings.lastViewedScriptFile.set(uiSourceCode.url);
 
 return sourceFrame;
 },
 
-_sourceFrameForSourceFileId: function(sourceFileId)
+_createSourceFrame: function(uiSourceCode)
 {
-var sourceFrame = this._sourceFileIdToSourceFrame[sourceFileId];
-return sourceFrame || this._createSourceFrame(sourceFileId);
-},
-
-_createSourceFrame: function(sourceFileId)
-{
-var sourceFile = this._presentationModel.sourceFile(sourceFileId);
-var delegate = new WebInspector.SourceFrameDelegateForScriptsPanel(this._presentationModel, sourceFileId);
-var sourceFrame = new WebInspector.SourceFrame(delegate, sourceFile.url);
-sourceFrame._sourceFileId = sourceFileId;
+var sourceFrame = new WebInspector.JavaScriptSourceFrame(this._presentationModel, uiSourceCode);
+this.addChildView(sourceFrame);
+sourceFrame._uiSourceCode = uiSourceCode;
 sourceFrame.addEventListener(WebInspector.SourceFrame.Events.Loaded, this._sourceFrameLoaded, this);
-this._sourceFileIdToSourceFrame[sourceFileId] = sourceFrame;
+uiSourceCode._sourceFrame = sourceFrame;
 return sourceFrame;
 },
 
-_sourceFileChanged: function(event)
+_removeSourceFrame: function(uiSourceCode)
 {
-var sourceFileId = event.data.id;
-
-var oldSourceFrame = this._sourceFileIdToSourceFrame[sourceFileId];
-if (!oldSourceFrame)
+var sourceFrame = uiSourceCode._sourceFrame;
+if (!sourceFrame)
 return;
-oldSourceFrame.removeEventListener(WebInspector.SourceFrame.Events.Loaded, this._sourceFrameLoaded, this);
-delete this._sourceFileIdToSourceFrame[sourceFileId];
-if (this.visibleView !== oldSourceFrame)
-return;
+delete uiSourceCode._sourceFrame;
+this.removeChildView(sourceFrame);
+sourceFrame.removeEventListener(WebInspector.SourceFrame.Events.Loaded, this._sourceFrameLoaded, this);
+},
 
-var newSourceFrame = this._createSourceFrame(sourceFileId)
-newSourceFrame.scrollTop = oldSourceFrame.scrollTop;
-this.visibleView = newSourceFrame;
+_uiSourceCodeReplaced: function(event)
+{
+var oldUISourceCode = event.data.oldUISourceCode;
+var uiSourceCode = event.data.uiSourceCode;
+
+
+var option = oldUISourceCode._option;
+if (!option)
+return;
+delete oldUISourceCode._option;
+option._uiSourceCode = uiSourceCode;
+uiSourceCode._option = option;
+
+
+this._removeSourceFrame(oldUISourceCode);
+if (option === this._filesSelectElement[this._filesSelectElement.selectedIndex])
+this._showSourceFrame(uiSourceCode);
 },
 
 _sourceFrameLoaded: function(event)
 {
 var sourceFrame = event.target;
-var sourceFileId = sourceFrame._sourceFileId;
-var sourceFile = this._presentationModel.sourceFile(sourceFileId);
+var uiSourceCode = sourceFrame._uiSourceCode;
 
-var messages = sourceFile.messages;
+var messages = this._presentationModel.messagesForUISourceCode(uiSourceCode);
 for (var i = 0; i < messages.length; ++i) {
 var message = messages[i];
 sourceFrame.addMessageToSource(message.lineNumber, message.originalMessage);
 }
 
-var breakpoints = this._presentationModel.breakpointsForSourceFileId(sourceFileId);
+var breakpoints = this._presentationModel.breakpointsForUISourceCode(uiSourceCode);
 for (var i = 0; i < breakpoints.length; ++i) {
 var breakpoint = breakpoints[i];
 sourceFrame.addBreakpoint(breakpoint.lineNumber, breakpoint.resolved, breakpoint.condition, breakpoint.enabled);
@@ -28570,17 +29954,16 @@ this.sidebarPanes.scopechain.update(callFrame);
 this.sidebarPanes.watchExpressions.refreshExpressions();
 this.sidebarPanes.callstack.selectedCallFrame = this._presentationModel.selectedCallFrame;
 
-function didGetSourceLocation(sourceFileId, lineNumber)
+function didGetSourceLocation(uiSourceCode, lineNumber)
 {
-if (!sourceFileId)
+if (!uiSourceCode)
 return;
 
-if (!(sourceFileId in this._sourceFileIdToFilesSelectOption)) {
+if (!uiSourceCode._option) {
 
-var sourceFile = this._presentationModel.sourceFile(sourceFileId);
-this._addOptionToFilesSelect(sourceFile);
+this._addOptionToFilesSelect(uiSourceCode);
 }
-var sourceFrame = this._showSourceFrameAndAddToHistory(sourceFileId);
+var sourceFrame = this._showSourceFrameAndAddToHistory(uiSourceCode);
 sourceFrame.setExecutionLine(lineNumber);
 this._executionSourceFrame = sourceFrame;
 }
@@ -28592,8 +29975,8 @@ _filesSelectChanged: function()
 if (this._filesSelectElement.selectedIndex === -1)
 return;
 
-var sourceFileId = this._filesSelectElement[this._filesSelectElement.selectedIndex]._sourceFileId;
-this._showSourceFrameAndAddToHistory(sourceFileId);
+var uiSourceCode = this._filesSelectElement[this._filesSelectElement.selectedIndex]._uiSourceCode;
+this._showSourceFrameAndAddToHistory(uiSourceCode);
 },
 
 _startSidebarResizeDrag: function(event)
@@ -28601,7 +29984,7 @@ _startSidebarResizeDrag: function(event)
 WebInspector.elementDragStart(this.sidebarElement, this._sidebarResizeDrag.bind(this), this._endSidebarResizeDrag.bind(this), event, "ew-resize");
 
 if (event.target === this.sidebarResizeWidgetElement)
-this._dragOffset = (event.target.offsetWidth - (event.pageX - event.target.totalOffsetLeft));
+this._dragOffset = (event.target.offsetWidth - (event.pageX - event.target.totalOffsetLeft()));
 else
 this._dragOffset = 0;
 },
@@ -28629,7 +30012,7 @@ this.viewsContainerElement.style.right = newWidth + "px";
 this.sidebarResizeWidgetElement.style.right = newWidth + "px";
 this.sidebarResizeElement.style.right = (newWidth - 3) + "px";
 
-this.resize();
+this.doResize();
 },
 
 _setPauseOnExceptions: function(pauseOnExceptionsState)
@@ -28647,7 +30030,7 @@ else if (pauseOnExceptionsState == WebInspector.ScriptsPanel.PauseOnExceptionsSt
 this._pauseOnExceptionButton.title = WebInspector.UIString("Pause on uncaught exceptions.\nClick to Not pause on exceptions.");
 
 this._pauseOnExceptionButton.state = pauseOnExceptionsState;
-WebInspector.settings.pauseOnExceptionStateString = pauseOnExceptionsState;
+WebInspector.settings.pauseOnExceptionStateString.set(pauseOnExceptionsState);
 }
 DebuggerAgent.setPauseOnExceptions(pauseOnExceptionsState, callback.bind(this));
 },
@@ -28749,10 +30132,10 @@ this._waitingToPause = false;
 this._stepping = false;
 
 if (this._debuggerEnabled) {
-WebInspector.settings.debuggerEnabled = false;
+WebInspector.settings.debuggerEnabled.set(false);
 WebInspector.debuggerModel.disableDebugger();
 } else {
-WebInspector.settings.debuggerEnabled = !!optionalAlways;
+WebInspector.settings.debuggerEnabled.set(!!optionalAlways);
 WebInspector.debuggerModel.enableDebugger();
 }
 },
@@ -28784,6 +30167,9 @@ this._clearInterface();
 
 _stepOverClicked: function()
 {
+if (!this._paused)
+return;
+
 this._paused = false;
 this._stepping = true;
 
@@ -28794,6 +30180,9 @@ DebuggerAgent.stepOver();
 
 _stepIntoClicked: function()
 {
+if (!this._paused)
+return;
+
 this._paused = false;
 this._stepping = true;
 
@@ -28804,6 +30193,9 @@ DebuggerAgent.stepInto();
 
 _stepOutClicked: function()
 {
+if (!this._paused)
+return;
+
 this._paused = false;
 this._stepping = true;
 
@@ -28889,7 +30281,7 @@ for (var i = 0; i < shortcuts.length; ++i) {
 this.registerShortcut(shortcuts[i].key, handler);
 shortcutNames.push(shortcuts[i].name);
 }
-var section = WebInspector.shortcutsHelp.section(WebInspector.UIString("Scripts Panel"));
+var section = WebInspector.shortcutsScreen.section(WebInspector.UIString("Scripts Panel"));
 section.addAlternateKeys(shortcutNames, shortcutDescription);
 
 return button;
@@ -28924,6 +30316,7 @@ return;
 
 WebInspector.searchController.updateSearchMatchesCount(searchMatches, this);
 view.jumpToFirstSearchResult();
+WebInspector.searchController.updateCurrentMatchIndex(view.currentSearchResultIndex + 1, this);
 }
 
 this._searchView.performSearch(query, finishedCallback.bind(this));
@@ -28943,6 +30336,7 @@ if (this._searchView.showingLastSearchResult())
 this._searchView.jumpToFirstSearchResult();
 else
 this._searchView.jumpToNextSearchResult();
+WebInspector.searchController.updateCurrentMatchIndex(this._searchView.currentSearchResultIndex + 1, this);
 },
 
 jumpToPreviousSearchResult: function()
@@ -28961,13 +30355,13 @@ if (this._searchView.showingFirstSearchResult())
 this._searchView.jumpToLastSearchResult();
 else
 this._searchView.jumpToPreviousSearchResult();
+WebInspector.searchController.updateCurrentMatchIndex(this._searchView.currentSearchResultIndex + 1, this);
 },
 
-_toggleFormatSourceFiles: function()
+_toggleFormatSource: function()
 {
-WebInspector.panels.scripts.reset();
-this._toggleFormatSourceFilesButton.toggled = !this._toggleFormatSourceFilesButton.toggled;
-this._presentationModel.setFormatSourceFiles(this._toggleFormatSourceFilesButton.toggled);
+this._toggleFormatSourceButton.toggled = !this._toggleFormatSourceButton.toggled;
+this._presentationModel.setFormatSource(this._toggleFormatSourceButton.toggled);
 },
 
 _contextMenu: function(event)
@@ -28976,8 +30370,8 @@ var contextMenu = new WebInspector.ContextMenu();
 
 function enableWorkerInspection()
 {
-var newValue = !WebInspector.settings.workerInspectionEnabled;
-WebInspector.settings.workerInspectionEnabled = newValue;
+var newValue = !WebInspector.settings.workerInspectionEnabled.get();
+WebInspector.settings.workerInspectionEnabled.set(newValue);
 WorkerAgent.setWorkerInspectionEnabled(newValue);
 if (newValue) {
 var element = this.sidebarPanes.workers.element;
@@ -28991,7 +30385,7 @@ this.sidebarPanes.workers = new WebInspector.WorkersSidebarPane();
 element.parentNode.replaceChild(this.sidebarPanes.workers.element, element);
 }
 }
-contextMenu.appendCheckboxItem(WebInspector.UIString("Enable worker inspection"), enableWorkerInspection.bind(this), WebInspector.settings.workerInspectionEnabled);
+contextMenu.appendCheckboxItem(WebInspector.UIString("Enable worker inspection"), enableWorkerInspection.bind(this), WebInspector.settings.workerInspectionEnabled.get());
 
 contextMenu.show(event);
 }
@@ -29000,18 +30394,31 @@ contextMenu.show(event);
 WebInspector.ScriptsPanel.prototype.__proto__ = WebInspector.Panel.prototype;
 
 
-WebInspector.SourceFrameDelegateForScriptsPanel = function(model, sourceFileId)
+
+
+
+WebInspector.JavaScriptSourceFrame = function(model, uiSourceCode)
+{
+
+
+var delegate = new WebInspector.SourceFrameDelegateForScriptsPanel(model, uiSourceCode);
+WebInspector.SourceFrame.call(this, delegate, uiSourceCode.url);
+}
+
+WebInspector.JavaScriptSourceFrame.prototype.__proto__ = WebInspector.SourceFrame.prototype;
+
+WebInspector.SourceFrameDelegateForScriptsPanel = function(model, uiSourceCode)
 {
 WebInspector.SourceFrameDelegate.call(this);
 this._model = model;
-this._sourceFileId = sourceFileId;
+this._uiSourceCode = uiSourceCode;
 this._popoverObjectGroup = "popover";
 }
 
 WebInspector.SourceFrameDelegateForScriptsPanel.prototype = {
 requestContent: function(callback)
 {
-this._model.requestSourceFileContent(this._sourceFileId, callback);
+this._uiSourceCode.requestContent(callback);
 },
 
 debuggingSupported: function()
@@ -29021,7 +30428,7 @@ return true;
 
 setBreakpoint: function(lineNumber, condition, enabled)
 {
-this._model.setBreakpoint(this._sourceFileId, lineNumber, condition, enabled);
+this._model.setBreakpoint(this._uiSourceCode, lineNumber, condition, enabled);
 
 if (!WebInspector.panels.scripts.breakpointsActivated)
 WebInspector.panels.scripts.toggleBreakpointsClicked();
@@ -29029,37 +30436,37 @@ WebInspector.panels.scripts.toggleBreakpointsClicked();
 
 updateBreakpoint: function(lineNumber, condition, enabled)
 {
-this._model.updateBreakpoint(this._sourceFileId, lineNumber, condition, enabled);
+this._model.updateBreakpoint(this._uiSourceCode, lineNumber, condition, enabled);
 },
 
 removeBreakpoint: function(lineNumber)
 {
-this._model.removeBreakpoint(this._sourceFileId, lineNumber);
+this._model.removeBreakpoint(this._uiSourceCode, lineNumber);
 },
 
 findBreakpoint: function(lineNumber)
 {
-return this._model.findBreakpoint(this._sourceFileId, lineNumber);
+return this._model.findBreakpoint(this._uiSourceCode, lineNumber);
 },
 
 continueToLine: function(lineNumber)
 {
-this._model.continueToLine(this._sourceFileId, lineNumber);
+this._model.continueToLine(this._uiSourceCode, lineNumber);
 },
 
 canEditScriptSource: function()
 {
-return this._model.canEditScriptSource(this._sourceFileId);
+return this._model.canEditScriptSource(this._uiSourceCode);
 },
 
 setScriptSource: function(text, callback)
 {
-this._model.setScriptSource(this._sourceFileId, text, callback);
+this._model.setScriptSource(this._uiSourceCode, text, callback);
 },
 
 setScriptSourceIsBeingEdited: function(inEditMode)
 {
-WebInspector.panels.scripts.setScriptSourceIsBeingEdited(this._sourceFileId, inEditMode);
+WebInspector.panels.scripts.setScriptSourceIsBeingEdited(this._uiSourceCode, inEditMode);
 },
 
 debuggerPaused: function()
@@ -29069,7 +30476,7 @@ return WebInspector.panels.scripts.paused;
 
 evaluateInSelectedCallFrame: function(string, callback)
 {
-WebInspector.panels.scripts.evaluateInSelectedCallFrame(string, this._popoverObjectGroup, false, callback);
+WebInspector.panels.scripts.evaluateInSelectedCallFrame(string, this._popoverObjectGroup, false, false, callback);
 },
 
 releaseEvaluationResult: function()
@@ -29079,8 +30486,8 @@ RuntimeAgent.releaseObjectGroup(this._popoverObjectGroup);
 
 suggestedFileName: function()
 {
-var sourceFile = this._model.sourceFile(this._sourceFileId);
-return WebInspector.panels.scripts._displayNameForScriptURL(sourceFile.url) || "untitled.js";
+var names = WebInspector.panels.scripts._folderAndDisplayNameForScriptURL(this._uiSourceCode.url);
+return names.displayName || "untitled.js";
 }
 }
 
@@ -29094,7 +30501,7 @@ WebInspector.ResourcesPanel = function(database)
 {
 WebInspector.Panel.call(this, "resources");
 
-WebInspector.settings.installApplicationSetting("resourcesLastSelectedItem", {});
+WebInspector.settings.resourcesLastSelectedItem = WebInspector.settings.createSetting("resourcesLastSelectedItem", {});
 
 this.createSidebar();
 this.sidebarElement.addStyleClass("outline-disclosure");
@@ -29140,8 +30547,6 @@ this.sidebarElement.addEventListener("mouseout", this._onmouseout.bind(this), fa
 
 this.registerShortcuts();
 
-WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceUpdated, this._refreshResource, this);
-
 WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.OnLoad, this._onLoadEventFired, this);
 }
 
@@ -29166,9 +30571,6 @@ show: function()
 WebInspector.Panel.prototype.show.call(this);
 
 this._populateResourceTree();
-
-if (this.visibleView && this.visibleView.resource)
-this._showResourceView(this.visibleView.resource);
 },
 
 _onLoadEventFired: function()
@@ -29178,12 +30580,14 @@ this._initDefaultSelection();
 
 _initDefaultSelection: function()
 {
-var itemURL = WebInspector.settings.resourcesLastSelectedItem;
+if (!this._treeElementForFrameId)
+return;
+
+var itemURL = WebInspector.settings.resourcesLastSelectedItem.get();
 if (itemURL) {
 for (var treeElement = this.sidebarTree.children[0]; treeElement; treeElement = treeElement.traverseNextTreeElement(false, this.sidebarTree, true)) {
 if (treeElement.itemURL === itemURL) {
-treeElement.select();
-treeElement.reveal();
+treeElement.revealAndSelect(true);
 return;
 }
 }
@@ -29195,7 +30599,6 @@ this.showResource(WebInspector.mainResource);
 
 reset: function()
 {
-delete this._initializedDefaultSelection;
 this._origins = {};
 this._domains = {};
 for (var i = 0; i < this._databases.length; ++i) {
@@ -29240,8 +30643,8 @@ WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.E
 WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.FrameNavigated, this._frameNavigated, this);
 WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.FrameDetached, this._frameDetached, this);
 WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.ResourceAdded, this._resourceAdded, this);
-WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.CachedResourcesLoaded, this._cachedResourcesLoaded, this); 
-WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.WillLoadCachedResources, this._resetResourcesTree, this); 
+WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.CachedResourcesLoaded, this._cachedResourcesLoaded, this);
+WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.WillLoadCachedResources, this._resetResourcesTree, this);
 
 function populateFrame(frameId)
 {
@@ -29326,17 +30729,6 @@ _cachedResourcesLoaded: function()
 this._initDefaultSelection();
 },
 
-_refreshResource: function(event)
-{
-var resource = event.data;
-
-if (resource.type === WebInspector.Resource.Type.XHR) {
-var resourceTreeElement = this._findTreeElementForResource(resource);
-if (resourceTreeElement)
-resourceTreeElement.parent.removeChild(resourceTreeElement);
-}
-},
-
 addDatabase: function(database)
 {
 this._databases.push(database);
@@ -29408,7 +30800,7 @@ var resource = WebInspector.resourceForURL(anchor.href);
 if (resource.type === WebInspector.Resource.Type.XHR) {
 
 if (WebInspector.panels.network && WebInspector.panels.network.canShowAnchorLocation(anchor)) {
-WebInspector.currentPanel = WebInspector.panels.network;
+WebInspector.setCurrentPanel(WebInspector.panels.network);
 WebInspector.panels.network.showAnchorLocation(anchor);
 }
 return;
@@ -29420,10 +30812,8 @@ this.showResource(resource, lineNumber);
 showResource: function(resource, line)
 {
 var resourceTreeElement = this._findTreeElementForResource(resource);
-if (resourceTreeElement) {
-resourceTreeElement.reveal();
-resourceTreeElement.select();
-}
+if (resourceTreeElement)
+resourceTreeElement.revealAndSelect();
 
 if (line !== undefined) {
 var view = this._resourceViewForResource(resource);
@@ -29596,6 +30986,7 @@ _innerShowView: function(view)
 if (this.visibleView)
 this.visibleView.hide();
 
+this.addChildView(view);
 view.show(this.storageViews);
 this.visibleView = view;
 
@@ -29607,7 +30998,8 @@ this.storageViewStatusBarItemsContainer.appendChild(statusBarItems[i]);
 
 closeVisibleView: function()
 {
-if (this.visibleView)
+if (!this.visibleView)
+return;
 this.visibleView.hide();
 delete this.visibleView;
 },
@@ -29760,10 +31152,9 @@ updateMainViewWidth: function(width)
 {
 this.storageViews.style.left = width + "px";
 this.storageViewStatusBarItemsContainer.style.left = width + "px";
-this.resize();
 },
 
-performSearch: function(query) 
+performSearch: function(query)
 {
 this._resetSearchResults();
 var regex = WebInspector.SourceFrame.createSearchRegex(query);
@@ -29789,6 +31180,12 @@ if (!frameTreeElement)
 continue;
 var resource = frameTreeElement.resourceByURL(searchResult.url);
 
+
+
+
+if (!resource)
+continue;
+
 if (resource.history.length > 0)
 continue; 
 this._findTreeElementForResource(resource).searchMatchesFound(searchResult.matchesCount);
@@ -29804,7 +31201,7 @@ this.jumpToNextSearchResult();
 }
 
 this._forAllResourceTreeElements(searchInEditedResource.bind(this));
-PageAgent.searchInResources(regex.source, !regex.ignoreCase, true, callback.bind(this));            
+PageAgent.searchInResources(regex.source, !regex.ignoreCase, true, callback.bind(this));
 },
 
 _ensureViewSearchPerformed: function(callback)
@@ -30018,7 +31415,7 @@ onselect: function()
 {
 var itemURL = this.itemURL;
 if (itemURL)
-WebInspector.settings.resourcesLastSelectedItem = itemURL;
+WebInspector.settings.resourcesLastSelectedItem.set(itemURL);
 },
 
 onreveal: function()
@@ -30045,7 +31442,7 @@ isEventWithinDisclosureTriangle: function()
 
 
 const paddingLeft = 14;
-var left = this.listItemElement.totalOffsetLeft + paddingLeft;
+var left = this.listItemElement.totalOffsetLeft() + paddingLeft;
 return event.pageX >= left && event.pageX <= left + this.arrowToggleWidth && this.hasChildren;
 }
 }
@@ -30056,7 +31453,7 @@ WebInspector.StorageCategoryTreeElement = function(storagePanel, categoryName, s
 {
 WebInspector.BaseStorageTreeElement.call(this, storagePanel, null, categoryName, iconClasses, true, noIcon);
 this._expandedSettingKey = "resources" + settingsKey + "Expanded";
-WebInspector.settings.installApplicationSetting(this._expandedSettingKey, settingsKey === "Frames");
+WebInspector.settings[this._expandedSettingKey] = WebInspector.settings.createSetting(this._expandedSettingKey, settingsKey === "Frames");
 this._categoryName = categoryName;
 }
 
@@ -30075,18 +31472,18 @@ this._storagePanel.showCategoryView(this._categoryName);
 onattach: function()
 {
 WebInspector.BaseStorageTreeElement.prototype.onattach.call(this);
-if (WebInspector.settings[this._expandedSettingKey])
+if (WebInspector.settings[this._expandedSettingKey].get())
 this.expand();
 },
 
 onexpand: function()
 {
-WebInspector.settings[this._expandedSettingKey] = true;
+WebInspector.settings[this._expandedSettingKey].set(true);
 },
 
 oncollapse: function()
 {
-WebInspector.settings[this._expandedSettingKey] = false;
+WebInspector.settings[this._expandedSettingKey].set(false);
 }
 }
 
@@ -30136,7 +31533,7 @@ WebInspector.BaseStorageTreeElement.prototype.onselect.call(this);
 this._storagePanel.showCategoryView(this._displayName);
 
 this.listItemElement.removeStyleClass("hovered");
-DOMAgent.hideFrameHighlight();
+DOMAgent.hideHighlight();
 },
 
 get displayName()
@@ -30168,18 +31565,15 @@ set hovered(hovered)
 {
 if (hovered) {
 this.listItemElement.addStyleClass("hovered");
-DOMAgent.highlightFrame(this._frameId);
+DOMAgent.highlightFrame(this._frameId, WebInspector.Color.PageHighlight.Content.toProtocolRGBA(), WebInspector.Color.PageHighlight.ContentOutline.toProtocolRGBA());
 } else {
 this.listItemElement.removeStyleClass("hovered");
-DOMAgent.hideFrameHighlight();
+DOMAgent.hideHighlight();
 }
 },
 
 appendResource: function(resource)
 {
-if (this._treeElementForResource[resource.url])
-return;
-
 var categoryName = resource.category.name;
 var categoryElement = resource.category === WebInspector.resourceCategories.documents ? this : this._categoryElements[categoryName];
 if (!categoryElement) {
@@ -30196,7 +31590,8 @@ this._treeElementForResource[resource.url] = resourceTreeElement;
 
 resourceByURL: function(url)
 {
-return this._treeElementForResource[url].representedObject;
+var treeElement = this._treeElementForResource[url];
+return treeElement ? treeElement.representedObject : null;
 },
 
 appendChild: function(treeElement)
@@ -30231,7 +31626,7 @@ var title1 = treeElement1.displayName || treeElement1.titleText;
 var title2 = treeElement2.displayName || treeElement2.titleText;
 result = title1.localeCompare(title2);
 }
-return result;            
+return result;
 }
 
 var children = parentTreeElement.children;
@@ -30250,8 +31645,8 @@ WebInspector.FrameResourceTreeElement = function(storagePanel, resource)
 {
 WebInspector.BaseStorageTreeElement.call(this, storagePanel, resource, resource.displayName, ["resource-sidebar-tree-item", "resources-category-" + resource.category.name]);
 this._resource = resource;
-this._resource.addEventListener("errors-warnings-cleared", this._errorsWarningsCleared, this);
-this._resource.addEventListener("errors-warnings-message-added", this._errorsWarningsMessageAdded, this);
+this._resource.addEventListener(WebInspector.Resource.Events.MessageAdded, this._consoleMessageAdded, this);
+this._resource.addEventListener(WebInspector.Resource.Events.MessagesCleared, this._consoleMessagesCleared, this);
 this._resource.addEventListener(WebInspector.Resource.Events.RevisionAdded, this._revisionAdded, this);
 this.tooltip = resource.url;
 }
@@ -30400,7 +31795,7 @@ if (this._resource.errors)
 this._bubbleElement.addStyleClass("error");
 },
 
-_errorsWarningsCleared: function()
+_consoleMessagesCleared: function()
 {
 
 if (this._sourceView)
@@ -30409,13 +31804,11 @@ this._sourceView.clearMessages();
 this._updateErrorsAndWarningsBubbles();
 },
 
-_errorsWarningsMessageAdded: function(event)
+_consoleMessageAdded: function(event)
 {
 var msg = event.data;
-
 if (this._sourceView)
 this._sourceView.addMessage(msg);
-
 this._updateErrorsAndWarningsBubbles();
 },
 
@@ -30465,18 +31858,17 @@ var oldView = this._sourceView;
 var newView = this._createSourceView();
 
 var oldViewParentNode = oldView.visible ? oldView.element.parentNode : null;
-var scrollTop = oldView.scrollTop;
+newView.inheritScrollPositions(oldView);
 
-this._sourceView.detach();
+this._storagePanel.removeChildView(this._sourceView);
+this._storagePanel.addChildView(newView);
 this._sourceView = newView;
 
 if (oldViewParentNode)
 newView.show(oldViewParentNode);
-if (scrollTop)
-newView.scrollTop = scrollTop;
 
 return newView;
-}    
+}
 }
 
 WebInspector.FrameResourceTreeElement.prototype.__proto__ = WebInspector.BaseStorageTreeElement.prototype;
@@ -30681,8 +32073,8 @@ this._emptyView.show(this.element);
 WebInspector.StorageCategoryView.prototype = {
 setText: function(text)
 {
-this._emptyView.text = text;    
-}        
+this._emptyView.text = text;
+}
 }
 
 WebInspector.StorageCategoryView.prototype.__proto__ = WebInspector.View.prototype;
@@ -30717,7 +32109,7 @@ previousSearchResult: function(currentTreeElement)
 {
 if (!currentTreeElement) {
 var treeElement = this._traverser.last();
-return this._searchResult(treeElement, treeElement.searchMatchesCount - 1);            
+return this._searchResult(treeElement, treeElement.searchMatchesCount - 1);
 }
 
 if (currentTreeElement.searchMatchesCount && this._lastTreeElement === currentTreeElement && this._lastIndex > 0)
@@ -30748,7 +32140,7 @@ return this.next(this._root);
 
 last: function(startTreeElement)
 {
-return this.previous(this._root);    
+return this.previous(this._root);
 },
 
 next: function(startTreeElement)
@@ -30787,10 +32179,10 @@ return treeElement.traversePreviousTreeElement(false, this._root, true);
 _lastTreeElement: function()
 {
 var treeElement = this._root;
-var nextTreeElement; 
+var nextTreeElement;
 while (nextTreeElement = this._traverseNext(treeElement))
 treeElement = nextTreeElement;
-return treeElement;        
+return treeElement;
 }
 }
 
@@ -30904,9 +32296,9 @@ this._registerProfileType(new WebInspector.CPUProfileType());
 if (Preferences.heapProfilerPresent)
 this._registerProfileType(new WebInspector.DetailedHeapshotProfileType());
 
-InspectorBackend.registerDomainDispatcher("Profiler", new WebInspector.ProfilerDispatcher(this));
+InspectorBackend.registerProfilerDispatcher(new WebInspector.ProfilerDispatcher(this));
 
-if (Preferences.profilerAlwaysEnabled || WebInspector.settings.profilerEnabled)
+if (Preferences.profilerAlwaysEnabled || WebInspector.settings.profilerEnabled.get())
 ProfilerAgent.enable();
 else {
 function onProfilerEnebled(error, value) {
@@ -31092,10 +32484,8 @@ sidebarParent.insertChild(group._profilesTreeElement, index);
 var selected = group[0]._profilesTreeElement.selected;
 sidebarParent.removeChild(group[0]._profilesTreeElement);
 group._profilesTreeElement.appendChild(group[0]._profilesTreeElement);
-if (selected) {
-group[0]._profilesTreeElement.select();
-group[0]._profilesTreeElement.reveal();
-}
+if (selected)
+group[0]._profilesTreeElement.revealAndSelect();
 
 group[0]._profilesTreeElement.small = true;
 group[0]._profilesTreeElement.mainTitle = WebInspector.UIString("Run %d", 1);
@@ -31111,7 +32501,7 @@ small = true;
 }
 
 var profileTreeElement = profileType.createSidebarTreeElementForProfile(profile);
-profile.sideBarElement = profileTreeElement;
+profile.sidebarElement = profileTreeElement;
 profileTreeElement.small = small;
 if (alternateTitle)
 profileTreeElement.mainTitle = alternateTitle;
@@ -31166,8 +32556,9 @@ var view = profile.__profilesPanelProfileType.viewForProfile(profile);
 
 view.show(this.profileViews);
 
-profile._profilesTreeElement.select(true);
-profile._profilesTreeElement.reveal();
+profile._profilesTreeElement._suppressOnSelect = true;
+profile._profilesTreeElement.revealAndSelect();
+delete profile._profilesTreeElement._suppressOnSelect;
 
 this.visibleView = view;
 
@@ -31216,11 +32607,18 @@ var profile = this._profilesIdMap[this._makeKey(uid, WebInspector.DetailedHeapsh
 if (!profile)
 return;
 
-if (!profile.proxy)
-profile.proxy = (new WebInspector.HeapSnapshotWorker()).createObject("WebInspector.HeapSnapshotLoader");
+if (!profile.proxy) {
+function setProfileWait(event) {
+profile.sidebarElement.wait = event.data;
+}
+var worker = new WebInspector.HeapSnapshotWorker();
+worker.addEventListener("wait", setProfileWait, this);
+profile.proxy = worker.createObject("WebInspector.HeapSnapshotLoader");
+}
 var proxy = profile.proxy;
 if (proxy.startLoading(callback)) {
-profile.sideBarElement.subtitle = WebInspector.UIString("Loading\u2026");
+profile.sidebarElement.subtitle = WebInspector.UIString("Loading\u2026");
+profile.sidebarElement.wait = true;
 ProfilerAgent.getProfile(profile.typeId, profile.uid);
 }
 },
@@ -31242,10 +32640,12 @@ var proxy = profile.proxy;
 function parsed(snapshotProxy)
 {
 profile.proxy = snapshotProxy;
-profile.sideBarElement.subtitle = Number.bytesToString(snapshotProxy.totalSize);
+profile.sidebarElement.subtitle = Number.bytesToString(snapshotProxy.totalSize);
+profile.sidebarElement.wait = false;
+snapshotProxy.worker.startCheckingForLongRunningCalls();
 }
 if (proxy.finishLoading(parsed))
-profile.sideBarElement.subtitle = WebInspector.UIString("Parsing\u2026");
+profile.sidebarElement.subtitle = WebInspector.UIString("Parsing\u2026");
 },
 
 showView: function(view)
@@ -31375,10 +32775,10 @@ this._toggleProfiling(this.panelEnablerView.alwaysEnabled);
 _toggleProfiling: function(optionalAlways)
 {
 if (this._profilerEnabled) {
-WebInspector.settings.profilerEnabled = false;
+WebInspector.settings.profilerEnabled.set(false);
 ProfilerAgent.disable();
 } else {
-WebInspector.settings.profilerEnabled = !!optionalAlways;
+WebInspector.settings.profilerEnabled.set(!!optionalAlways);
 ProfilerAgent.enable();
 }
 },
@@ -31407,8 +32807,8 @@ updateMainViewWidth: function(width)
 {
 this.welcomeView.element.style.left = width + "px";
 this.profileViews.style.left = width + "px";
-this.profileViewStatusBarItemsContainer.style.left = Math.max(155, width) + "px";
-this.resize();
+
+this.profileViewStatusBarItemsContainer.style.left = Math.max(6 * 31, width) + "px";
 },
 
 _setRecordingProfile: function(isProfiling)
@@ -31423,9 +32823,10 @@ uid: -1,
 isTemporary: true
 };
 }
-if (isProfiling)
+if (isProfiling) {
 this._addProfileHeader(this._temporaryRecordingProfile);
-else
+WebInspector.userMetrics.ProfilesCPUProfileTaken.record();
+} else
 this._removeProfileHeader(this._temporaryRecordingProfile);
 }
 this.updateProfileTypeButtons();
@@ -31445,12 +32846,14 @@ isTemporary: true
 this._addProfileHeader(this._temporaryTakingSnapshot);
 }
 ProfilerAgent.takeHeapSnapshot();
+WebInspector.userMetrics.ProfilesHeapProfileTaken.record();
 },
 
 _reportHeapSnapshotProgress: function(done, total)
 {
 if (this.hasTemporaryProfile(WebInspector.DetailedHeapshotProfileType.TypeId)) {
-this._temporaryTakingSnapshot.sideBarElement.subtitle = WebInspector.UIString("%.2f%%", (done / total) * 100);
+this._temporaryTakingSnapshot.sidebarElement.subtitle = WebInspector.UIString("%.2f%%", (done / total) * 100);
+this._temporaryTakingSnapshot.sidebarElement.wait = true;
 if (done >= total)
 this._removeProfileHeader(this._temporaryTakingSnapshot);
 }
@@ -31538,6 +32941,7 @@ this.refreshTitles();
 WebInspector.ProfileSidebarTreeElement.prototype = {
 onselect: function()
 {
+if (!this._suppressOnSelect)
 this.treeOutline.panel.showProfile(this.profile);
 },
 
@@ -31601,8 +33005,9 @@ WebInspector.ProfileGroupSidebarTreeElement.prototype.__proto__ = WebInspector.S
 WebInspector.ConsolePanel = function()
 {
 WebInspector.Panel.call(this, "console");
-WebInspector.console.addEventListener(WebInspector.ConsoleView.Events.EntryAdded, this._consoleMessageAdded, this);
-WebInspector.console.addEventListener(WebInspector.ConsoleView.Events.ConsoleCleared, this._consoleCleared, this);
+WebInspector.consoleView.addEventListener(WebInspector.ConsoleView.Events.EntryAdded, this._consoleMessageAdded, this);
+WebInspector.consoleView.addEventListener(WebInspector.ConsoleView.Events.ConsoleCleared, this._consoleCleared, this);
+this._view = WebInspector.consoleView;
 }
 
 WebInspector.ConsolePanel.prototype = {
@@ -31611,49 +33016,31 @@ get toolbarItemLabel()
 return WebInspector.UIString("Console");
 },
 
+get statusBarItems()
+{
+return this._view.statusBarItems;
+},
+
 show: function()
 {
+if (WebInspector.drawer.visible) {
+WebInspector.drawer.hide(true);
+this._drawerWasVisible = true;
+}
 WebInspector.Panel.prototype.show.call(this);
 
-this._previousConsoleState = WebInspector.drawer.state;
-WebInspector.drawer.enterPanelMode();
-WebInspector.showConsole();
-
-
-var scopeBar = document.getElementById("console-filter");
-var consoleMessages = document.getElementById("console-messages");
-
-scopeBar.parentNode.removeChild(scopeBar);
-document.getElementById("console-view").insertBefore(scopeBar, consoleMessages);
-
-
-scopeBar.addStyleClass("console-filter-top");
-scopeBar.removeStyleClass("status-bar-item");
-
-consoleMessages.addStyleClass("console-filter-top");
+this.addChildView(this._view);
+this._view.show();
 },
 
 hide: function()
 {
 WebInspector.Panel.prototype.hide.call(this);
-
-if (this._previousConsoleState === WebInspector.Drawer.State.Hidden)
-WebInspector.drawer.immediatelyExitPanelMode();
-else
-WebInspector.drawer.exitPanelMode();
-delete this._previousConsoleState;
-
-
-var scopeBar = document.getElementById("console-filter");
-
-scopeBar.parentNode.removeChild(scopeBar);
-document.getElementById("other-drawer-status-bar-items").appendChild(scopeBar);
-
-
-scopeBar.removeStyleClass("console-filter-top");
-scopeBar.addStyleClass("status-bar-item");
-
-document.getElementById("console-messages").removeStyleClass("console-filter-top");
+this.removeChildView(this._view);
+if (this._drawerWasVisible) {
+WebInspector.drawer.show(this._view, true);
+delete this._drawerWasVisible;
+}
 },
 
 searchCanceled: function()
@@ -31670,7 +33057,7 @@ this.searchCanceled();
 this._searchRegex = createSearchRegex(query, "g");
 
 this._searchResults = [];
-var messages = WebInspector.console.messages;
+var messages = WebInspector.consoleView.messages;
 for (var i = 0; i < messages.length; i++) {
 if (messages[i].matchesRegex(this._searchRegex)) {
 this._searchResults.push(messages[i]);
@@ -31746,8 +33133,34 @@ WebInspector.ConsolePanel.prototype.__proto__ = WebInspector.Panel.prototype;
 
 
 
-WebInspector.injectedExtensionAPI = function(InjectedScriptHost, inspectedWindow, injectedScriptId)
+function defineCommonExtensionSymbols(apiPrivate)
 {
+if (!apiPrivate.audits)
+apiPrivate.audits = {};
+
+apiPrivate.audits.Severity = {
+Info: "info",
+Warning: "warning",
+Severe: "severe"
+};
+
+if (!apiPrivate.console)
+apiPrivate.console = {};
+apiPrivate.console.Severity = {
+Tip: "tip",
+Debug: "debug",
+Log: "log",
+Warning: "warning",
+Error: "error"
+};
+}
+
+function injectedExtensionAPI(injectedScriptId)
+{
+
+var apiPrivate = {};
+
+defineCommonExtensionSymbols(apiPrivate);
 
 
 
@@ -31766,7 +33179,7 @@ EventSinkImpl.prototype = {
 addListener: function(callback)
 {
 if (typeof callback != "function")
-throw new "addListener: callback is not a function";
+throw "addListener: callback is not a function";
 if (this._listeners.length === 0)
 extensionServer.sendRequest({ command: "subscribe", type: this._type });
 this._listeners.push(callback);
@@ -31808,8 +33221,10 @@ function InspectorExtensionAPI()
 this.audits = new Audits();
 this.inspectedWindow = new InspectedWindow();
 this.panels = new Panels();
-this.resources = new Resources();
+this.network = new Network();
+defineDeprecatedProperty(this, "webInspector", "resources", "network");
 this.timeline = new Timeline();
+this.console = new Console();
 
 this.onReset = new EventSink("reset");
 }
@@ -31821,27 +33236,50 @@ extensionServer.sendRequest({ command: "log", message: message });
 }
 }
 
-function Resources()
+function Console()
 {
-function resourceDispatch(request)
-{
-var resource = request.arguments[1];
-resource.__proto__ = new Resource(request.arguments[0]);
-this._fire(resource);
+this.onMessageAdded = new EventSink("console-message-added");
 }
-this.onFinished = new EventSink("resource-finished", resourceDispatch);
+
+Console.prototype = {
+getMessages: function(callback)
+{
+extensionServer.sendRequest({ command: "getConsoleMessages" }, callback);
+},
+
+addMessage: function(severity, text, url, line)
+{
+extensionServer.sendRequest({ command: "addConsoleMessage", severity: severity, text: text, url: url, line: line });
+},
+
+get Severity()
+{
+return apiPrivate.console.Severity;
+},
+};
+
+function Network()
+{
+function dispatchRequestEvent(message)
+{
+var request = message.arguments[1];
+request.__proto__ = new Request(message.arguments[0]);
+this._fire(request);
+}
+this.onRequestFinished = new EventSink("network-request-finished", dispatchRequestEvent);
+defineDeprecatedProperty(this, "network", "onFinished", "onRequestFinished");
 this.onNavigated = new EventSink("inspectedURLChanged");
 }
 
-Resources.prototype = {
+Network.prototype = {
 getHAR: function(callback)
 {
 function callbackWrapper(result)
 {
 var entries = (result && result.entries) || [];
 for (var i = 0; i < entries.length; ++i) {
-entries[i].__proto__ = new Resource(entries[i]._resourceId);
-delete entries[i]._resourceId;
+entries[i].__proto__ = new Request(entries[i]._requestId);
+delete entries[i]._requestId;
 }
 callback(result);
 }
@@ -31854,19 +33292,19 @@ return extensionServer.sendRequest({ command: "addRequestHeaders", headers: head
 }
 }
 
-function ResourceImpl(id)
+function RequestImpl(id)
 {
 this._id = id;
 }
 
-ResourceImpl.prototype = {
+RequestImpl.prototype = {
 getContent: function(callback)
 {
 function callbackWrapper(response)
 {
 callback(response.content, response.encoding);
 }
-extensionServer.sendRequest({ command: "getResourceContent", id: this._id }, callback && callbackWrapper);
+extensionServer.sendRequest({ command: "getRequestContent", id: this._id }, callback && callbackWrapper);
 }
 };
 
@@ -31885,15 +33323,15 @@ this.__defineGetter__(panel, bind(panelGetter, null, panel));
 }
 
 Panels.prototype = {
-create: function(title, iconURL, pageURL, callback)
+create: function(title, icon, page, callback)
 {
 var id = "extension-panel-" + extensionServer.nextObjectId();
 var request = {
 command: "createPanel",
 id: id,
 title: title,
-icon: expandURL(iconURL),
-url: expandURL(pageURL)
+icon: icon,
+page: page
 };
 extensionServer.sendRequest(request, callback && bind(callback, this, new ExtensionPanel(id)));
 }
@@ -31966,9 +33404,9 @@ setObject: function(jsonObject, rootTitle)
 extensionServer.sendRequest({ command: "setSidebarContent", id: this._id, expression: jsonObject, rootTitle: rootTitle });
 },
 
-setPage: function(url)
+setPage: function(page)
 {
-extensionServer.sendRequest({ command: "setSidebarPage", id: this._id, url: expandURL(url) });
+extensionServer.sendRequest({ command: "setSidebarPage", id: this._id, page: page });
 }
 }
 
@@ -31987,7 +33425,7 @@ return new AuditCategory(id);
 
 function AuditCategoryImpl(id)
 {
-function auditResultDispatch(request)
+function dispatchAuditEvent(request)
 {
 var auditResult = new AuditResult(request.arguments[0]);
 try {
@@ -31998,20 +33436,17 @@ auditResult.done();
 }
 }
 this._id = id;
-this.onAuditStarted = new EventSink("audit-started-" + id, auditResultDispatch);
+this.onAuditStarted = new EventSink("audit-started-" + id, dispatchAuditEvent);
 }
 
 function AuditResultImpl(id)
 {
 this._id = id;
 
-var formatterTypes = [
-"url",
-"snippet",
-"text"
-];
-for (var i = 0; i < formatterTypes.length; ++i)
-this[formatterTypes[i]] = bind(this._nodeFactory, null, formatterTypes[i]);
+this.createURL = bind(this._nodeFactory, null, "url");
+this.createSnippet = bind(this._nodeFactory, null, "snippet");
+this.createText = bind(this._nodeFactory, null, "text");
+this.createResourceLink = bind(this._nodeFactory, null, "resourceLink");
 }
 
 AuditResultImpl.prototype = {
@@ -32076,6 +33511,16 @@ return node;
 
 function InspectedWindow()
 {
+function dispatchResourceEvent(message)
+{
+this._fire(new Resource(message.arguments[0]));
+}
+function dispatchResourceContentEvent(message)
+{
+this._fire(new Resource(message.arguments[0]), message.arguments[1]);
+}
+this.onResourceAdded = new EventSink("resource-added", dispatchResourceEvent);
+this.onResourceContentCommitted = new EventSink("resource-content-committed", dispatchResourceContentEvent);
 }
 
 InspectedWindow.prototype = {
@@ -32094,8 +33539,54 @@ value = value === "undefined" ? undefined : JSON.parse(value);
 callback(value, result.isException);
 }
 return extensionServer.sendRequest({ command: "evaluateOnInspectedPage", expression: expression }, callback && callbackWrapper);
+},
+
+getResources: function(callback)
+{
+function wrapResource(resourceData)
+{
+return new Resource(resourceData);
+}
+function callbackWrapper(resources)
+{
+callback(resources.map(wrapResource));
+}
+return extensionServer.sendRequest({ command: "getPageResources" }, callback && callbackWrapper);
 }
 }
+
+function ResourceImpl(resourceData)
+{
+this._url = resourceData.url
+this._type = resourceData.type;
+}
+
+ResourceImpl.prototype = {
+get url()
+{
+return this._url;
+},
+
+get type()
+{
+return this._type;
+},
+
+getContent: function(callback)
+{
+function callbackWrapper(response)
+{
+callback(response.content, response.encoding);
+}
+
+return extensionServer.sendRequest({ command: "getResourceContent", url: this._url }, callback && callbackWrapper);
+},
+
+setContent: function(content, commit, callback)
+{
+return extensionServer.sendRequest({ command: "setResourceContent", url: this._url, content: content, commit: commit }, callback);
+}
+};
 
 function TimelineImpl()
 {
@@ -32162,18 +33653,6 @@ handler.call(this, request);
 }
 }
 
-function expandURL(url)
-{
-if (!url)
-return url;
-if (/^[^/]+:/.exec(url)) // See if url has schema.
-return url;
-var baseURL = location.protocol + "//" + location.hostname + location.port;
-if (/^\//.exec(url))
-return baseURL + url;
-return baseURL + location.pathname.replace(/\/[^/]*$/,"/") + url;
-}
-
 function bind(func, thisObject)
 {
 var args = Array.prototype.slice.call(arguments, 2);
@@ -32185,9 +33664,18 @@ function populateInterfaceClass(interface, implementation)
 for (var member in implementation) {
 if (member.charAt(0) === "_")
 continue;
-var value = implementation[member];
-interface[member] = typeof value === "function" ? bind(value, implementation)
-: interface[member] = implementation[member];
+var descriptor = null;
+
+for (var owner = implementation; owner && !descriptor; owner = owner.__proto__)
+descriptor = Object.getOwnPropertyDescriptor(owner, member);
+if (!descriptor)
+continue;
+if (typeof descriptor.value === "function")
+interface[member] = bind(descriptor.value, implementation);
+else if (typeof descriptor.get === "function")
+interface.__defineGetter__(member, bind(descriptor.get, implementation));
+else
+Object.defineProperty(interface, member, descriptor);
 }
 }
 
@@ -32201,12 +33689,27 @@ populateInterfaceClass(this, impl);
 }
 }
 
+function defineDeprecatedProperty(object, className, oldName, newName)
+{
+var warningGiven = false;
+function getter()
+{
+if (!warningGiven) {
+console.warn(className + "." + oldName + " is deprecated. Use " + className + "." + newName + " instead");
+warningGiven = true;
+}
+return object[newName];
+}
+object.__defineGetter__(oldName, getter);
+}
+
 var AuditCategory = declareInterfaceClass(AuditCategoryImpl);
 var AuditResult = declareInterfaceClass(AuditResultImpl);
 var EventSink = declareInterfaceClass(EventSinkImpl);
 var ExtensionSidebarPane = declareInterfaceClass(ExtensionSidebarPaneImpl);
 var Panel = declareInterfaceClass(PanelImpl);
 var PanelWithSidebar = declareInterfaceClass(PanelWithSidebarImpl);
+var Request = declareInterfaceClass(RequestImpl);
 var Resource = declareInterfaceClass(ResourceImpl);
 var Timeline = declareInterfaceClass(TimelineImpl);
 
@@ -32216,6 +33719,16 @@ webInspector = new InspectorExtensionAPI();
 experimental = window.experimental || {};
 experimental.webInspector = webInspector;
 
+}
+
+function buildExtensionAPIInjectedScript(platformAPI)
+{
+return "(function(injectedScriptHost, inspectedWindow, injectedScriptId){ " +
+defineCommonExtensionSymbols.toString() + ";" +
+injectedExtensionAPI.toString() + ";" +
+"injectedExtensionAPI(injectedScriptId);" +
+(platformAPI || "") +
+"})";
 }
 
 
@@ -32308,27 +33821,6 @@ WebInspector.ExtensionAuditCategoryResults._lastId = 0;
 
 
 
-WebInspector.commonExtensionSymbols = function(apiPrivate)
-{
-
-if (!apiPrivate.audits)
-apiPrivate.audits = {};
-
-apiPrivate.audits.Severity = {
-Info: "info",
-Warning: "warning",
-Severe: "severe"
-};
-}
-
-WebInspector.extensionAPI = {};
-
-WebInspector.commonExtensionSymbols(WebInspector.extensionAPI);
-
-
-
-
-
 WebInspector.ExtensionServer = function()
 {
 this._clientObjects = {};
@@ -32337,20 +33829,26 @@ this._subscribers = {};
 this._subscriptionStartHandlers = {};
 this._subscriptionStopHandlers = {};
 this._extraHeaders = {};
-this._resources = {};
-this._lastResourceId = 0;
+this._requests = {};
+this._lastRequestId = 0;
+this._allowedOrigins = {};
 this._status = new WebInspector.ExtensionStatus();
 
-this._registerHandler("addRequestHeaders", this._onAddRequestHeaders.bind(this));
 this._registerHandler("addAuditCategory", this._onAddAuditCategory.bind(this));
 this._registerHandler("addAuditResult", this._onAddAuditResult.bind(this));
+this._registerHandler("addConsoleMessage", this._onAddConsoleMessage.bind(this));
+this._registerHandler("addRequestHeaders", this._onAddRequestHeaders.bind(this));
 this._registerHandler("createPanel", this._onCreatePanel.bind(this));
 this._registerHandler("createSidebarPane", this._onCreateSidebarPane.bind(this));
 this._registerHandler("evaluateOnInspectedPage", this._onEvaluateOnInspectedPage.bind(this));
 this._registerHandler("getHAR", this._onGetHAR.bind(this));
+this._registerHandler("getConsoleMessages", this._onGetConsoleMessages.bind(this));
+this._registerHandler("getPageResources", this._onGetPageResources.bind(this));
+this._registerHandler("getRequestContent", this._onGetRequestContent.bind(this));
 this._registerHandler("getResourceContent", this._onGetResourceContent.bind(this));
 this._registerHandler("log", this._onLog.bind(this));
 this._registerHandler("reload", this._onReload.bind(this));
+this._registerHandler("setResourceContent", this._onSetResourceContent.bind(this));
 this._registerHandler("setSidebarHeight", this._onSetSidebarHeight.bind(this));
 this._registerHandler("setSidebarContent", this._onSetSidebarContent.bind(this));
 this._registerHandler("setSidebarPage", this._onSetSidebarPage.bind(this));
@@ -32358,19 +33856,10 @@ this._registerHandler("stopAuditCategoryRun", this._onStopAuditCategoryRun.bind(
 this._registerHandler("subscribe", this._onSubscribe.bind(this));
 this._registerHandler("unsubscribe", this._onUnsubscribe.bind(this));
 
-this._registerSubscriptionHandler("timeline-event-recorded", WebInspector.timelineManager.start.bind(WebInspector.timelineManager), WebInspector.timelineManager.stop.bind(WebInspector.timelineManager));
-
 window.addEventListener("message", this._onWindowMessage.bind(this), false);
-
-WebInspector.timelineManager.addEventListener(WebInspector.TimelineManager.EventTypes.TimelineEventRecorded, this._addRecordToTimeline, this);
 }
 
 WebInspector.ExtensionServer.prototype = {
-_addRecordToTimeline: function(event)
-{
-this._postNotification("timeline-event-recorded", event.data);
-},
-
 notifyObjectSelected: function(panelId, objectId)
 {
 this._postNotification("panel-objectSelected-" + panelId, objectId);
@@ -32393,6 +33882,7 @@ this._postNotification("panel-hidden-" + panelId);
 
 _inspectedURLChanged: function(event)
 {
+this._requests = {};
 var url = event.data;
 this._postNotification("inspectedURLChanged", url);
 },
@@ -32418,21 +33908,9 @@ stopAuditRun: function(auditRun)
 delete this._clientObjects[auditRun.id];
 },
 
-resetResources: function()
+notifyResourceContentCommitted: function(resource, content)
 {
-this._resources = {};
-},
-
-_notifyResourceFinished: function(event)
-{
-var resource = event.data;
-if (this._hasSubscribers("resource-finished"))
-this._postNotification("resource-finished", this._resourceId(resource), (new WebInspector.HAREntry(resource)).build());
-},
-
-_hasSubscribers: function(type)
-{
-return !!this._subscribers[type];
+this._postNotification("resource-content-committed", this._makeResource(resource), content);
 },
 
 _postNotification: function(type, details)
@@ -32456,7 +33934,7 @@ subscribers.push(port);
 else {
 this._subscribers[message.type] = [ port ];
 if (this._subscriptionStartHandlers[message.type])
-this._subscriptionStartHandlers[message.type]()
+this._subscriptionStartHandlers[message.type]();
 }
 },
 
@@ -32469,7 +33947,7 @@ subscribers.remove(port);
 if (!subscribers.length) {
 delete this._subscribers[message.type];
 if (this._subscriptionStopHandlers[message.type])
-this._subscriptionStopHandlers[message.type]()
+this._subscriptionStopHandlers[message.type]();
 }
 },
 
@@ -32493,7 +33971,7 @@ if (typeof headers[name] === "string")
 allHeaders[name] = headers[name];
 }
 }
-NetworkAgent.setExtraHeaders(allHeaders);
+NetworkAgent.setExtraHTTPHeaders(allHeaders);
 },
 
 _onCreatePanel: function(message, port)
@@ -32504,12 +33982,12 @@ var id = message.id;
 if (id in this._clientObjects || id in WebInspector.panels)
 return this._status.E_EXISTS(id);
 
-var panel = new WebInspector.ExtensionPanel(id, message.title, message.icon);
+var panel = new WebInspector.ExtensionPanel(id, message.title, this._expandResourcePath(port._extensionOrigin, message.icon));
 this._clientObjects[id] = panel;
 WebInspector.panels[id] = panel;
 WebInspector.addPanel(panel);
 
-var iframe = this.createClientIframe(panel.element, message.url);
+var iframe = this.createClientIframe(panel.element, this._expandResourcePath(port._extensionOrigin, message.page));
 iframe.addStyleClass("panel");
 return this._status.OK();
 },
@@ -32558,12 +34036,12 @@ else
 sidebar.setObject(message.expression, message.rootTitle);
 },
 
-_onSetSidebarPage: function(message)
+_onSetSidebarPage: function(message, port)
 {
 var sidebar = this._clientObjects[message.id];
 if (!sidebar)
 return this._status.E_NOTFOUND(message.id);
-sidebar.setPage(message.url);
+sidebar.setPage(this._expandResourcePath(port._extensionOrigin, message.page));
 },
 
 _onLog: function(message)
@@ -32574,7 +34052,7 @@ WebInspector.log(message.message);
 _onReload: function(message)
 {
 if (typeof message.userAgent === "string")
-PageAgent.setUserAgentOverride(message.userAgent);
+NetworkAgent.setUserAgentOverride(message.userAgent);
 
 PageAgent.reload(false);
 return this._status.OK();
@@ -32597,41 +34075,107 @@ var evalExpression = "JSON.stringify(eval(unescape('" + escape(message.expressio
 RuntimeAgent.evaluate(evalExpression, "", true, callback.bind(this));
 },
 
-_onRevealAndSelect: function(message)
+_onGetConsoleMessages: function()
 {
-if (message.panelId === "resources" && type === "resource")
-return this._onRevealAndSelectResource(message);
-else
-return this._status.E_NOTSUPPORTED(message.panelId, message.type);
+return WebInspector.console.messages.map(this._makeConsoleMessage);
 },
 
-_onRevealAndSelectResource: function(message)
+_onAddConsoleMessage: function(message)
 {
-var id = message.id;
-var resource = null;
+function convertSeverity(level)
+{
+switch (level) {
+case WebInspector.extensionAPI.console.Severity.Tip:
+return WebInspector.ConsoleMessage.MessageLevel.Tip;
+case WebInspector.extensionAPI.console.Severity.Log:
+return WebInspector.ConsoleMessage.MessageLevel.Log;
+case WebInspector.extensionAPI.console.Severity.Warning:
+return WebInspector.ConsoleMessage.MessageLevel.Warning;
+case WebInspector.extensionAPI.console.Severity.Error:
+return WebInspector.ConsoleMessage.MessageLevel.Error;
+case WebInspector.extensionAPI.console.Severity.Debug:
+return WebInspector.ConsoleMessage.MessageLevel.Debug;
+}
+}
+var level = convertSeverity(message.severity);
+if (!level)
+return this._status.E_BADARG("message.severity", message.severity);
 
-resource = this._resourceById(id) || WebInspector.resourceForURL(id);
-if (!resource)
-return this._status.E_NOTFOUND(typeof id + ": " + id);
-
-WebInspector.panels.resources.showResource(resource, message.line);
-WebInspector.showPanel("resources");
+var consoleMessage = new WebInspector.ConsoleMessage(
+WebInspector.ConsoleMessage.MessageSource.JS,
+WebInspector.ConsoleMessage.MessageType.Log,
+level,
+message.line,
+message.url,
+1,
+message.text,
+null, 
+null, 
+null); 
+WebInspector.console.addMessage(consoleMessage);
 },
 
-_dispatchCallback: function(requestId, port, result)
+_makeConsoleMessage: function(message)
 {
-port.postMessage({ command: "callback", requestId: requestId, result: result });
+function convertLevel(level)
+{
+if (!level)
+return;
+switch (level) {
+case WebInspector.ConsoleMessage.MessageLevel.Tip:
+return WebInspector.extensionAPI.console.Severity.Tip;
+case WebInspector.ConsoleMessage.MessageLevel.Log:
+return WebInspector.extensionAPI.console.Severity.Log;
+case WebInspector.ConsoleMessage.MessageLevel.Warning:
+return WebInspector.extensionAPI.console.Severity.Warning;
+case WebInspector.ConsoleMessage.MessageLevel.Error:
+return WebInspector.extensionAPI.console.Severity.Error;
+case WebInspector.ConsoleMessage.MessageLevel.Debug:
+return WebInspector.extensionAPI.console.Severity.Debug;
+default:
+return WebInspector.extensionAPI.console.Severity.Log;
+}
+}
+var result = {
+severity: convertLevel(message.level),
+text: message.text,
+};
+if (message.url)
+result.url = message.url;
+if (message.line)
+result.line = message.line;
+return result;
 },
 
-_onGetHAR: function(request)
+_onGetHAR: function()
 {
-var harLog = (new WebInspector.HARLog()).build();
+var requests = WebInspector.networkLog.resources;
+var harLog = (new WebInspector.HARLog(requests)).build();
 for (var i = 0; i < harLog.entries.length; ++i)
-harLog.entries[i]._resourceId = this._resourceId(WebInspector.networkResources[i]);
+harLog.entries[i]._requestId = this._requestId(requests[i]);
 return harLog;
 },
 
-_onGetResourceContent: function(message, port)
+_makeResource: function(resource)
+{
+return {
+url: resource.url,
+type: WebInspector.Resource.Type.toString(resource.type)
+};
+},
+
+_onGetPageResources: function()
+{
+var resources = [];
+function pushResourceData(resource)
+{
+resources.push(this._makeResource(resource));
+}
+WebInspector.resourceTreeModel.forAllResources(pushResourceData.bind(this));
+return resources;
+},
+
+_getResourceContent: function(resource, message, port)
 {
 function onContentAvailable(content, encoded)
 {
@@ -32641,124 +34185,203 @@ content: content
 };
 this._dispatchCallback(message.requestId, port, response);
 }
-var resource = this._resourceById(message.id);
-if (!resource)
-return this._status.E_NOTFOUND(message.id);
 resource.requestContent(onContentAvailable.bind(this));
 },
 
-_resourceId: function(resource)
+_onGetRequestContent: function(message, port)
 {
-if (!resource._extensionResourceId) {
-resource._extensionResourceId = ++this._lastResourceId;
-this._resources[resource._extensionResourceId] = resource;
+var request = this._requestById(message.id);
+if (!request)
+return this._status.E_NOTFOUND(message.id);
+this._getResourceContent(request, message, port);
+},
+
+_onGetResourceContent: function(message, port)
+{
+var resource = WebInspector.resourceTreeModel.resourceForURL(message.url);
+if (!resource)
+return this._status.E_NOTFOUND(message.url);
+this._getResourceContent(resource, message, port);
+},
+
+_onSetResourceContent: function(message, port)
+{
+function callbackWrapper(error)
+{
+var response = error ? this._status.E_FAILED(error) : this._status.OK();
+this._dispatchCallback(message.requestId, port, response);
 }
-return resource._extensionResourceId;
+var resource = WebInspector.resourceTreeModel.resourceForURL(message.url);
+if (!resource)
+return this._status.E_NOTFOUND(message.url);
+resource.setContent(message.content, message.commit, callbackWrapper.bind(this));
 },
 
-_resourceById: function(id)
+_requestId: function(request)
 {
-return this._resources[id];
+if (!request._extensionRequestId) {
+request._extensionRequestId = ++this._lastRequestId;
+this._requests[request._extensionRequestId] = request;
+}
+return request._extensionRequestId;
 },
 
-_onAddAuditCategory: function(request)
+_requestById: function(id)
 {
-var category = new WebInspector.ExtensionAuditCategory(request.id, request.displayName, request.resultCount);
+return this._requests[id];
+},
+
+_onAddAuditCategory: function(message)
+{
+var category = new WebInspector.ExtensionAuditCategory(message.id, message.displayName, message.resultCount);
 if (WebInspector.panels.audits.getCategory(category.id))
 return this._status.E_EXISTS(category.id);
-this._clientObjects[request.id] = category;
+this._clientObjects[message.id] = category;
 WebInspector.panels.audits.addCategory(category);
 },
 
-_onAddAuditResult: function(request)
+_onAddAuditResult: function(message)
 {
-var auditResult = this._clientObjects[request.resultId];
+var auditResult = this._clientObjects[message.resultId];
 if (!auditResult)
-return this._status.E_NOTFOUND(request.resultId);
+return this._status.E_NOTFOUND(message.resultId);
 try {
-auditResult.addResult(request.displayName, request.description, request.severity, request.details);
+auditResult.addResult(message.displayName, message.description, message.severity, message.details);
 } catch (e) {
 return e;
 }
 return this._status.OK();
 },
 
-_onStopAuditCategoryRun: function(request)
+_onStopAuditCategoryRun: function(message)
 {
-var auditRun = this._clientObjects[request.resultId];
+var auditRun = this._clientObjects[message.resultId];
 if (!auditRun)
-return this._status.E_NOTFOUND(request.resultId);
+return this._status.E_NOTFOUND(message.resultId);
 auditRun.cancel();
+},
+
+_dispatchCallback: function(requestId, port, result)
+{
+port.postMessage({ command: "callback", requestId: requestId, result: result });
 },
 
 initExtensions: function()
 {
+this._registerAutosubscriptionHandler("console-message-added",
+WebInspector.console, WebInspector.ConsoleModel.Events.MessageAdded, this._notifyConsoleMessageAdded);
+this._registerAutosubscriptionHandler("network-request-finished",
+WebInspector.networkManager, WebInspector.NetworkManager.EventTypes.ResourceFinished, this._notifyRequestFinished);
+this._registerAutosubscriptionHandler("resource-added",
+WebInspector.resourceTreeModel, WebInspector.ResourceTreeModel.EventTypes.ResourceAdded, this._notifyResourceAdded);
 
-WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceFinished, this._notifyResourceFinished, this);
-WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.InspectedURLChanged, this._inspectedURLChanged, this);
+function onTimelineSubscriptionStarted()
+{
+WebInspector.timelineManager.addEventListener(WebInspector.TimelineManager.EventTypes.TimelineEventRecorded,
+this._notifyTimelineEventRecorded, this);
+WebInspector.timelineManager.start();
+}
+function onTimelineSubscriptionStopped()
+{
+WebInspector.timelineManager.stop();
+WebInspector.timelineManager.removeEventListener(WebInspector.TimelineManager.EventTypes.TimelineEventRecorded,
+this._notifyTimelineEventRecorded, this);
+}
+this._registerSubscriptionHandler("timeline-event-recorded", onTimelineSubscriptionStarted.bind(this), onTimelineSubscriptionStopped.bind(this));
 
+WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.InspectedURLChanged,
+this._inspectedURLChanged, this);
 InspectorExtensionRegistry.getExtensionsAsync();
+},
+
+_notifyConsoleMessageAdded: function(event)
+{
+this._postNotification("console-message-added", this._makeConsoleMessage(event.data));
+},
+
+_notifyResourceAdded: function(event)
+{
+var resource = event.data;
+this._postNotification("resource-added", this._makeResource(resource));
+},
+
+_notifyRequestFinished: function(event)
+{
+var request = event.data;
+this._postNotification("network-request-finished", this._requestId(request), (new WebInspector.HAREntry(request)).build());
+},
+
+_notifyTimelineEventRecorded: function(event)
+{
+this._postNotification("timeline-event-recorded", event.data);
 },
 
 _addExtensions: function(extensions)
 {
 
-InspectorFrontendHost.setExtensionAPI(this._buildExtensionAPIInjectedScript());
-for (var i = 0; i < extensions.length; ++i) {
-var extension = extensions[i];
+InspectorFrontendHost.setExtensionAPI(this._buildExtensionAPIScript());
+for (var i = 0; i < extensions.length; ++i)
+this._addExtension(extensions[i].startPage);
+},
+
+_addExtension: function(startPage)
+{
+const urlOriginRegExp = new RegExp("([^:]+:\/\/[^/]*)\/"); 
+
 try {
-if (!extension.startPage)
-return;
+var originMatch = urlOriginRegExp.exec(startPage);
+if (!originMatch) {
+console.error("Skipping extension with invalid URL: " + startPage);
+return false;
+}
+this._allowedOrigins[originMatch[1]] = true;
 var iframe = document.createElement("iframe");
-iframe.src = extension.startPage;
+iframe.src = startPage;
 iframe.style.display = "none";
 document.body.appendChild(iframe);
 } catch (e) {
-console.error("Failed to initialize extension " + extension.startPage + ":" + e);
+console.error("Failed to initialize extension " + startPage + ":" + e);
+return false;
 }
-}
+return true;
 },
 
-_buildExtensionAPIInjectedScript: function()
+_buildExtensionAPIScript: function()
 {
-var resourceTypes = {};
-var resourceTypeProperties = Object.getOwnPropertyNames(WebInspector.Resource.Type);
-for (var i = 0; i < resourceTypeProperties.length; ++i) {
-var propName = resourceTypeProperties[i];
-var propValue = WebInspector.Resource.Type[propName];
-if (typeof propValue === "number")
-resourceTypes[propName] = WebInspector.Resource.Type.toString(propValue);
-}
 var platformAPI = WebInspector.buildPlatformExtensionAPI ? WebInspector.buildPlatformExtensionAPI() : "";
-return "(function(){ " +
-"var apiPrivate = {};" +
-"(" + WebInspector.commonExtensionSymbols.toString() + ")(apiPrivate);" +
-"(" + WebInspector.injectedExtensionAPI.toString() + ").apply(this, arguments);" +
-platformAPI +
-"})";
+return buildExtensionAPIInjectedScript(platformAPI);
 },
 
 _onWindowMessage: function(event)
 {
-if (event.data !== "registerExtension")
+if (event.data === "registerExtension")
+this._registerExtension(event.origin, event.ports[0]);
+},
+
+_registerExtension: function(origin, port)
+{
+if (!this._allowedOrigins.hasOwnProperty(origin)) {
+if (origin !== location.origin) 
+console.error("Ignoring unauthorized client request from " + origin);
 return;
-var port = event.ports[0];
+}
+port._extensionOrigin = origin;
 port.addEventListener("message", this._onmessage.bind(this), false);
 port.start();
 },
 
 _onmessage: function(event)
 {
-var request = event.data;
+var message = event.data;
 var result;
 
-if (request.command in this._handlers)
-result = this._handlers[request.command](request, event.target);
+if (message.command in this._handlers)
+result = this._handlers[message.command](message, event.target);
 else
-result = this._status.E_NOTSUPPORTED(request.command);
+result = this._status.E_NOTSUPPORTED(message.command);
 
-if (result && request.requestId)
-this._dispatchCallback(request.requestId, event.target, result);
+if (result && message.requestId)
+this._dispatchCallback(message.requestId, event.target, result);
 },
 
 _registerHandler: function(command, callback)
@@ -32770,6 +34393,39 @@ _registerSubscriptionHandler: function(eventTopic, onSubscribeFirst, onUnsubscri
 {
 this._subscriptionStartHandlers[eventTopic] =  onSubscribeFirst;
 this._subscriptionStopHandlers[eventTopic] =  onUnsubscribeLast;
+},
+
+_registerAutosubscriptionHandler: function(eventTopic, eventTarget, frontendEventType, handler)
+{
+this._registerSubscriptionHandler(eventTopic,
+WebInspector.Object.prototype.addEventListener.bind(eventTarget, frontendEventType, handler, this),
+WebInspector.Object.prototype.removeEventListener.bind(eventTarget, frontendEventType, handler, this));
+},
+
+_expandResourcePath: function(extensionPath, resourcePath)
+{
+if (!resourcePath)
+return;
+return extensionPath + this._normalizePath(resourcePath);
+},
+
+_normalizePath: function(path)
+{
+var source = path.split("/");
+var result = [];
+
+for (var i = 0; i < source.length; ++i) {
+if (source[i] === ".")
+continue;
+
+if (source[i] === "")
+continue;
+if (source[i] === "..")
+result.pop();
+else
+result.push(source[i]);
+}
+return "/" + result.join("/");
 }
 }
 
@@ -32781,6 +34437,7 @@ E_BADARG: "Invalid argument %s: %s",
 E_BADARGTYPE: "Invalid type for argument %s: got %s, expected %s",
 E_NOTFOUND: "Object not found: %s",
 E_NOTSUPPORTED: "Object does not support requested operation: %s",
+E_FAILED: "Operation failed: %s"
 }
 
 WebInspector.ExtensionStatus = function()
@@ -32807,6 +34464,11 @@ WebInspector.extensionServer._addExtensions(extensions);
 
 WebInspector.extensionServer = new WebInspector.ExtensionServer();
 
+WebInspector.extensionAPI = {};
+defineCommonExtensionSymbols(WebInspector.extensionAPI);
+
+window.addExtension = WebInspector.extensionServer._addExtension.bind(WebInspector.extensionServer);
+
 
 
 
@@ -32814,6 +34476,7 @@ WebInspector.extensionServer = new WebInspector.ExtensionServer();
 WebInspector.ExtensionPanel = function(id, label, iconURL, options)
 {
 this.toolbarItemLabel = label;
+if (iconURL)
 this._addStyleRule(".toolbar-item." + id + " .toolbar-icon", "background-image: url(" + iconURL + ");");
 WebInspector.Panel.call(this, id);
 }
@@ -32822,12 +34485,6 @@ WebInspector.ExtensionPanel.prototype = {
 get defaultFocusedElement()
 {
 return this.sidebarTreeElement || this.element;
-},
-
-updateMainViewWidth: function(width)
-{
-this.bodyElement.style.left = width + "px";
-this.resize();
 },
 
 searchCanceled: function(startingNewSearch)
@@ -33008,7 +34665,7 @@ this.categoriesById[categoryCtorID] = auditCategory;
 
 _executeAudit: function(categories, resultCallback)
 {
-var resources = WebInspector.networkResources;
+var resources = WebInspector.networkLog.resources;
 
 var rulesRemaining = 0;
 for (var i = 0; i < categories.length; ++i)
@@ -33052,8 +34709,7 @@ ordinal++;
 
 var resultTreeElement = new WebInspector.AuditResultSidebarTreeElement(results, mainResourceURL, ordinal);
 this.auditResultsTreeElement.appendChild(resultTreeElement);
-resultTreeElement.reveal();
-resultTreeElement.select();
+resultTreeElement.revealAndSelect();
 if (launcherCallback)
 launcherCallback();
 },
@@ -33076,6 +34732,8 @@ if (runImmediately)
 initiateAuditCallback.call(this, categories, launcherCallback);
 else
 this._reloadResources(initiateAuditCallback.bind(this, categories, launcherCallback));
+
+WebInspector.userMetrics.AuditsStarted.record();
 },
 
 _reloadResources: function(callback)
@@ -33139,8 +34797,7 @@ this.viewsContainerElement.style.left = width + "px";
 
 _clearButtonClicked: function()
 {
-this.auditsItemTreeElement.reveal();
-this.auditsItemTreeElement.select();
+this.auditsItemTreeElement.revealAndSelect();
 this.auditResultsTreeElement.removeChildren();
 }
 }
@@ -34817,6 +36474,19 @@ a.textContent = displayText || url;
 if (allowExternalNavigation)
 a.target = "_blank";
 return a;
+},
+
+resourceLink: function(url, line)
+{
+var title = url.replace(/.*[\/\\]/, "") + ":" + line;
+var a = document.createElement("a");
+a.href = url;
+a.title = url;
+a.className = "console-message-url webkit-html-resource-link";
+a.setAttribute("line_number", line);
+a.setAttribute("preferred_panel", "scripts");
+a.textContent = title;
+return a;
 }
 };
 
@@ -34826,48 +36496,47 @@ return a;
 
 WebInspector.NetworkItemView = function(resource)
 {
-WebInspector.View.call(this);
+WebInspector.TabbedPane.call(this);
 
 this.element.addStyleClass("network-item-view");
-this._tabbedPane = new WebInspector.TabbedPane(this.element);
 
 var headersView = new WebInspector.ResourceHeadersView(resource);
-this._tabbedPane.appendTab("headers", WebInspector.UIString("Headers"), headersView);
+this.appendTab("headers", WebInspector.UIString("Headers"), headersView);
 
 var responseView = new WebInspector.ResourceResponseView(resource);
 var previewView = new WebInspector.ResourcePreviewView(resource, responseView);
 
-this._tabbedPane.appendTab("preview", WebInspector.UIString("Preview"), previewView);
-this._tabbedPane.appendTab("response", WebInspector.UIString("Response"), responseView);
+this.appendTab("preview", WebInspector.UIString("Preview"), previewView);
+this.appendTab("response", WebInspector.UIString("Response"), responseView);
 
 if (Preferences.showCookiesTab) {
 this._cookiesView = new WebInspector.ResourceCookiesView(resource);
-this._tabbedPane.appendTab("cookies", WebInspector.UIString("Cookies"), this._cookiesView);
+this.appendTab("cookies", WebInspector.UIString("Cookies"), this._cookiesView);
 }
 
 if (Preferences.showTimingTab) {
 var timingView = new WebInspector.ResourceTimingView(resource);
-this._tabbedPane.appendTab("timing", WebInspector.UIString("Timing"), timingView);
+this.appendTab("timing", WebInspector.UIString("Timing"), timingView);
 }
 
-this._tabbedPane.addEventListener("tab-selected", this._tabSelected, this);
+this.addEventListener("tab-selected", this._tabSelected, this);
 }
 
 WebInspector.NetworkItemView.prototype = {
 show: function(parentElement)
 {
-WebInspector.View.prototype.show.call(this, parentElement);
+WebInspector.TabbedPane.prototype.show.call(this, parentElement);
 this._selectTab();
 },
 
 _selectTab: function(tabId)
 {
 if (!tabId)
-tabId = WebInspector.settings.resourceViewTab;
+tabId = WebInspector.settings.resourceViewTab.get();
 
-if (!this._tabbedPane.selectTab(tabId)) {
+if (!this.selectTab(tabId)) {
 this._isInFallbackSelection = true;
-this._tabbedPane.selectTab("headers");
+this.selectTab("headers");
 delete this._isInFallbackSelection;
 }
 },
@@ -34875,7 +36544,7 @@ delete this._isInFallbackSelection;
 _tabSelected: function(event)
 {
 if (event.data.isUserGesture)
-WebInspector.settings.resourceViewTab = event.data.tabId;
+WebInspector.settings.resourceViewTab.set(event.data.tabId);
 this._installHighlightSupport(event.data.view);
 },
 
@@ -34885,16 +36554,10 @@ if (typeof view.highlightLine === "function")
 this.highlightLine = view.highlightLine.bind(view);
 else
 delete this.highlightLine;
-},
-
-resize: function()
-{
-if (this._cookiesView && this._cookiesView.visible)
-this._cookiesView.resize();
 }
 }
 
-WebInspector.NetworkItemView.prototype.__proto__ = WebInspector.View.prototype;
+WebInspector.NetworkItemView.prototype.__proto__ = WebInspector.TabbedPane.prototype;
 
 WebInspector.ResourceContentView = function(resource)
 {
@@ -34907,17 +36570,27 @@ hasContent: function()
 return true;
 },
 
-get sourceView()
+get innerView()
 {
-if (!this._sourceView && WebInspector.ResourceView.hasTextContent(this.resource))
-this._sourceView = new WebInspector.ResourceSourceFrame(this.resource);
-return this._sourceView;
+return this._innerView;
+},
+
+set innerView(innerView)
+{
+this._innerView = innerView;
 },
 
 show: function(parentElement)
 {
 WebInspector.ResourceView.prototype.show.call(this, parentElement);
 this._ensureInnerViewShown();
+},
+
+hide: function()
+{
+if (this._innerView)
+this._innerView.hide();
+WebInspector.ResourceView.prototype.hide.call(this);
 },
 
 _ensureInnerViewShown: function()
@@ -35077,7 +36750,7 @@ this._urlFragmentTreeElement.hidden = !urlFragment;
 if (!urlFragment)
 return;
 
-var sectionTitle = WebInspector.UIString("URL fragment"); 
+var sectionTitle = WebInspector.UIString("URL fragment");
 
 this._urlFragmentTreeElement.removeChildren();
 this._urlFragmentTreeElement.listItemElement.removeChildren();
@@ -35122,6 +36795,26 @@ parmTreeElement.selectable = false;
 this._requestPayloadTreeElement.appendChild(parmTreeElement);
 },
 
+_decodeURIComponent: function(value)
+{
+var errorDecoding = false;
+
+if (value.indexOf("%") >= 0) {
+try {
+value = decodeURIComponent(value);
+} catch(e) {
+errorDecoding = true;
+}
+}
+value = value.replace(/\+/g, " ");
+
+var valueEscaped = value.escapeHTML();
+if (errorDecoding)
+valueEscaped += " <span class=\"error-message\">" + WebInspector.UIString("(unable to decode value)").escapeHTML() + "</span>";
+
+return valueEscaped;
+},
+
 _refreshParms: function(title, parms, parmsTreeElement)
 {
 parmsTreeElement.removeChildren();
@@ -35144,24 +36837,10 @@ for (var i = 0; i < parms.length; ++i) {
 var name = parms[i].name;
 var value = parms[i].value;
 
-var errorDecoding = false;
-if (this._decodeRequestParameters) {
-if (value.indexOf("%") >= 0) {
-try {
-value = decodeURIComponent(value);
-} catch(e) {
-errorDecoding = true;
-}
-}
+var valueEscaped = this._decodeRequestParameters ? this._decodeURIComponent(value) : value.escapeHTML();
+var nameEscaped = this._decodeRequestParameters ? this._decodeURIComponent(name) : name.escapeHTML();
 
-value = value.replace(/\+/g, " ");
-}
-
-valueEscaped = value.escapeHTML();
-if (errorDecoding)
-valueEscaped += " <span class=\"error-message\">" + WebInspector.UIString("(unable to decode value)").escapeHTML() + "</span>";
-
-var title = "<div class=\"header-name\">" + name.escapeHTML() + ":</div>";
+var title = "<div class=\"header-name\">" + nameEscaped + ":</div>";
 title += "<div class=\"header-value source-code\">" + valueEscaped + "</div>";
 
 var parmTreeElement = new TreeElement(null, null, false);
@@ -35194,10 +36873,10 @@ if (typeof this._resource.webSocketRequestKey3 !== "undefined")
 additionalRow = {header: "(Key3)", value: this._resource.webSocketRequestKey3};
 if (this._showRequestHeadersText)
 this._refreshHeadersText(WebInspector.UIString("Request Headers"), this._resource.requestHeadersText, this._requestHeadersTreeElement);
-else 
+else
 this._refreshHeaders(WebInspector.UIString("Request Headers"), this._resource.sortedRequestHeaders, additionalRow, this._requestHeadersTreeElement);
 
-if (this._resource.requestHeadersText) { 
+if (this._resource.requestHeadersText) {
 var toggleButton = this._createHeadersToggleButton(this._showRequestHeadersText);
 toggleButton.addEventListener("click", this._toggleRequestHeadersText.bind(this));
 this._requestHeadersTreeElement.listItemElement.appendChild(toggleButton);
@@ -35246,8 +36925,12 @@ statusCodeImage = "<img class=\"resource-status-image\" src=\"" + statusImageSou
 requestMethodElement.titleHTML = "<div class=\"header-name\">" + WebInspector.UIString("Request Method") + ":</div>" +
 "<div class=\"header-value source-code\">" + this._resource.requestMethod + "</div>";
 
+var fromCacheSpan = "";
+if (this._resource.cached)
+fromCacheSpan = " " + "<span class=\"status-from-cache\">" + WebInspector.UIString("(from cache)").escapeHTML() + "</span>";
+
 statusCodeElement.titleHTML = "<div class=\"header-name\">" + WebInspector.UIString("Status Code") + ":</div>" +
-statusCodeImage + "<div class=\"header-value source-code\">" + statusTextEscaped + "</div>";
+statusCodeImage + "<div class=\"header-value source-code\">" + statusTextEscaped + fromCacheSpan + "</div>";
 }
 },
 
@@ -35371,7 +37054,7 @@ WebInspector.View.prototype.show.call(this, parentElement);
 this._cookiesTable.updateWidths();
 },
 
-resize: function()
+onResize: function()
 {
 if (this._cookiesTable)
 this._cookiesTable.updateWidths();
@@ -35386,7 +37069,7 @@ _buildCookiesTable: function()
 {
 this.element.removeChildren();
 
-this._cookiesTable = new WebInspector.CookiesTable(null, true, true);
+this._cookiesTable = new WebInspector.CookiesTable(null, true);
 this._cookiesTable.addCookiesFolder(WebInspector.UIString("Request Cookies"), this._resource.requestCookies);
 this._cookiesTable.addCookiesFolder(WebInspector.UIString("Response Cookies"), this._resource.responseCookies);
 this.element.appendChild(this._cookiesTable.element);
@@ -35424,14 +37107,16 @@ show: function(parentElement)
 if (!this._resource.timing) {
 if (!this._emptyView) {
 this._emptyView = new WebInspector.EmptyView(WebInspector.UIString("This request has no detailed timing info."));
-this._emptyView.show(this.element);
+this.addChildView(this._emptyView);
+this._emptyView.show();
+this.innerView = this._emptyView;
 }
 WebInspector.View.prototype.show.call(this, parentElement);
 return;
 }
 
 if (this._emptyView) {
-this._emptyView.detach();
+this.removeChildView(this._emptyView);
 delete this._emptyView;
 }
 
@@ -35526,7 +37211,7 @@ if (total - rows[i].end < rows[i].start)
 title.style.right = (scale * (total - rows[i].end) + 3) + "px";
 else
 title.style.left = (scale * rows[i].start + 3) + "px";
-title.textContent = Number.millisToString(rows[i].end - rows[i].start);
+title.textContent = Number.secondsToString((rows[i].end - rows[i].start) / 1000);
 row.appendChild(title);
 
 tr.appendChild(td);
@@ -35549,13 +37234,36 @@ this.element.addStyleClass("json");
 
 WebInspector.ResourceJSONView.parseJSON = function(text)
 {
+var prefix = "";
+
 
 var start = /[{[]/.exec(text);
-if (start && start.index)
+if (start && start.index) {
+prefix = text.substring(0, start.index);
 text = text.substring(start.index);
+}
 
 try {
-return JSON.parse(text);
+return new WebInspector.ParsedJSON(JSON.parse(text), prefix, "");
+} catch (e) {
+return;
+}
+}
+
+WebInspector.ResourceJSONView.parseJSONP = function(text)
+{
+
+var start = text.indexOf("(");
+var end = text.lastIndexOf(")");
+if (start == -1 || end == -1 || end < start)
+return;
+
+var prefix = text.substring(0, start + 1);
+var suffix = text.substring(end);
+var text = text.substring(start + 1, end);
+
+try {
+return new WebInspector.ParsedJSON(JSON.parse(text), prefix, suffix);
 } catch (e) {
 return;
 }
@@ -35579,12 +37287,23 @@ if (this._initialized)
 return;
 this._initialized = true;
 
-var obj = WebInspector.RemoteObject.fromLocalObject(this._parsedJSON);
-this.element.appendChild(new WebInspector.ObjectPropertiesSection(obj, obj.description).element);
+var obj = WebInspector.RemoteObject.fromLocalObject(this._parsedJSON.data);
+var title = this._parsedJSON.prefix + obj.description + this._parsedJSON.suffix;
+var section = new WebInspector.ObjectPropertiesSection(obj, title);
+section.expand();
+section.editable = false;
+this.element.appendChild(section.element);
 }
 }
 
 WebInspector.ResourceJSONView.prototype.__proto__ = WebInspector.ResourceView.prototype;
+
+WebInspector.ParsedJSON = function(data, prefix, suffix)
+{
+this.data = data;
+this.prefix = prefix;
+this.suffix = suffix;
+}
 
 
 
@@ -35651,14 +37370,18 @@ contentLoaded: function()
 if (!this.resource.content || !this.sourceView) {
 if (!this._emptyView) {
 this._emptyView = new WebInspector.EmptyView(WebInspector.UIString("This request has no response data available."));
-this._emptyView.show(this.element);
+this.addChildView(this._emptyView);
+this._emptyView.show();
+this.innerView = this._emptyView;
 }
 } else {
 if (this._emptyView) {
-this._emptyView.detach();
+this.removeChildView(this._emptyView);
 delete this._emptyView;
 }
-this.sourceView.show(this.element);
+this.addChildView(this.sourceView);
+this.sourceView.show();
+this.innerView = this.sourceView;
 }
 }
 }
@@ -35680,21 +37403,30 @@ contentLoaded: function()
 {
 if (!this.resource.content) {
 if (!this._emptyView) {
-this._emptyView = new WebInspector.EmptyView(WebInspector.UIString("This request has no preview available."));
-this._emptyView.show(this.element);
+this._emptyView = this._createEmptyView();
+this.addChildView(this._emptyView);
+this._emptyView.show();
+this.innerView = this._emptyView;
 }
 } else {
 if (this._emptyView) {
-this._emptyView.detach();
+this.removeChildView(this._emptyView);
 delete this._emptyView;
 }
-if (!this._view)
-this._view = this._createInnerView();
-this._view.show(this.element);
+if (!this._previewView)
+this._previewView = this._createPreviewView();
+this.addChildView(this._previewView);
+this._previewView.show();
+this.innerView = this._previewView;
 }
 },
 
-_createInnerView: function()
+_createEmptyView: function()
+{
+return new WebInspector.EmptyView(WebInspector.UIString("This request has no preview available."));
+},
+
+_createPreviewView: function()
 {
 if (this.resource.hasErrorStatusCode() && this.resource.content)
 return new WebInspector.ResourceHTMLView(this.resource);
@@ -35705,8 +37437,17 @@ if (parsedJSON)
 return new WebInspector.ResourceJSONView(this.resource, parsedJSON);
 }
 
+if (this.resource.content && this.resource.category === WebInspector.resourceCategories.scripts && this.resource.mimeType === "application/json") {
+var parsedJSONP = WebInspector.ResourceJSONView.parseJSONP(this.resource.content);
+if (parsedJSONP)
+return new WebInspector.ResourceJSONView(this.resource, parsedJSONP);
+}
+
 if (this._responseView.sourceView)
 return this._responseView.sourceView;
+
+if (this.resource.category === WebInspector.resourceCategories.other)
+return this._createEmptyView();
 
 return WebInspector.ResourceView.nonSourceViewForResource(this.resource);
 }
@@ -35718,10 +37459,9 @@ WebInspector.ResourcePreviewView.prototype.__proto__ = WebInspector.ResourceCont
 
 
 
+
 WebInspector.ScriptFormatter = function()
 {
-this._worker = new Worker("ScriptFormatterWorker.js");
-this._worker.onmessage = this._didFormatContent.bind(this);
 this._tasks = [];
 }
 
@@ -35756,10 +37496,28 @@ _didFormatContent: function(event)
 var task = this._tasks.shift();
 var originalContent = task.data.content;
 var formattedContent = event.data.content;
-var sourceMapping = new WebInspector.FormattedSourceMapping(originalContent.lineEndings(), formattedContent.lineEndings(), event.data.mapping);
+var mapping = event.data.mapping;
+var sourceMapping = new WebInspector.FormattedSourceMapping(originalContent.lineEndings(), formattedContent.lineEndings(), mapping);
 task.callback(formattedContent, sourceMapping);
+},
+
+get _worker()
+{
+if (!this._cachedWorker) {
+this._cachedWorker = new Worker("ScriptFormatterWorker.js");
+this._cachedWorker.onmessage = this._didFormatContent.bind(this);
+}
+return this._cachedWorker;
 }
 }
+
+
+WebInspector.FormatterMappingPayload = function()
+{
+this.original = [];
+this.formatted = [];
+}
+
 
 WebInspector.FormattedSourceMapping = function(originalLineEndings, formattedLineEndings, mapping)
 {
@@ -35875,7 +37633,7 @@ return this.endLine - this.startLine;
 
 clone: function()
 {
-return new WebInspector.TextRange(this.startLine, this.startColumn, this.endLine, this.endColumn); 
+return new WebInspector.TextRange(this.startLine, this.startColumn, this.endLine, this.endColumn);
 }
 }
 
@@ -35932,11 +37690,6 @@ this._changeListener(range, newRange, command.text, text);
 return newRange;
 },
 
-set replaceTabsWithSpaces(replaceTabsWithSpaces)
-{
-this._replaceTabsWithSpaces = replaceTabsWithSpaces;
-},
-
 _innerSetText: function(range, text)
 {
 this._eraseRange(range);
@@ -35944,7 +37697,6 @@ if (text === "")
 return new WebInspector.TextRange(range.startLine, range.startColumn, range.startLine, range.startColumn);
 
 var newLines = text.split(/\r?\n/);
-this._replaceTabsIfNeeded(newLines);
 
 var prefix = this._lines[range.startLine].substring(0, range.startColumn);
 var suffix = this._lines[range.startLine].substring(range.startColumn);
@@ -35963,34 +37715,6 @@ postCaret = newLines[newLines.length - 1].length;
 }
 return new WebInspector.TextRange(range.startLine, range.startColumn,
 range.startLine + newLines.length - 1, postCaret);
-},
-
-_replaceTabsIfNeeded: function(lines)
-{
-if (!this._replaceTabsWithSpaces)
-return;
-var spaces = [ "    ", "   ", "  ", " "];
-for (var i = 0; i < lines.length; ++i) {
-var line = lines[i];
-var caretIndex = 0;
-var index = line.indexOf("\t", caretIndex);
-var buffer = [];
-var offset = 0;
-while (index !== -1) {
-if (index > caretIndex) {
-offset += index - caretIndex;
-buffer.push(line.substring(caretIndex, index));
-}
-caretIndex = index + 1;
-var space = spaces[offset % 4];
-offset += space.length;
-buffer.push(space);
-index = line.indexOf("\t", caretIndex);
-}
-if (line.length > caretIndex)
-buffer.push(line.substring(caretIndex));
-lines[i] = buffer.join("");
-}
 },
 
 _eraseRange: function(range)
@@ -36512,8 +38236,8 @@ this._valueKeywords = [
 "visibleFill", "visiblePainted", "visibleStroke", "visual", "w-resize", "wait", "wave", "white", "wider", "window", "windowframe", "windowtext",
 "x-large", "x-small", "xor", "xx-large", "xx-small", "yellow", "-wap-marquee", "-webkit-activelink", "-webkit-auto", "-webkit-baseline-middle",
 "-webkit-body", "-webkit-box", "-webkit-center", "-webkit-control", "-webkit-focus-ring-color", "-webkit-grab", "-webkit-grabbing",
-"-webkit-gradient", "-webkit-inline-box", "-webkit-left", "-webkit-link", "-webkit-marquee", "-webkit-mini-control", "-webkit-nowrap", "-webkit-right",
-"-webkit-small-control", "-webkit-text", "-webkit-xxx-large", "-webkit-zoom-in", "-webkit-zoom-out",
+"-webkit-gradient", "-webkit-inline-box", "-webkit-left", "-webkit-link", "-webkit-marquee", "-webkit-mini-control", "-webkit-nowrap", "-webkit-pictograph",
+"-webkit-right", "-webkit-small-control", "-webkit-text", "-webkit-xxx-large", "-webkit-zoom-in", "-webkit-zoom-out",
 ].keySet();
 
 this._mediaTypes = ["all", "aural", "braille", "embossed", "handheld", "import", "print", "projection", "screen", "tty", "tv"].keySet();
@@ -41085,7 +42809,7 @@ this._createContentIfNeeded();
 this.updateFontPreviewSize();
 },
 
-resize: function()
+onResize: function()
 {
 if (this._inResize)
 return;
@@ -41451,7 +43175,7 @@ var trimmedQuery = query.trim();
 if (dataGrid) {
 dataGrid.element.addStyleClass("inline");
 this._appendQueryResult(trimmedQuery, dataGrid.element);
-dataGrid.autoSizeColumns(5);            
+dataGrid.autoSizeColumns(5);
 }
 
 if (trimmedQuery.match(/^create /i) || trimmedQuery.match(/^drop table /i))
@@ -41578,10 +43302,10 @@ if (this.profileNode._searchMatchedFunctionColumn)
 cell.addStyleClass("highlight");
 
 if (this.profileNode.url) {
-var lineNumber;
-if (this.profileNode.lineNumber > 0)
-lineNumber = this.profileNode.lineNumber;
-var urlElement = WebInspector.linkifyResourceAsNode(this.profileNode.url, "scripts", lineNumber, "profile-node-file");
+
+var lineNumber = this.profileNode.lineNumber ? this.profileNode.lineNumber - 1 : 0;
+var urlElement = WebInspector.debuggerPresentationModel.linkifyLocation(this.profileNode.url, lineNumber, 0, "profile-node-file");
+urlElement.style.maxWidth = "75%";
 cell.insertBefore(urlElement, cell.firstChild);
 }
 
@@ -42370,19 +44094,13 @@ this._sortProfile(this._bottomUpTree);
 return this._bottomUpTree;
 },
 
-show: function(parentElement)
-{
-WebInspector.View.prototype.show.call(this, parentElement);
-this.dataGrid.updateWidths();
-},
-
 hide: function()
 {
 WebInspector.View.prototype.hide.call(this);
 this._currentSearchResultIndex = -1;
 },
 
-resize: function()
+onResize: function()
 {
 if (this.dataGrid)
 this.dataGrid.updateWidths();
@@ -42619,8 +44337,7 @@ if (!searchResult)
 return;
 
 var profileNode = searchResult.profileNode;
-profileNode.reveal();
-profileNode.select();
+profileNode.revealAndSelect();
 },
 
 _changeView: function(event)
@@ -43010,7 +44727,7 @@ this._snapshot.nodes = [JSON.parse(this._json.slice(0, closingBracketIndex))];
 this._json = this._json.slice(closingBracketIndex);
 this._state = "parse-nodes";
 this.pushJSONChunk("");
-break;          
+break;
 }
 case "parse-nodes": {
 if (this._parseNodes())
@@ -43615,7 +45332,7 @@ this._buildDominatedNodes();
 
 var dominatedIndexFrom = this._getDominatedIndex(node.nodeIndex);
 var dominatedIndexTo = this._getDominatedIndex(node._nextNodeIndex);
-return new WebInspector.HeapSnapshotArraySlice(this, "_dominatedNodes", dominatedIndexFrom, dominatedIndexTo);        
+return new WebInspector.HeapSnapshotArraySlice(this, "_dominatedNodes", dominatedIndexFrom, dominatedIndexTo);
 },
 
 aggregates: function(sortedIndexes)
@@ -43687,11 +45404,11 @@ _buildAggregates: function()
 this._aggregates = {};
 for (var iter = this._allNodes; iter.hasNext(); iter.next()) {
 var node = iter.node;
-var className = node.className;
-var nameMatters = node.type === "object" || node.type === "native";
 if (node.type !== "native" && node.selfSize === 0)
 continue;
-if (!(className in this._aggregates))
+var nameMatters = node.type === "object" || node.type === "native";
+var className = node.className;
+if (!this._aggregates.hasOwnProperty(className))
 this._aggregates[className] = { count: 0, self: 0, maxRet: 0, type: node.type, name: nameMatters ? node.name : null, idxs: [] };
 var clss = this._aggregates[className];
 ++clss.count;
@@ -44159,7 +45876,7 @@ updateRoots: function(filter)
 {
 if (filter)
 filter = eval("(function(){return " + filter + "})()");
-this._rootChildren = this._fillRootChildren(filter);  
+this._rootChildren = this._fillRootChildren(filter);
 this._reset();
 },
 
@@ -44330,10 +46047,10 @@ diff.removedSize += this._baseSelfSizes[i];
 } else if (nodeAId > nodeB.id) {
 diff.addedCount++;
 diff.addedSize += nodeB.selfSize;
-nodeB.nodeIndex = indexes[++j];                
+nodeB.nodeIndex = indexes[++j];
 } else {
 ++i;
-nodeB.nodeIndex = indexes[++j];                
+nodeB.nodeIndex = indexes[++j];
 }
 }
 while (i < l) {
@@ -44429,6 +46146,7 @@ WebInspector.HeapSnapshotWorker = function()
 this._nextObjectId = 1;
 this._nextCallId = 1;
 this._callbacks = [];
+this._previousCallbacks = [];
 
 this._worker = typeof InspectorTest === "undefined" ? new WebInspector.HeapSnapshotRealWorker() : new WebInspector.HeapSnapshotFakeWorker();
 this._worker.addEventListener("message", this._messageReceived.bind(this), false);
@@ -44447,6 +46165,8 @@ return proxy;
 dispose: function()
 {
 this._worker.terminate();
+if (this._interval)
+clearInterval(this._interval);
 },
 
 disposeObject: function(objectId)
@@ -44490,6 +46210,27 @@ this._callbacks[callId] = callback;
 this._postMessage({callId: callId, disposition: "method", objectId: objectId, methodName: methodName, methodArguments: methodArguments});
 },
 
+startCheckingForLongRunningCalls: function()
+{
+this._checkLongRunningCalls();
+this._interval = setInterval(this._checkLongRunningCalls.bind(this), 300);
+},
+
+_checkLongRunningCalls: function()
+{
+for (var callId in this._previousCallbacks)
+if (!(callId in this._callbacks))
+delete this._previousCallbacks[callId];
+var hasLongRunningCalls = false;
+for (callId in this._previousCallbacks) {
+hasLongRunningCalls = true;
+break;
+}
+this.dispatchEventToListeners("wait", hasLongRunningCalls);
+for (callId in this._callbacks)
+this._previousCallbacks[callId] = true;
+},
+
 _findFunction: function(name)
 {
 var path = name.split(".");
@@ -44511,9 +46252,11 @@ callback(data.result);
 
 _postMessage: function(message)
 {
-this._worker.postMessage(message);      
+this._worker.postMessage(message);
 }
 };
+
+WebInspector.HeapSnapshotWorker.prototype.__proto__ = WebInspector.Object.prototype;
 
 WebInspector.HeapSnapshotProxyObject = function(worker, objectId)
 {
@@ -44551,6 +46294,10 @@ return this._callWorker("callGetter", Array.prototype.slice.call(arguments, 0));
 callMethod: function(callback, methodName)
 {
 return this._callWorker("callMethod", Array.prototype.slice.call(arguments, 0));
+},
+
+get worker() {
+return this._worker;
 }
 };
 
@@ -44830,7 +46577,7 @@ case "factory": {
 var object = this._objects[data.objectId];
 var result = object[data.methodName].apply(object, data.methodArguments);
 if (result)
-this._objects[data.newObjectId] = result;            
+this._objects[data.newObjectId] = result;
 this._postMessage({callId: data.callId, result: !!result});
 break;
 }
@@ -44888,13 +46635,11 @@ function sorted(ignored)
 {
 this.populateChildren();
 }
-WebInspector.PleaseWaitMessage.prototype.show(this.dataGrid.element);
 this._provider.sortAndRewind(this.comparator(), sorted.bind(this));
 },
 
 populateChildren: function(provider, howMany, atIndex, afterPopulate, suppressNotifyAboutCompletion)
 {
-WebInspector.PleaseWaitMessage.prototype.show(this.dataGrid.element);
 if (!howMany && provider) {
 howMany = provider.instanceCount;
 provider.instanceCount = 0;
@@ -44952,7 +46697,6 @@ this.dispatchEventToListeners("populate complete");
 }
 setTimeout(notify.bind(this), 0);
 }
-WebInspector.PleaseWaitMessage.prototype.hide();
 }
 setTimeout(callSerialize.bind(this), 0);
 },
@@ -44969,7 +46713,6 @@ this._savedChildren[this._childHashForNode(child)] = child;
 
 sort: function()
 {
-WebInspector.PleaseWaitMessage.prototype.showAndWaitFor(this.dataGrid.element, this.dataGrid, "sorting complete");
 this.dataGrid.recursiveSortingEnter();
 function afterSort(sorted)
 {
@@ -45665,12 +47408,7 @@ if (!sortFields[3])
 result = -result;
 return result;
 }
-
-WebInspector.PleaseWaitMessage.prototype.showAndWaitFor(this.element, this, "sorting complete", sort.bind(this));
-function sort()
-{
 this._performSorting(SortByTwoFields);
-}
 },
 
 _performSorting: function(sortFunction)
@@ -45869,7 +47607,7 @@ if (this.baseSnapshot === this.snapshot) {
 this.dispatchEventToListeners("sorting complete");
 return;
 }
-this.populateChildren();        
+this.populateChildren();
 },
 
 populateChildren: function()
@@ -45938,6 +47676,61 @@ this.sort();
 MixInSnapshotNodeFunctions(WebInspector.HeapSnapshotDominatorObjectNode.prototype, WebInspector.HeapSnapshotDominatorsDataGrid.prototype);
 WebInspector.HeapSnapshotDominatorsDataGrid.prototype.__proto__ = WebInspector.HeapSnapshotSortableDataGrid.prototype;
 
+WebInspector.HeapSnapshotPathFinderState = function(snapshot, nodeIndex, rootFilter)
+{
+this._pathFinder = snapshot.createPathFinder(nodeIndex, !WebInspector.DetailedHeapshotView.prototype.showHiddenData);
+this._pathFinder.updateRoots(rootFilter);
+this._foundCount = 0;
+this._foundCountMax = null;
+this._totalFoundCount = 0;
+this._cancelled = false;
+}
+
+WebInspector.HeapSnapshotPathFinderState.prototype = {
+batchDone: function(status)
+{
+},
+
+pathFound: function(path)
+{
+},
+
+cancel: function()
+{
+this._cancelled = true;
+this._pathFinder.dispose();
+},
+
+startBatch: function(count)
+{
+if (this._cancelled)
+return;
+this._foundCount = 0;
+this._foundCountMax = count;
+this._pathFinder.findNext(this._pathFound.bind(this));
+},
+
+_pathFound: function(result)
+{
+if (this._cancelled)
+return;
+if (result === null) {
+if (!this._totalFoundCount)
+this.batchDone("no-paths-at-all");
+} else if (result !== false) {
+this.pathFound(result);
+++this._foundCount;
+++this._totalFoundCount;
+if (this._foundCount < this._foundCountMax)
+this._pathFinder.findNext(this._pathFound.bind(this));
+else
+this.batchDone("have-more-paths");
+} else {
+this.batchDone("no-more-paths");
+}
+}
+};
+
 WebInspector.HeapSnapshotRetainingPathsList = function()
 {
 var columns = {
@@ -45946,14 +47739,17 @@ len: { title: WebInspector.UIString("Length"), width: "90px", sortable: true, so
 };
 WebInspector.HeapSnapshotSortableDataGrid.call(this, columns);
 this._defaultPopulateCount = 100;
+this._nodeIndex = null;
+this._state = null;
+this._prefix = null;
 }
 
 WebInspector.HeapSnapshotRetainingPathsList.prototype = {
 dispose: function()
 {
-if (this.pathFinder)
-this.pathFinder.dispose();
-}, 
+if (this._state)
+this._state.cancel();
+},
 
 _sortFields: function(sortColumn, sortAscending)
 {
@@ -45965,53 +47761,63 @@ len: ["len", sortAscending, "path", true]
 
 _resetPaths: function()
 {
-this._setRootChildrenForFinder();
+var rootFilter = this.snapshotView.isTracingToWindowObjects ?
+"function (node) { return node.name.substr(0, 9) === \"DOMWindow\"; }" : null;
+if (this._state)
+this._state.cancel();
+this._state = new WebInspector.HeapSnapshotPathFinderState(this._snapshot, this._nodeIndex, rootFilter);
+this._state.batchDone = this._batchDone.bind(this);
+this._state.pathFound = this._pathFound.bind(this);
 this.removeChildren();
 this.resetSortingCache();
-this._counter = 0;
 this.showNext(this._defaultPopulateCount);
 },
 
 setDataSource: function(snapshotView, snapshot, nodeIndex, prefix)
 {
+if (this._nodeIndex === nodeIndex)
+return;
 this.snapshotView = snapshotView;
+this._snapshot = snapshot;
+this._nodeIndex = nodeIndex;
 this._prefix = prefix;
-
-if (this.pathFinder) {
-this.searchCancelled();
-this.pathFinder.dispose();
-}
-this.pathFinder = snapshot.createPathFinder(nodeIndex, !WebInspector.DetailedHeapshotView.prototype.showHiddenData);
 this._resetPaths();
 },
 
 refresh: function()
 {
-delete this._cancel;
+if (this.snapshotView)
 this._resetPaths();
 },
 
 reset: function()
 {
-delete this._cancel;
+if (this._state)
+this._state.cancel();
 this.removeChildren();
 this.resetSortingCache();
-this._counter = 0;
 this.appendChild(new WebInspector.DataGridNode({path:WebInspector.UIString("Click on an object to show retaining paths"), len:""}, false));
 },
 
-showNext: function(pathsCount)
+_batchDone: function(state)
 {
-WebInspector.PleaseWaitMessage.prototype.show(this.element, this.searchCancelled.bind(this, pathsCount));
-
-function pathFound(result)
-{
-if (result === null) {
-WebInspector.PleaseWaitMessage.prototype.hide();
-if (!this.children.length)
+switch (state) {
+case "no-paths-at-all":
 this.appendChild(new WebInspector.DataGridNode({path:WebInspector.UIString("Can't find any paths."), len:""}, false));
-return;
-} else if (result !== false) {
+break;
+case "have-more-paths":
+this.appendChild(new WebInspector.ShowMoreDataGridNode(this.showNext.bind(this), this._defaultPopulateCount));
+this.resetSortingCache();
+this.sortingChanged();
+break;
+case "no-more-paths":
+
+break;
+}
+},
+
+_pathFound: function(result)
+{
 if (WebInspector.HeapSnapshotGenericObjectNode.prototype.isDOMWindow(result.path))
 result.path = WebInspector.HeapSnapshotGenericObjectNode.prototype.shortenWindowURL(result.path, true);
 if (this._prefix)
@@ -46019,45 +47825,11 @@ result.path = this._prefix + result.path;
 var node = new WebInspector.DataGridNode(result, false);
 node.route = result.route;
 this.appendChild(node);
-++this._counter;
-}
-setTimeout(startSearching.bind(this), 0);
-}
-
-function startSearching()
-{
-if (this._cancel === this.pathFinder)
-return;
-delete this._cancel;
-if (this._counter < pathsCount)
-this.pathFinder.findNext(pathFound.bind(this));
-else {
-this.searchCancelled.call(this, pathsCount);
-delete this._cancel;
-}
-}
-startSearching.call(this);
 },
 
-searchCancelled: function(pathsCount)
+showNext: function(pathsCount)
 {
-WebInspector.PleaseWaitMessage.prototype.hide();
-this._counter = 0;
-this._cancel = this.pathFinder;
-if (pathsCount) {
-this.appendChild(new WebInspector.ShowMoreDataGridNode(this.showNext.bind(this), pathsCount));
-this.resetSortingCache();
-this.sortingChanged();
-}
-},
-
-_setRootChildrenForFinder: function()
-{
-if (this.snapshotView.isTracingToWindowObjects)
-this.pathFinder.updateRoots(
-"function (node) { return node.name.substr(0, 9) === \"DOMWindow\"; }");
-else
-this.pathFinder.updateRoots();
+this._state.startBatch(pathsCount);
 },
 
 _performSorting: function(sortFunction)
@@ -46094,28 +47866,31 @@ this.element.appendChild(this.viewsContainer);
 this.containmentView = new WebInspector.View();
 this.containmentView.element.addStyleClass("view");
 this.containmentDataGrid = new WebInspector.HeapSnapshotContainmentDataGrid();
-this.containmentDataGrid.element.addEventListener("click", this._mouseClickInContainmentGrid.bind(this), true);
+this.containmentDataGrid.element.addEventListener("click", this._mouseClickInContentsGrid.bind(this), true);
+this.containmentDataGrid.element.addEventListener("mousedown", this._mouseDownInContentsGrid.bind(this), true);
 this.containmentView.element.appendChild(this.containmentDataGrid.element);
 this.viewsContainer.appendChild(this.containmentView.element);
 
 this.constructorsView = new WebInspector.View();
 this.constructorsView.element.addStyleClass("view");
 this.constructorsDataGrid = new WebInspector.HeapSnapshotConstructorsDataGrid();
-this.constructorsDataGrid.element.addEventListener("click", this._mouseClickInContainmentGrid.bind(this), true);
+this.constructorsDataGrid.element.addEventListener("click", this._mouseClickInContentsGrid.bind(this), true);
+this.constructorsDataGrid.element.addEventListener("mousedown", this._mouseDownInContentsGrid.bind(this), true);
 this.constructorsView.element.appendChild(this.constructorsDataGrid.element);
 this.viewsContainer.appendChild(this.constructorsView.element);
 
 this.diffView = new WebInspector.View();
 this.diffView.element.addStyleClass("view");
 this.diffDataGrid = new WebInspector.HeapSnapshotDiffDataGrid();
-this.diffDataGrid.element.addEventListener("click", this._mouseClickInContainmentGrid.bind(this), true);
+this.diffDataGrid.element.addEventListener("click", this._mouseClickInContentsGrid.bind(this), true);
 this.diffView.element.appendChild(this.diffDataGrid.element);
 this.viewsContainer.appendChild(this.diffView.element);
 
 this.dominatorView = new WebInspector.View();
 this.dominatorView.element.addStyleClass("view");
 this.dominatorDataGrid = new WebInspector.HeapSnapshotDominatorsDataGrid();
-this.dominatorDataGrid.element.addEventListener("click", this._mouseClickInContainmentGrid.bind(this), true);
+this.dominatorDataGrid.element.addEventListener("click", this._mouseClickInContentsGrid.bind(this), true);
+this.dominatorDataGrid.element.addEventListener("mousedown", this._mouseDownInContentsGrid.bind(this), true);
 this.dominatorView.element.appendChild(this.dominatorDataGrid.element);
 this.viewsContainer.appendChild(this.dominatorView.element);
 
@@ -46181,7 +47956,7 @@ this.percentButton.addEventListener("click", this._percentClicked.bind(this), fa
 this.helpButton = new WebInspector.StatusBarButton("", "heapshot-help-status-bar-item status-bar-item");
 this.helpButton.addEventListener("click", this._helpClicked.bind(this), false);
 
-var popoverHelper = new WebInspector.PopoverHelper(this.element, this._getHoverAnchor.bind(this), this._showStringContentPopup.bind(this));
+var popoverHelper = new WebInspector.PopoverHelper(this.element, this._getHoverAnchor.bind(this), this._showStringContentPopover.bind(this));
 
 this._loadProfile(this._profileUid, profileCallback.bind(this));
 
@@ -46198,12 +47973,7 @@ if (profileIndex > 0)
 this.baseSelectElement.selectedIndex = profileIndex - 1;
 else
 this.baseSelectElement.selectedIndex = profileIndex;
-WebInspector.PleaseWaitMessage.prototype.showAndWaitFor(this.currentView.element, this.dataGrid, "sorting complete", setDataSource.bind(this));
-}
-
-function setDataSource()
-{
-this.dataGrid.setDataSource(this, this.profileWrapper); 
+this.dataGrid.setDataSource(this, this.profileWrapper);
 this._updatePercentButton();
 }
 }
@@ -46273,7 +48043,7 @@ WebInspector.View.prototype.hide.call(this);
 this._currentSearchResultIndex = -1;
 },
 
-resize: function()
+onResize: function()
 {
 if (this.dataGrid)
 this.dataGrid.updateWidths();
@@ -46412,8 +48182,7 @@ if (!searchResult)
 return;
 
 var node = searchResult.node;
-node.reveal();
-node.select();
+node.revealAndSelect();
 },
 
 refreshVisibleData: function()
@@ -46437,11 +48206,6 @@ function baseProfileLoaded()
 {
 delete this._baseProfileWrapper;
 this.baseProfile._lastShown = Date.now();
-WebInspector.PleaseWaitMessage.prototype.showAndWaitFor(this.currentView.element, this.diffDataGrid, "sorting complete", setDataSource.bind(this));
-}
-
-function setDataSource()
-{
 this.diffDataGrid.setBaseDataSource(this.baseProfileWrapper);
 }
 
@@ -46479,13 +48243,13 @@ processLoadedSnapshot: function(profile, snapshot)
 profile.nodes = snapshot.nodes;
 profile.strings = snapshot.strings;
 var s = new WebInspector.HeapSnapshot(profile);
-profile.sideBarElement.subtitle = Number.bytesToString(s.totalSize);
+profile.sidebarElement.subtitle = Number.bytesToString(s.totalSize);
 },
 
-_mouseClickInContainmentGrid: function(event)
+_mouseClickInContentsGrid: function(event)
 {
 var cell = event.target.enclosingNodeOrSelfWithNodeName("td");
-if (!cell || (!cell.hasStyleClass("object-column") && !cell.hasStyleClass("shallowSize-column") && !cell.hasStyleClass("retainedSize-column")))
+if (!cell || (!cell.hasStyleClass("object-column")))
 return;
 var row = event.target.enclosingNodeOrSelfWithNodeName("tr");
 if (!row)
@@ -46497,6 +48261,27 @@ if (nodeItem.snapshotNodeIndex)
 this.retainmentDataGrid.setDataSource(this, nodeItem.isDeletedNode ? nodeItem.dataGrid.baseSnapshot : nodeItem.dataGrid.snapshot, nodeItem.snapshotNodeIndex, nodeItem.isDeletedNode ? this.baseSelectElement.childNodes[this.baseSelectElement.selectedIndex].label + " | " : "");
 else
 this.retainmentDataGrid.reset();
+},
+
+_mouseDownInContentsGrid: function(event)
+{
+if (event.detail < 2)
+return;
+
+var cell = event.target.enclosingNodeOrSelfWithNodeName("td");
+if (!cell || (!cell.hasStyleClass("count-column") && !cell.hasStyleClass("shallowSize-column") && !cell.hasStyleClass("retainedSize-column")))
+return;
+
+if (cell.hasStyleClass("count-column"))
+this.showCountAsPercent = !this.showCountAsPercent;
+else if (cell.hasStyleClass("shallowSize-column"))
+this.showShallowSizeAsPercent = !this.showShallowSizeAsPercent;
+else if (cell.hasStyleClass("retainedSize-column"))
+this.showRetainedSizeAsPercent = !this.showRetainedSizeAsPercent;
+this.refreshShowAsPercents();
+
+event.preventDefault();
+event.stopPropagation();
 },
 
 _mouseClickInRetainmentGrid: function(event)
@@ -46535,7 +48320,7 @@ setTimeout(callback, 0);
 }
 this.views[viewIndex].grid.addEventListener("sorting complete", sortingComplete, this);
 this.viewSelectElement.selectedIndex = viewIndex;
-this._changeView({target: {selectedIndex: viewIndex}});      
+this._changeView({target: {selectedIndex: viewIndex}});
 },
 
 _changeView: function(event)
@@ -46562,14 +48347,8 @@ this._changeBase();
 } else {
 this.baseSelectElement.addStyleClass("hidden");
 if (!this.dataGrid.snapshotView)
-WebInspector.PleaseWaitMessage.prototype.showAndWaitFor(this.currentView.element, this.dataGrid, "sorting complete", setDataSource.bind(this));
-}
-
-function setDataSource()
-{
 this.dataGrid.setDataSource(this, this.profileWrapper);
 }
-
 
 if (!this.currentQuery || !this._searchFinishedCallback || !this._searchResults)
 return;
@@ -46622,21 +48401,19 @@ this.showRetainedSizeAsPercent = !currentState;
 this.refreshShowAsPercents();
 },
 
-_showStringContentPopup: function(span)
+_showStringContentPopover: function(anchor, popover)
 {
 var stringContentElement = document.createElement("span");
 stringContentElement.className = "monospace";
 stringContentElement.style.whiteSpace = "pre";
 
-var popover = new WebInspector.Popover(stringContentElement);
 function displayString(name, className)
 {
 stringContentElement.textContent = name;
 stringContentElement.className += " " + className;
-popover.show(span);
+popover.show(stringContentElement, anchor);
 }
-span.node.hoverMessage(displayString);
-return popover;
+anchor.node.hoverMessage(displayString);
 },
 
 _helpClicked: function(event)
@@ -46731,7 +48508,7 @@ _updateRetainmentViewHeight: function(height)
 height = Number.constrain(height, Preferences.minConsoleHeight, this.element.clientHeight - Preferences.minConsoleHeight);
 this.viewsContainer.style.bottom = (height + this.retainmentViewHeader.clientHeight) + "px";
 this.retainmentView.element.style.height = height + "px";
-this.retainmentViewHeader.style.bottom = height + "px";        
+this.retainmentViewHeader.style.bottom = height + "px";
 },
 
 _updateBaseOptions: function()
@@ -46812,12 +48589,19 @@ WebInspector.DetailedHeapshotProfileType.prototype.__proto__ = WebInspector.Prof
 
 
 
+
 WebInspector.DebuggerModel = function()
 {
 this._debuggerPausedDetails = {};
 this._scripts = {};
 
-InspectorBackend.registerDomainDispatcher("Debugger", new WebInspector.DebuggerDispatcher(this));
+InspectorBackend.registerDebuggerDispatcher(new WebInspector.DebuggerDispatcher(this));
+}
+
+
+WebInspector.DebuggerModel.Location = function()
+{
+this.scriptId = null;
 }
 
 WebInspector.DebuggerModel.Events = {
@@ -46857,6 +48641,15 @@ continueToLocation: function(location)
 DebuggerAgent.continueToLocation(location);
 },
 
+setBreakpointByScriptLocation: function(location, condition, callback)
+{
+var script = this.scriptForSourceID(location.scriptId);
+if (script.sourceURL)
+this.setBreakpoint(script.sourceURL, location.lineNumber, location.columnNumber, condition, callback);
+else
+this.setBreakpointBySourceId(location, condition, callback);
+},
+
 setBreakpoint: function(url, lineNumber, columnNumber, condition, callback)
 {
 
@@ -46873,7 +48666,8 @@ function didSetBreakpoint(error, breakpointId, locations)
 if (callback)
 callback(error ? null : breakpointId, locations);
 }
-DebuggerAgent.setBreakpointByUrl(url, lineNumber, columnNumber, condition, didSetBreakpoint.bind(this));
+DebuggerAgent.setBreakpointByUrl(lineNumber, url, undefined, columnNumber, condition, didSetBreakpoint.bind(this));
+WebInspector.userMetrics.ScriptsBreakpointSet.record();
 },
 
 setBreakpointBySourceId: function(location, condition, callback)
@@ -46884,6 +48678,7 @@ if (callback)
 callback(error ? null : breakpointId, [actualLocation]);
 }
 DebuggerAgent.setBreakpoint(location, condition, didSetBreakpoint.bind(this));
+WebInspector.userMetrics.ScriptsBreakpointSet.record();
 },
 
 removeBreakpoint: function(breakpointId, callback)
@@ -46908,9 +48703,9 @@ get scripts()
 return this._scripts;
 },
 
-scriptForSourceID: function(sourceId)
+scriptForSourceID: function(scriptId)
 {
-return this._scripts[sourceId];
+return this._scripts[scriptId];
 },
 
 scriptsForURL: function(url)
@@ -46921,20 +48716,20 @@ return this.queryScripts(function(s) { return s.sourceURL === url; });
 queryScripts: function(filter)
 {
 var scripts = [];
-for (var sourceId in this._scripts) {
-var script = this._scripts[sourceId];
+for (var scriptId in this._scripts) {
+var script = this._scripts[scriptId];
 if (filter(script))
 scripts.push(script);
 }
 return scripts;
 },
 
-setScriptSource: function(sourceId, newSource, callback)
+setScriptSource: function(scriptId, newSource, callback)
 {
-this._scripts[sourceId].editSource(newSource, this._didEditScriptSource.bind(this, sourceId, newSource, callback));
+this._scripts[scriptId].editSource(newSource, this._didEditScriptSource.bind(this, scriptId, newSource, callback));
 },
 
-_didEditScriptSource: function(sourceId, newSource, callback, error, callFrames)
+_didEditScriptSource: function(scriptId, newSource, callback, error, callFrames)
 {
 if (!error && callFrames && callFrames.length)
 this._debuggerPausedDetails.callFrames = callFrames;
@@ -46951,8 +48746,9 @@ get debuggerPausedDetails()
 return this._debuggerPausedDetails;
 },
 
-_pausedScript: function(details)
+_pausedScript: function(callFrames, reason, auxData)
 {
+var details = { callFrames: callFrames, reason: reason, auxData: auxData };
 this._debuggerPausedDetails = details;
 this.dispatchEventToListeners(WebInspector.DebuggerModel.Events.DebuggerPaused, details);
 },
@@ -46963,10 +48759,10 @@ this._debuggerPausedDetails = {};
 this.dispatchEventToListeners(WebInspector.DebuggerModel.Events.DebuggerResumed);
 },
 
-_parsedScriptSource: function(sourceId, sourceURL, startLine, startColumn, endLine, endColumn, isContentScript)
+_parsedScriptSource: function(scriptId, sourceURL, startLine, startColumn, endLine, endColumn, isContentScript)
 {
-var script = new WebInspector.Script(sourceId, sourceURL, startLine, startColumn, endLine, endColumn, undefined, undefined, isContentScript);
-this._scripts[sourceId] = script;
+var script = new WebInspector.Script(scriptId, sourceURL, startLine, startColumn, endLine, endColumn, undefined, undefined, isContentScript);
+this._scripts[scriptId] = script;
 this.dispatchEventToListeners(WebInspector.DebuggerModel.Events.ParsedScriptSource, script);
 },
 
@@ -46985,15 +48781,16 @@ JavaScriptBreakpoint: 1,
 NativeBreakpoint: 2
 };
 
+
 WebInspector.DebuggerDispatcher = function(debuggerModel)
 {
 this._debuggerModel = debuggerModel;
 }
 
 WebInspector.DebuggerDispatcher.prototype = {
-paused: function(details)
+paused: function(callFrames, reason, auxData)
 {
-this._debuggerModel._pausedScript(details);
+this._debuggerModel._pausedScript(callFrames, reason, auxData);
 },
 
 resumed: function()
@@ -47011,9 +48808,9 @@ debuggerWasDisabled: function()
 this._debuggerModel._debuggerWasDisabled();
 },
 
-scriptParsed: function(sourceId, sourceURL, startLine, startColumn, endLine, endColumn, isContentScript)
+scriptParsed: function(scriptId, sourceURL, startLine, startColumn, endLine, endColumn, isContentScript)
 {
-this._debuggerModel._parsedScriptSource(sourceId, sourceURL, startLine, startColumn, endLine, endColumn, isContentScript);
+this._debuggerModel._parsedScriptSource(scriptId, sourceURL, startLine, startColumn, endLine, endColumn, isContentScript);
 },
 
 scriptFailedToParse: function(sourceURL, source, startingLine, errorLine, errorMessage)
@@ -47021,11 +48818,15 @@ scriptFailedToParse: function(sourceURL, source, startingLine, errorLine, errorM
 this._debuggerModel._failedToParseScriptSource(sourceURL, source, startingLine, errorLine, errorMessage);
 },
 
-breakpointResolved: function(breakpointId, sourceId, lineNumber, columnNumber)
+breakpointResolved: function(breakpointId, scriptId, lineNumber, columnNumber)
 {
-this._debuggerModel._breakpointResolved(breakpointId, sourceId, lineNumber, columnNumber);
+this._debuggerModel._breakpointResolved(breakpointId, scriptId, lineNumber, columnNumber);
 }
 }
+
+
+WebInspector.debuggerModel = null;
+
 
 
 
@@ -47033,32 +48834,29 @@ this._debuggerModel._breakpointResolved(breakpointId, sourceId, lineNumber, colu
 
 WebInspector.DebuggerPresentationModel = function()
 {
-this._sourceFiles = {};
-this._messages = [];
-this._anchors = [];
-this._breakpointsByDebuggerId = {};
-this._breakpointsWithoutSourceFile = {};
 
+this._formatter = new WebInspector.ScriptFormatter();
+this._rawSourceCode = {};
 this._presentationCallFrames = [];
 this._selectedCallFrameIndex = 0;
 
-WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.DebuggerWasEnabled, this._debuggerWasEnabled, this);
+this._breakpointManager = new WebInspector.BreakpointManager(WebInspector.settings.breakpoints, this._breakpointAdded.bind(this), this._breakpointRemoved.bind(this), WebInspector.debuggerModel);
+
 WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.ParsedScriptSource, this._parsedScriptSource, this);
 WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.FailedToParseScriptSource, this._failedToParseScriptSource, this);
-WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.BreakpointResolved, this._breakpointResolved, this);
 WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.DebuggerPaused, this._debuggerPaused, this);
 WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.DebuggerResumed, this._debuggerResumed, this);
 WebInspector.debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.Reset, this._debuggerReset, this);
 
-WebInspector.console.addEventListener(WebInspector.ConsoleView.Events.MessageAdded, this._consoleMessageAdded, this);
-WebInspector.console.addEventListener(WebInspector.ConsoleView.Events.ConsoleCleared, this._consoleCleared, this);
+WebInspector.console.addEventListener(WebInspector.ConsoleModel.Events.MessageAdded, this._consoleMessageAdded, this);
+WebInspector.console.addEventListener(WebInspector.ConsoleModel.Events.ConsoleCleared, this._consoleCleared, this);
 
 new WebInspector.DebuggerPresentationModelResourceBinding(this);
 }
 
 WebInspector.DebuggerPresentationModel.Events = {
-SourceFileAdded: "source-file-added",
-SourceFileChanged: "source-file-changed",
+UISourceCodeAdded: "source-file-added",
+UISourceCodeReplaced: "source-file-replaced",
 ConsoleMessageAdded: "console-message-added",
 ConsoleMessagesCleared: "console-messages-cleared",
 BreakpointAdded: "breakpoint-added",
@@ -47069,56 +48867,30 @@ CallFrameSelected: "call-frame-selected"
 }
 
 WebInspector.DebuggerPresentationModel.prototype = {
-_debuggerWasEnabled: function()
+linkifyLocation: function(sourceURL, lineNumber, columnNumber, classes)
 {
-if (this._breakpointsRestored)
-return;
-this._restoreBreakpointsFromSettings();
-this._breakpointsRestored = true;
-},
+var linkText = WebInspector.formatLinkText(sourceURL, lineNumber);
+var anchor = WebInspector.linkifyURLAsNode(sourceURL, linkText, classes, false);
 
-sourceFile: function(sourceFileId)
-{
-return this._sourceFiles[sourceFileId];
-},
-
-sourceFileForScriptURL: function(scriptURL)
-{
-return this._sourceFiles[this._createSourceFileId(scriptURL)];
-},
-
-scriptLocationToUILocation: function(sourceURL, sourceId, lineNumber, columnNumber, callback)
-{
-var sourceFile = this._sourceFileForScript(sourceURL, sourceId);
-var scriptLocation = { lineNumber: lineNumber, columnNumber: columnNumber };
-
-function didRequestSourceMapping(mapping)
-{
-var lineNumber = mapping.scriptLocationToSourceLine(scriptLocation);
-callback(sourceFile.id, lineNumber);
+var rawSourceCode = this._rawSourceCodeForScript(sourceURL);
+if (!rawSourceCode) {
+anchor.setAttribute("preferred_panel", "resources");
+anchor.setAttribute("line_number", lineNumber);
+return anchor;
 }
-sourceFile.requestSourceMapping(didRequestSourceMapping);
-},
 
-requestSourceFileContent: function(sourceFileId, callback)
+function updateAnchor()
 {
-this._sourceFiles[sourceFileId].requestContent(callback);
-},
-
-registerAnchor: function(sourceURL, sourceId, lineNumber, columnNumber, updateHandler)
-{
-var anchor = { sourceURL: sourceURL, sourceId: sourceId, lineNumber: lineNumber, columnNumber: columnNumber, updateHandler: updateHandler };
-this._anchors.push(anchor);
-this._updateAnchor(anchor);
-},
-
-_updateAnchor: function(anchor)
-{
-var sourceFile = this._sourceFileForScript(anchor.sourceURL, anchor.sourceId);
-if (!sourceFile)
-return;
-
-this.scriptLocationToUILocation(anchor.sourceURL, anchor.sourceId, anchor.lineNumber, anchor.columnNumber, anchor.updateHandler);
+var uiLocation = rawSourceCode.rawLocationToUILocation({ lineNumber: lineNumber, columnNumber: columnNumber });
+anchor.textContent = WebInspector.formatLinkText(uiLocation.uiSourceCode.url, uiLocation.lineNumber);
+anchor.setAttribute("preferred_panel", "scripts");
+anchor.uiSourceCode = uiLocation.uiSourceCode;
+anchor.lineNumber = uiLocation.lineNumber;
+}
+if (rawSourceCode.uiSourceCode)
+updateAnchor.call(this);
+rawSourceCode.addEventListener(WebInspector.RawSourceCode.Events.SourceMappingUpdated, updateAnchor, this);
+return anchor;
 },
 
 _parsedScriptSource: function(event)
@@ -47133,93 +48905,111 @@ this._addScript(event.data);
 
 _addScript: function(script)
 {
-var sourceFileId = this._createSourceFileId(script.sourceURL, script.sourceId);
-var sourceFile = this._sourceFiles[sourceFileId];
-if (sourceFile) {
-sourceFile.addScript(script);
+var rawSourceCodeId = this._createRawSourceCodeId(script.sourceURL, script.scriptId);
+var rawSourceCode = this._rawSourceCode[rawSourceCodeId];
+if (rawSourceCode) {
+rawSourceCode.addScript(script);
 return;
 }
 
-function contentChanged(sourceFile)
-{
-if (this._sourceFiles[sourceFileId] === sourceFile)
-this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.SourceFileChanged, this._sourceFiles[sourceFileId]);
-}
-if (!this._formatSourceFiles)
-sourceFile = new WebInspector.SourceFile(sourceFileId, script, contentChanged.bind(this));
-else
-sourceFile = new WebInspector.FormattedSourceFile(sourceFileId, script, contentChanged.bind(this), this._formatter());
-this._sourceFiles[sourceFileId] = sourceFile;
-
-this._restoreBreakpoints(sourceFile);
-
-this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.SourceFileAdded, sourceFile);
+var resource;
+if (script.sourceURL)
+resource = WebInspector.networkManager.inflightResourceForURL(script.sourceURL) || WebInspector.resourceForURL(script.sourceURL);
+rawSourceCode = new WebInspector.RawSourceCode(rawSourceCodeId, script, resource, this._formatter, this._formatSource);
+this._rawSourceCode[rawSourceCodeId] = rawSourceCode;
+if (rawSourceCode.uiSourceCode)
+this._updateSourceMapping(rawSourceCode, null);
+rawSourceCode.addEventListener(WebInspector.RawSourceCode.Events.SourceMappingUpdated, this._sourceMappingUpdated, this);
 },
 
-_restoreBreakpoints: function(sourceFile)
+_sourceMappingUpdated: function(event)
 {
-var pendingBreakpoints = this._breakpointsWithoutSourceFile[sourceFile.id];
-if (!pendingBreakpoints)
-return;
-for (var lineNumber in pendingBreakpoints) {
-var breakpointData = pendingBreakpoints[lineNumber];
-if ("debuggerId" in breakpointData) {
-var breakpoint = new WebInspector.PresentationBreakpoint(sourceFile, breakpointData.lineNumber, breakpointData.condition, breakpointData.enabled);
-this._bindDebuggerId(breakpoint, breakpointData.debuggerId);
-this._breakpointAdded(breakpoint);
-} else
-this.setBreakpoint(sourceFile.id, breakpointData.lineNumber, breakpointData.condition, breakpointData.enabled, true);
-}
-delete this._breakpointsWithoutSourceFile[sourceFile.id];
+var rawSourceCode = event.target;
+var oldUISourceCode = event.data.oldUISourceCode;
+this._updateSourceMapping(rawSourceCode, oldUISourceCode);
 },
 
-canEditScriptSource: function(sourceFileId)
+_updateSourceMapping: function(rawSourceCode, oldUISourceCode)
 {
-if (!Preferences.canEditScriptSource || this._formatSourceFiles)
+var uiSourceCode = rawSourceCode.uiSourceCode;
+
+if (oldUISourceCode) {
+var breakpoints = this._breakpointManager.breakpointsForUISourceCode(oldUISourceCode);
+for (var lineNumber in breakpoints) {
+var breakpoint = breakpoints[lineNumber];
+this._breakpointRemoved(breakpoint);
+delete breakpoint.uiSourceCode;
+}
+}
+
+this._restoreBreakpoints(uiSourceCode);
+this._restoreConsoleMessages(uiSourceCode);
+
+if (!oldUISourceCode)
+this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.UISourceCodeAdded, uiSourceCode);
+else {
+var eventData = { uiSourceCode: uiSourceCode, oldUISourceCode: oldUISourceCode };
+this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.UISourceCodeReplaced, eventData);
+}
+},
+
+_restoreBreakpoints: function(uiSourceCode)
+{
+this._breakpointManager.uiSourceCodeAdded(uiSourceCode);
+var breakpoints = this._breakpointManager.breakpointsForUISourceCode(uiSourceCode);
+for (var lineNumber in breakpoints)
+this._breakpointAdded(breakpoints[lineNumber]);
+},
+
+_restoreConsoleMessages: function(uiSourceCode)
+{
+var messages = uiSourceCode.rawSourceCode.messages;
+for (var i = 0; i < messages.length; ++i)
+messages[i]._presentationMessage = this._createPresentationMessage(messages[i], uiSourceCode);
+},
+
+canEditScriptSource: function(uiSourceCode)
+{
+if (!Preferences.canEditScriptSource || this._formatSource)
 return false;
-var script = this._scriptForSourceFileId(sourceFileId);
-return !script.lineOffset && !script.columnOffset;
+var rawSourceCode = uiSourceCode.rawSourceCode;
+var script = this._scriptForRawSourceCode(rawSourceCode);
+return script && !script.lineOffset && !script.columnOffset;
 },
 
-setScriptSource: function(sourceFileId, newSource, callback)
+setScriptSource: function(uiSourceCode, newSource, callback)
 {
-var script = this._scriptForSourceFileId(sourceFileId);
-var sourceFile = this._sourceFiles[sourceFileId];
+var rawSourceCode = uiSourceCode.rawSourceCode;
+var script = this._scriptForRawSourceCode(rawSourceCode);
 
-function didEditScriptSource(oldSource, error)
+function didEditScriptSource(error)
 {
-if (!error) {
-sourceFile.content = newSource;
+callback(error);
+if (error)
+return;
 
-var resource = WebInspector.resourceForURL(sourceFile.url);
+var resource = WebInspector.resourceForURL(rawSourceCode.url);
 if (resource)
 resource.addRevision(newSource);
-}
 
-callback(error);
+rawSourceCode.contentEdited();
 
-if (!error && WebInspector.debuggerModel.callFrames)
+if (WebInspector.debuggerModel.callFrames)
 this._debuggerPaused();
 }
-
-var oldSource = sourceFile.requestContent(didReceiveSource.bind(this));
-function didReceiveSource(oldSource)
-{
-WebInspector.debuggerModel.setScriptSource(script.sourceId, newSource, didEditScriptSource.bind(this, oldSource));
-}
+WebInspector.debuggerModel.setScriptSource(script.scriptId, newSource, didEditScriptSource.bind(this));
 },
 
-_updateBreakpointsAfterLiveEdit: function(sourceFileId, oldSource, newSource)
+_updateBreakpointsAfterLiveEdit: function(uiSourceCode, oldSource, newSource)
 {
-var sourceFile = this._sourceFiles[sourceFileId];
+var breakpoints = this._breakpointManager.breakpointsForUISourceCode(uiSourceCode);
 
 
 var diff = Array.diff(oldSource.split("\n"), newSource.split("\n"));
-for (var lineNumber in sourceFile.breakpoints) {
-var breakpoint = sourceFile.breakpoints[lineNumber];
+for (var lineNumber in breakpoints) {
+var breakpoint = breakpoints[lineNumber];
 
-var lineNumber = breakpoint.lineNumber;
-this.removeBreakpoint(sourceFileId, lineNumber);
+this.removeBreakpoint(uiSourceCode, lineNumber);
 
 var newLineNumber = diff.left[lineNumber].row;
 if (newLineNumber === undefined) {
@@ -47236,333 +49026,125 @@ break;
 }
 }
 if (newLineNumber !== undefined)
-this.setBreakpoint(sourceFileId, newLineNumber, breakpoint.condition, breakpoint.enabled);
+this.setBreakpoint(uiSourceCode, newLineNumber, breakpoint.condition, breakpoint.enabled);
 }
 },
 
-setFormatSourceFiles: function(formatSourceFiles)
+setFormatSource: function(formatSource)
 {
-if (this._formatSourceFiles === formatSourceFiles)
+if (this._formatSource === formatSource)
 return;
 
-this._formatSourceFiles = formatSourceFiles;
-
-for (var id in this._sourceFiles) {
-var sourceFile = this._sourceFiles[id];
-for (var line in sourceFile.breakpoints)
-this._removeBreakpointFromDebugger(sourceFile.breakpoints[line]);
-}
-
-for (var id in this._breakpointsWithoutSourceFile) {
-var breakpoints = this._breakpointsWithoutSourceFile[id];
-for (var lineNumber in breakpoints)
-this._removeBreakpointFromDebugger(breakpoints[lineNumber]);
-}
-
-var messages = this._messages;
-this._reset();
-
-var scripts = WebInspector.debuggerModel.scripts;
-for (var id in scripts)
-this._addScript(scripts[id]);
-
-for (var i = 0; i < messages.length; ++i)
-this._addConsoleMessage(messages[i]);
-
-for (var i = 0; i < this._anchors.length; ++i)
-this._updateAnchor(this._anchors[i]);
+this._formatSource = formatSource;
+this._breakpointManager.reset();
+for (var id in this._rawSourceCode)
+this._rawSourceCode[id].setFormatted(this._formatSource);
 
 if (WebInspector.debuggerModel.callFrames)
 this._debuggerPaused();
 },
 
-_formatter: function()
-{
-if (!this._scriptFormatter)
-this._scriptFormatter = new WebInspector.ScriptFormatter();
-return this._scriptFormatter;
-},
-
 _consoleMessageAdded: function(event)
 {
 var message = event.data;
-if (message.isErrorOrWarning() && message.message)
-this._addConsoleMessage(message);
-},
-
-_addConsoleMessage: function(message)
-{
-this._messages.push(message);
-
-var sourceFile = this._sourceFileForScript(message.url);
-if (!sourceFile)
+if (!message.url || !message.isErrorOrWarning() || !message.message)
 return;
 
-function didRequestSourceMapping(mapping)
-{
-var presentationMessage = {};
-presentationMessage.sourceFileId = sourceFile.id;
-presentationMessage.lineNumber = mapping.scriptLocationToSourceLine({lineNumber:message.line - 1, columnNumber:0});
-presentationMessage.originalMessage = message;
-sourceFile.messages.push(presentationMessage);
-this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.ConsoleMessageAdded, presentationMessage);
+var rawSourceCode = this._rawSourceCodeForScript(message.url);
+if (!rawSourceCode)
+return;
+
+rawSourceCode.messages.push(message);
+if (rawSourceCode.uiSourceCode) {
+message._presentationMessage = this._createPresentationMessage(message, rawSourceCode.uiSourceCode);
+this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.ConsoleMessageAdded, message._presentationMessage);
 }
-sourceFile.requestSourceMapping(didRequestSourceMapping.bind(this));
+},
+
+_createPresentationMessage: function(message, uiSourceCode)
+{
+
+var lineNumber = message.stackTrace ? message.stackTrace[0].lineNumber - 1 : message.line - 1;
+var columnNumber = message.stackTrace ? message.stackTrace[0].columnNumber - 1 : 0;
+var uiLocation = uiSourceCode.rawSourceCode.rawLocationToUILocation({ lineNumber: lineNumber, columnNumber: columnNumber });
+var presentationMessage = {};
+presentationMessage.uiSourceCode = uiLocation.uiSourceCode;
+presentationMessage.lineNumber = uiLocation.lineNumber;
+presentationMessage.originalMessage = message;
+return presentationMessage;
 },
 
 _consoleCleared: function()
 {
-this._messages = [];
-for (var id in this._sourceFiles)
-this._sourceFiles[id].messages = [];
+for (var id in this._rawSourceCode)
+this._rawSourceCode[id].messages = [];
 this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.ConsoleMessagesCleared);
 },
 
-continueToLine: function(sourceFileId, lineNumber)
+continueToLine: function(uiSourceCode, lineNumber)
 {
-function didRequestSourceMapping(mapping)
-{
-var location = mapping.sourceLineToScriptLocation(lineNumber);
-WebInspector.debuggerModel.continueToLocation(location);
-}
-this._sourceFiles[sourceFileId].requestSourceMapping(didRequestSourceMapping.bind(this));
+var rawLocation = uiSourceCode.rawSourceCode.uiLocationToRawLocation(lineNumber, 0);
+WebInspector.debuggerModel.continueToLocation(rawLocation);
 },
 
-breakpointsForSourceFileId: function(sourceFileId)
+breakpointsForUISourceCode: function(uiSourceCode)
 {
-var sourceFile = this.sourceFile(sourceFileId);
-if (!sourceFile)
-return [];
-var breakpoints = [];
-for (var lineNumber in sourceFile.breakpoints)
-breakpoints.push(sourceFile.breakpoints[lineNumber]);
-return breakpoints;
+var breakpointsMap = this._breakpointManager.breakpointsForUISourceCode(uiSourceCode);
+var breakpointsList = [];
+for (var lineNumber in breakpointsMap)
+breakpointsList.push(breakpointsMap[lineNumber]);
+return breakpointsList;
 },
 
-setBreakpoint: function(sourceFileId, lineNumber, condition, enabled, dontSaveBreakpoints)
+messagesForUISourceCode: function(uiSourceCode)
 {
-var sourceFile = this._sourceFiles[sourceFileId];
-if (!sourceFile)
-return;
-
-var breakpoint = new WebInspector.PresentationBreakpoint(sourceFile, lineNumber, condition, enabled);
-if (!enabled) {
-this._breakpointAdded(breakpoint);
-if (!dontSaveBreakpoints)
-this._saveBreakpoints();
-return;
-}
-
-function callback()
-{
-this._breakpointAdded(breakpoint);
-if (!dontSaveBreakpoints)
-this._saveBreakpoints();
-}
-this._setBreakpointInDebugger(breakpoint, callback.bind(this));
+var rawSourceCode = uiSourceCode.rawSourceCode;
+var messages = [];
+for (var i = 0; i < rawSourceCode.messages.length; ++i)
+messages.push(rawSourceCode.messages[i]._presentationMessage);
+return messages;
 },
 
-_setBreakpointInDebugger: function(breakpoint, callback)
+setBreakpoint: function(uiSourceCode, lineNumber, condition, enabled)
 {
-function didSetBreakpoint(breakpointId, locations)
-{
-if (!breakpointId)
-return;
-
-this._bindDebuggerId(breakpoint, breakpointId);
-breakpoint.location = locations[0];
-callback();
-}
-
-function didRequestSourceMapping(mapping)
-{
-var location = mapping.sourceLineToScriptLocation(breakpoint.lineNumber);
-var script = WebInspector.debuggerModel.scriptForSourceID(location.sourceId);
-if (script.sourceURL)
-WebInspector.debuggerModel.setBreakpoint(script.sourceURL, location.lineNumber, location.columnNumber, breakpoint.condition, didSetBreakpoint.bind(this));
-else {
-location.sourceId = script.sourceId;
-WebInspector.debuggerModel.setBreakpointBySourceId(location, breakpoint.condition, didSetBreakpoint.bind(this));
-}
-}
-breakpoint.sourceFile.requestSourceMapping(didRequestSourceMapping.bind(this));
+this._breakpointManager.setBreakpoint(uiSourceCode, lineNumber, condition, enabled);
 },
 
-_removeBreakpointFromDebugger: function(breakpoint, callback)
+setBreakpointEnabled: function(uiSourceCode, lineNumber, enabled)
 {
-if ("debuggerId" in breakpoint) {
-WebInspector.debuggerModel.removeBreakpoint(breakpoint.debuggerId);
-this._unbindDebuggerId(breakpoint);
-}
-
-if (callback)
-callback();
-},
-
-_bindDebuggerId: function(breakpoint, debuggerId)
-{
-breakpoint.debuggerId = debuggerId;
-this._breakpointsByDebuggerId[debuggerId] = breakpoint;
-},
-
-_unbindDebuggerId: function(breakpoint)
-{
-delete this._breakpointsByDebuggerId[breakpoint.debuggerId];
-delete breakpoint.debuggerId;
-},
-
-setBreakpointEnabled: function(sourceFileId, lineNumber, enabled)
-{
-var breakpoint = this.findBreakpoint(sourceFileId, lineNumber);
+var breakpoint = this.findBreakpoint(uiSourceCode, lineNumber);
 if (!breakpoint)
 return;
-
-this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.BreakpointRemoved, breakpoint);
-
-breakpoint.enabled = enabled;
-
-function afterUpdate()
-{
-this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.BreakpointAdded, breakpoint);
-this._saveBreakpoints();
-}
-
-if (!enabled)
-this._removeBreakpointFromDebugger(breakpoint, afterUpdate.call(this));
-else
-this._setBreakpointInDebugger(breakpoint, afterUpdate.bind(this));
+this._breakpointManager.removeBreakpoint(uiSourceCode, lineNumber);
+this._breakpointManager.setBreakpoint(uiSourceCode, lineNumber, breakpoint.condition, enabled);
 },
 
-updateBreakpoint: function(sourceFileId, lineNumber, condition, enabled)
+updateBreakpoint: function(uiSourceCode, lineNumber, condition, enabled)
 {
-this.removeBreakpoint(sourceFileId, lineNumber);
-this.setBreakpoint(sourceFileId, lineNumber, condition, enabled);
+this._breakpointManager.removeBreakpoint(uiSourceCode, lineNumber);
+this._breakpointManager.setBreakpoint(uiSourceCode, lineNumber, condition, enabled);
 },
 
-removeBreakpoint: function(sourceFileId, lineNumber)
+removeBreakpoint: function(uiSourceCode, lineNumber)
 {
-var breakpoint = this.findBreakpoint(sourceFileId, lineNumber);
-if (!breakpoint)
-return;
-
-function callback()
-{
-this._breakpointRemoved(breakpoint);
-this._saveBreakpoints();
-}
-this._removeBreakpointFromDebugger(breakpoint, callback.bind(this));
+this._breakpointManager.removeBreakpoint(uiSourceCode, lineNumber);
 },
 
-findBreakpoint: function(sourceFileId, lineNumber)
+findBreakpoint: function(uiSourceCode, lineNumber)
 {
-var sourceFile = this.sourceFile(sourceFileId);
-if (sourceFile)
-return sourceFile.breakpoints[lineNumber];
+return this._breakpointManager.breakpointsForUISourceCode(uiSourceCode)[lineNumber];
 },
 
 _breakpointAdded: function(breakpoint)
 {
-var sourceFile = breakpoint.sourceFile;
-if (!sourceFile)
-return;
-
-function didRequestSourceMapping(mapping)
-{
-
-if (breakpoint.location)
-breakpoint.lineNumber = mapping.scriptLocationToSourceLine(breakpoint.location);
-
-var existingBreakpoint = this.findBreakpoint(sourceFile.id, breakpoint.lineNumber);
-if (existingBreakpoint) {
-
-this._removeBreakpointFromDebugger(breakpoint);
-return;
-}
-sourceFile.breakpoints[breakpoint.lineNumber] = breakpoint;
+if (breakpoint.uiSourceCode)
 this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.BreakpointAdded, breakpoint);
-}
-sourceFile.requestSourceMapping(didRequestSourceMapping.bind(this));
 },
 
 _breakpointRemoved: function(breakpoint)
 {
-var sourceFile = breakpoint.sourceFile;
-if (sourceFile.breakpoints[breakpoint.lineNumber] === breakpoint) {
-
-delete sourceFile.breakpoints[breakpoint.lineNumber];
+if (breakpoint.uiSourceCode)
 this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.BreakpointRemoved, breakpoint);
-}
-},
-
-_breakpointResolved: function(event)
-{
-var debuggerId = event.data.breakpointId;
-if (!(debuggerId in this._breakpointsByDebuggerId))
-return;
-var breakpoint = this._breakpointsByDebuggerId[debuggerId];
-
-this._breakpointRemoved(breakpoint);
-breakpoint.location = event.data.location;
-this._breakpointAdded(breakpoint);
-},
-
-_restoreBreakpointsFromSettings: function()
-{
-var breakpoints = WebInspector.settings.breakpoints;
-for (var i = 0; i < breakpoints.length; ++i) {
-var breakpointData = breakpoints[i];
-var sourceFileId = breakpointData.sourceFileId;
-if (!sourceFileId)
-continue;
-var sourceFile = this._sourceFiles[sourceFileId];
-if (sourceFile) {
-this.setBreakpoint(sourceFileId, breakpointData.lineNumber, breakpointData.condition, breakpointData.enabled);
-continue;
-}
-
-
-var pendingBreakpoints = this._breakpointsWithoutSourceFile[sourceFileId];
-if (!pendingBreakpoints) {
-pendingBreakpoints = {};
-this._breakpointsWithoutSourceFile[sourceFileId] = pendingBreakpoints;
-}
-pendingBreakpoints[breakpointData.lineNumber] = breakpointData;
-}
-},
-
-_saveBreakpoints: function()
-{
-var serializedBreakpoints = [];
-
-
-for (var sourceFileId in this._sourceFiles) {
-var sourceFile = this._sourceFiles[sourceFileId];
-if (!sourceFile.url)
-continue;
-
-for (var lineNumber in sourceFile.breakpoints)
-serializedBreakpoints.push(sourceFile.breakpoints[lineNumber].serialize());
-}
-
-
-for (var sourceFileId in this._breakpointsWithoutSourceFile) {
-var breakpoints = this._breakpointsWithoutSourceFile[sourceFileId];
-for (var lineNumber in breakpoints)
-serializedBreakpoints.push(breakpoints[lineNumber]);
-}
-
-
-for (var i = 0; i < serializedBreakpoints.length; ++i) {
-var breakpoint = serializedBreakpoints[i];
-var breakpointCopy = {};
-for (var property in breakpoint) {
-if (property !== "debuggerId")
-breakpointCopy[property] = breakpoint[property];
-}
-serializedBreakpoints[i] = breakpointCopy;
-}
-
-WebInspector.settings.breakpoints = serializedBreakpoints;
 },
 
 _debuggerPaused: function()
@@ -47571,11 +49153,11 @@ var callFrames = WebInspector.debuggerModel.callFrames;
 this._presentationCallFrames = [];
 for (var i = 0; i < callFrames.length; ++i) {
 var callFrame = callFrames[i];
-var sourceFile;
-var script = WebInspector.debuggerModel.scriptForSourceID(callFrame.location.sourceId);
+var rawSourceCode;
+var script = WebInspector.debuggerModel.scriptForSourceID(callFrame.location.scriptId);
 if (script)
-sourceFile = this._sourceFileForScript(script.sourceURL, script.sourceId);
-this._presentationCallFrames.push(new WebInspector.PresenationCallFrame(callFrame, i, sourceFile));
+rawSourceCode = this._rawSourceCodeForScript(script.sourceURL, script.scriptId);
+this._presentationCallFrames.push(new WebInspector.PresentationCallFrame(callFrame, i, this, rawSourceCode));
 }
 var details = WebInspector.debuggerModel.debuggerPausedDetails;
 this.dispatchEventToListeners(WebInspector.DebuggerPresentationModel.Events.DebuggerPaused, { callFrames: this._presentationCallFrames, details: details });
@@ -47602,115 +49184,53 @@ get selectedCallFrame()
 return this._presentationCallFrames[this._selectedCallFrameIndex];
 },
 
-_sourceFileForScript: function(sourceURL, sourceId)
+_rawSourceCodeForScript: function(sourceURL, scriptId)
 {
-return this._sourceFiles[this._createSourceFileId(sourceURL, sourceId)];
+if (!sourceURL) {
+var script = WebInspector.debuggerModel.scriptForSourceID(scriptId);
+if (!script)
+return;
+sourceURL = script.sourceURL;
+}
+return this._rawSourceCode[this._createRawSourceCodeId(sourceURL, scriptId)];
 },
 
-_scriptForSourceFileId: function(sourceFileId)
+_scriptForRawSourceCode: function(rawSourceCode)
 {
 function filter(script)
 {
-return this._createSourceFileId(script.sourceURL, script.sourceId) === sourceFileId;
+return this._createRawSourceCodeId(script.sourceURL, script.scriptId) === rawSourceCode.id;
 }
 return WebInspector.debuggerModel.queryScripts(filter.bind(this))[0];
 },
 
-_createSourceFileId: function(sourceURL, sourceId)
+_createRawSourceCodeId: function(sourceURL, scriptId)
 {
-var prefix = this._formatSourceFiles ? "deobfuscated:" : "";
-return prefix + (sourceURL || sourceId);
-},
-
-_reset: function()
-{
-for (var id in this._sourceFiles) {
-var sourceFile = this._sourceFiles[id];
-for (var line in sourceFile.breakpoints) {
-var breakpoints = this._breakpointsWithoutSourceFile[sourceFile.id];
-if (!breakpoints) {
-breakpoints = {};
-this._breakpointsWithoutSourceFile[sourceFile.id] = breakpoints;
-}
-breakpoints[line] = sourceFile.breakpoints[line].serialize();
-}
-}
-
-this._sourceFiles = {};
-this._messages = [];
-this._breakpointsByDebuggerId = {};
+return sourceURL || scriptId;
 },
 
 _debuggerReset: function()
 {
-this._reset();
-this._anchors = [];
+this._rawSourceCode = {};
 this._presentationCallFrames = [];
 this._selectedCallFrameIndex = 0;
+this._breakpointManager.debuggerReset();
 }
 }
 
 WebInspector.DebuggerPresentationModel.prototype.__proto__ = WebInspector.Object.prototype;
 
-WebInspector.PresentationBreakpoint = function(sourceFile, lineNumber, condition, enabled)
-{
-this.sourceFile = sourceFile;
-this.sourceFileId = sourceFile.id;
-this.lineNumber = lineNumber;
-this.condition = condition;
-this.enabled = enabled;
-}
 
-WebInspector.PresentationBreakpoint.prototype = {
-get url()
-{
-return this.sourceFile.url;
-},
-
-get resolved()
-{
-return !!this.location;
-},
-
-loadSnippet: function(callback)
-{
-function didRequestContent(mimeType, content)
-{
-var lineEndings = content.lineEndings();
-var snippet = "";
-if (this.lineNumber < lineEndings.length)
-snippet = content.substring(lineEndings[this.lineNumber - 1], lineEndings[this.lineNumber]);
-callback(snippet);
-}
-if (!this.sourceFile) {
-callback(WebInspector.UIString("N/A"));
-return;
-}
-this.sourceFile.requestContent(didRequestContent.bind(this));
-},
-
-serialize: function()
-{
-var serializedBreakpoint = {};
-serializedBreakpoint.sourceFileId = this.sourceFile.id;
-serializedBreakpoint.lineNumber = this.lineNumber;
-serializedBreakpoint.condition = this.condition;
-serializedBreakpoint.enabled = this.enabled;
-if ("debuggerId" in this)
-serializedBreakpoint.debuggerId = this.debuggerId;
-return serializedBreakpoint;
-}
-}
-
-WebInspector.PresenationCallFrame = function(callFrame, index, sourceFile)
+WebInspector.PresentationCallFrame = function(callFrame, index, model, rawSourceCode)
 {
 this._callFrame = callFrame;
 this._index = index;
-this._sourceFile = sourceFile;
-this._script = WebInspector.debuggerModel.scriptForSourceID(callFrame.location.sourceId);
+this._model = model;
+this._rawSourceCode = rawSourceCode;
+this._script = WebInspector.debuggerModel.scriptForSourceID(callFrame.location.scriptId);
 }
 
-WebInspector.PresenationCallFrame.prototype = {
+WebInspector.PresentationCallFrame.prototype = {
 get functionName()
 {
 return this._callFrame.functionName;
@@ -47728,8 +49248,8 @@ return !this._script;
 
 get url()
 {
-if (this._sourceFile)
-return this._sourceFile.url;
+if (this._rawSourceCode && this._rawSourceCode.uiSourceCode)
+return this._rawSourceCode.uiSourceCode.url;
 },
 
 get scopeChain()
@@ -47749,33 +49269,52 @@ return this._index;
 
 select: function()
 {
-if (this._sourceFile)
-this._sourceFile.forceLoadContent(this._script);
+if (this._rawSourceCode)
+this._rawSourceCode.forceUpdateSourceMapping();
 },
 
-evaluate: function(code, objectGroup, includeCommandLineAPI, callback)
+evaluate: function(code, objectGroup, includeCommandLineAPI, returnByValue, callback)
 {
 function didEvaluateOnCallFrame(error, result, wasThrown)
 {
+if (error) {
+console.error(error);
+callback(null);
+return;
+}
+
+if (returnByValue && !wasThrown)
+callback(result, wasThrown);
+else
 callback(WebInspector.RemoteObject.fromPayload(result), wasThrown);
 }
-DebuggerAgent.evaluateOnCallFrame(this._callFrame.id, code, objectGroup, includeCommandLineAPI, didEvaluateOnCallFrame.bind(this));
+DebuggerAgent.evaluateOnCallFrame(this._callFrame.callFrameId, code, objectGroup, includeCommandLineAPI, returnByValue, didEvaluateOnCallFrame.bind(this));
 },
 
 sourceLine: function(callback)
 {
-if (!this._sourceFile) {
-callback(undefined, this._callFrame.location.lineNumber);
+var rawLocation = this._callFrame.location;
+if (!this._rawSourceCode) {
+callback(undefined, rawLocation.lineNumber);
 return;
 }
 
-function didRequestSourceMapping(mapping)
+if (this._rawSourceCode.uiSourceCode) {
+var uiLocation = this._rawSourceCode.rawLocationToUILocation(rawLocation);
+callback(uiLocation.uiSourceCode, uiLocation.lineNumber);
+return;
+}
+
+function sourceMappingUpdated()
 {
-callback(this._sourceFile.id, mapping.scriptLocationToSourceLine(this._callFrame.location));
+this._rawSourceCode.removeEventListener(WebInspector.RawSourceCode.Events.SourceMappingUpdated, sourceMappingUpdated, this);
+var uiLocation = this._rawSourceCode.rawLocationToUILocation(rawLocation);
+callback(uiLocation.uiSourceCode, uiLocation.lineNumber);
 }
-this._sourceFile.requestSourceMapping(didRequestSourceMapping.bind(this));
+this._rawSourceCode.addEventListener(WebInspector.RawSourceCode.Events.SourceMappingUpdated, sourceMappingUpdated, this);
 }
 }
+
 
 WebInspector.DebuggerPresentationModelResourceBinding = function(model)
 {
@@ -47786,10 +49325,10 @@ WebInspector.Resource.registerDomainModelBinding(WebInspector.Resource.Type.Scri
 WebInspector.DebuggerPresentationModelResourceBinding.prototype = {
 canSetContent: function(resource)
 {
-var sourceFile = this._presentationModel._sourceFileForScript(resource.url)
-if (!sourceFile)
+var rawSourceCode = this._presentationModel._rawSourceCodeForScript(resource.url)
+if (!rawSourceCode)
 return false;
-return this._presentationModel.canEditScriptSource(sourceFile.id);
+return this._presentationModel.canEditScriptSource(rawSourceCode.uiSourceCode);
 },
 
 setContent: function(resource, content, majorChange, userCallback)
@@ -47797,58 +49336,320 @@ setContent: function(resource, content, majorChange, userCallback)
 if (!majorChange)
 return;
 
-var sourceFile = this._presentationModel._sourceFileForScript(resource.url);
-if (!sourceFile) {
+var rawSourceCode = this._presentationModel._rawSourceCodeForScript(resource.url);
+if (!rawSourceCode) {
 userCallback("Resource is not editable");
 return;
 }
 
-resource.requestContent(this._setContentWithInitialContent.bind(this, sourceFile, content, userCallback));
+resource.requestContent(this._setContentWithInitialContent.bind(this, rawSourceCode.uiSourceCode, content, userCallback));
 },
 
-_setContentWithInitialContent: function(sourceFile, content, userCallback, oldContent)
+_setContentWithInitialContent: function(uiSourceCode, content, userCallback, oldContent)
 {
 function callback(error)
 {
 if (userCallback)
 userCallback(error);
-if (!error) {
-this._presentationModel._updateBreakpointsAfterLiveEdit(sourceFile.id, oldContent, content);
-sourceFile.reload();
+if (!error)
+this._presentationModel._updateBreakpointsAfterLiveEdit(uiSourceCode, oldContent, content);
 }
-}
-this._presentationModel.setScriptSource(sourceFile.id, content, callback.bind(this));
+this._presentationModel.setScriptSource(uiSourceCode, content, callback.bind(this));
 }
 }
 
 WebInspector.DebuggerPresentationModelResourceBinding.prototype.__proto__ = WebInspector.ResourceDomainModelBinding.prototype;
 
 
+WebInspector.debuggerPresentationModel = null;
 
 
 
-WebInspector.SourceFile = function(id, script, contentChangedDelegate)
+
+
+
+WebInspector.BreakpointManager = function(breakpointStorage, breakpointAddedDelegate, breakpointRemovedDelegate, debuggerModel)
 {
-this._scripts = [script];
-this._contentChangedDelegate = contentChangedDelegate;
-if (script.sourceURL)
-this._resource = WebInspector.networkManager.inflightResourceForURL(script.sourceURL) || WebInspector.resourceForURL(script.sourceURL);
-this._requestContentCallbacks = [];
+this._breakpointStorage = breakpointStorage;
+this._breakpointAddedDelegate = breakpointAddedDelegate;
+this._breakpointRemovedDelegate = breakpointRemovedDelegate;
+this._breakpointsByUILocation = {};
 
-this.id = id;
-this.url = script.sourceURL;
-this.isContentScript = script.isContentScript;
-this.messages = [];
-this.breakpoints = {};
+this._debuggerModel = debuggerModel;
+this._breakpointsByDebuggerId = {};
+this._debuggerModel.addEventListener(WebInspector.DebuggerModel.Events.BreakpointResolved, this._breakpointResolved, this);
 
-if (this._hasPendingResource())
-this._resource.addEventListener("finished", this.reload.bind(this));
+var breakpoints = this._breakpointStorage.get();
+for (var i = 0; i < breakpoints.length; ++i) {
+var breakpoint = WebInspector.Breakpoint.deserialize(breakpoints[i]);
+if (!this._breakpoint(breakpoint.uiSourceCodeId, breakpoint.lineNumber))
+this._addBreakpointToUI(breakpoint);
+}
 }
 
-WebInspector.SourceFile.prototype = {
-addScript: function(script)
+WebInspector.BreakpointManager.prototype = {
+uiSourceCodeAdded: function(uiSourceCode)
 {
-this._scripts.push(script);
+var breakpoints = this._breakpoints(uiSourceCode.id);
+for (var lineNumber in breakpoints) {
+var breakpoint = breakpoints[lineNumber];
+breakpoint.uiSourceCode = uiSourceCode;
+this._materializeBreakpoint(breakpoint);
+if (breakpoint._debuggerLocation)
+this._breakpointDebuggerLocationChanged(breakpoint, breakpoint._debuggerLocation);
+}
+},
+
+breakpointsForUISourceCode: function(uiSourceCode)
+{
+return this._breakpoints(uiSourceCode.id);
+},
+
+setBreakpoint: function(uiSourceCode, lineNumber, condition, enabled)
+{
+if (this._breakpoint(uiSourceCode.id, lineNumber))
+return;
+
+var persistent = !!uiSourceCode.url;
+var breakpoint = new WebInspector.Breakpoint(uiSourceCode.id, lineNumber, condition, enabled, persistent);
+breakpoint.uiSourceCode = uiSourceCode;
+this._addBreakpointToUI(breakpoint);
+this._materializeBreakpoint(breakpoint);
+},
+
+removeBreakpoint: function(uiSourceCode, lineNumber)
+{
+var breakpoint = this._breakpoint(uiSourceCode.id, lineNumber);
+if (!breakpoint)
+return;
+this._deleteBreakpointFromUI(breakpoint);
+this._removeBreakpointFromDebugger(breakpoint);
+},
+
+_materializeBreakpoint: function(breakpoint)
+{
+if (!breakpoint.enabled || breakpoint._materialized)
+return;
+
+breakpoint._materialized = true;
+var rawLocation = breakpoint.uiSourceCode.rawSourceCode.uiLocationToRawLocation(breakpoint.lineNumber, 0);
+this._setBreakpointInDebugger(breakpoint, rawLocation);
+},
+
+_breakpointDebuggerLocationChanged: function(breakpoint)
+{
+if (!breakpoint.uiSourceCode)
+return;
+var uiLocation = breakpoint.uiSourceCode.rawSourceCode.rawLocationToUILocation(breakpoint._debuggerLocation);
+if (uiLocation.lineNumber === breakpoint.lineNumber)
+return;
+
+if (!this._moveBreakpointInUI(breakpoint, uiLocation.lineNumber))
+this._removeBreakpointFromDebugger(breakpoint);
+},
+
+_addBreakpointToUI: function(breakpoint)
+{
+console.assert(!this._breakpoint(breakpoint.uiSourceCodeId, breakpoint.lineNumber));
+this._breakpoints(breakpoint.uiSourceCodeId)[breakpoint.lineNumber] = breakpoint;
+this._saveBreakpoints();
+this._breakpointAddedDelegate(breakpoint);
+},
+
+_deleteBreakpointFromUI: function(breakpoint)
+{
+console.assert(this._breakpoint(breakpoint.uiSourceCodeId, breakpoint.lineNumber) === breakpoint);
+delete this._breakpoints(breakpoint.uiSourceCodeId)[breakpoint.lineNumber];
+this._saveBreakpoints();
+this._breakpointRemovedDelegate(breakpoint);
+},
+
+_moveBreakpointInUI: function(breakpoint, lineNumber)
+{
+this._deleteBreakpointFromUI(breakpoint);
+if (this._breakpoint(breakpoint.uiSourceCodeId, lineNumber))
+return false;
+breakpoint.lineNumber = lineNumber;
+this._addBreakpointToUI(breakpoint);
+return true;
+},
+
+_breakpoints: function(uiSourceCodeId)
+{
+if (!this._breakpointsByUILocation[uiSourceCodeId])
+this._breakpointsByUILocation[uiSourceCodeId] = {};
+return this._breakpointsByUILocation[uiSourceCodeId];
+},
+
+_breakpoint: function(uiSourceCodeId, lineNumber)
+{
+return this._breakpoints(uiSourceCodeId)[lineNumber];
+},
+
+_forEachBreakpoint: function(handler)
+{
+for (var uiSourceCodeId in this._breakpointsByUILocation) {
+var breakpoints = this._breakpointsByUILocation[uiSourceCodeId];
+for (var lineNumber in breakpoints)
+handler(breakpoints[lineNumber]);
+}
+},
+
+_setBreakpointInDebugger: function(breakpoint, rawLocation)
+{
+function didSetBreakpoint(breakpointId, locations)
+{
+if (breakpoint === this._breakpoint(breakpoint.uiSourceCodeId, breakpoint.lineNumber)) {
+if (!breakpointId) {
+this._deleteBreakpointFromUI(breakpoint);
+return;
+}
+} else {
+if (breakpointId)
+this._debuggerModel.removeBreakpoint(breakpointId);
+return;
+}
+
+this._breakpointsByDebuggerId[breakpointId] = breakpoint;
+breakpoint._debuggerId = breakpointId;
+breakpoint._debuggerLocation = locations[0];
+if (breakpoint._debuggerLocation)
+this._breakpointDebuggerLocationChanged(breakpoint);
+}
+this._debuggerModel.setBreakpointByScriptLocation(rawLocation, breakpoint.condition, didSetBreakpoint.bind(this));
+},
+
+_removeBreakpointFromDebugger: function(breakpoint)
+{
+if (!("_debuggerId" in breakpoint))
+return;
+this._debuggerModel.removeBreakpoint(breakpoint._debuggerId);
+delete this._breakpointsByDebuggerId[breakpoint._debuggerId];
+delete breakpoint._debuggerId;
+delete breakpoint._debuggerLocation;
+},
+
+_breakpointResolved: function(event)
+{
+var breakpoint = this._breakpointsByDebuggerId[event.data.breakpointId];
+breakpoint._debuggerLocation = event.data.location;
+this._breakpointDebuggerLocationChanged(breakpoint);
+},
+
+_saveBreakpoints: function()
+{
+var serializedBreakpoints = [];
+function serializePersistent(breakpoint)
+{
+if (breakpoint.persistent)
+serializedBreakpoints.push(breakpoint.serialize());
+}
+this._forEachBreakpoint(serializePersistent.bind(this));
+this._breakpointStorage.set(serializedBreakpoints);
+},
+
+reset: function()
+{
+function resetBreakpoint(breakpoint)
+{
+this._removeBreakpointFromDebugger(breakpoint);
+delete breakpoint._materialized;
+}
+this._forEachBreakpoint(resetBreakpoint.bind(this));
+},
+
+debuggerReset: function()
+{
+function resetOrDeleteBreakpoint(breakpoint)
+{
+if (breakpoint.persistent) {
+delete breakpoint.uiSourceCode;
+delete breakpoint._debuggerLocation;
+} else {
+this._deleteBreakpointFromUI(breakpoint);
+delete this._breakpointsByDebuggerId[breakpoint._debuggerId];
+}
+}
+this._forEachBreakpoint(resetOrDeleteBreakpoint.bind(this));
+
+for (var id in this._breakpointsByUILocation) {
+var empty = true;
+for (var lineNumber in this._breakpointsByUILocation[id]) {
+empty = false;
+break;
+}
+if (empty)
+delete this._breakpointsByUILocation[id];
+}
+}
+}
+
+
+WebInspector.Breakpoint = function(uiSourceCodeId, lineNumber, condition, enabled, persistent)
+{
+this.uiSourceCodeId = uiSourceCodeId;
+this.lineNumber = lineNumber;
+this.condition = condition;
+this.enabled = enabled;
+this.persistent = persistent;
+}
+
+WebInspector.Breakpoint.prototype = {
+serialize: function()
+{
+var serializedBreakpoint = {};
+serializedBreakpoint.sourceFileId = this.uiSourceCodeId;
+serializedBreakpoint.lineNumber = this.lineNumber;
+serializedBreakpoint.condition = this.condition;
+serializedBreakpoint.enabled = this.enabled;
+return serializedBreakpoint;
+}
+}
+
+WebInspector.Breakpoint.deserialize = function(serializedBreakpoint)
+{
+return new WebInspector.Breakpoint(
+serializedBreakpoint.sourceFileId,
+serializedBreakpoint.lineNumber,
+serializedBreakpoint.condition,
+serializedBreakpoint.enabled,
+true);
+}
+
+
+
+
+
+
+WebInspector.UISourceCode = function(id, url, isContentScript, rawSourceCode, contentProvider)
+{
+this._id = id;
+this._url = url;
+this._isContentScript = isContentScript;
+this._rawSourceCode = rawSourceCode;
+this._contentProvider = contentProvider;
+this._requestContentCallbacks = [];
+}
+
+WebInspector.UISourceCode.prototype = {
+get id()
+{
+return this._id;
+},
+
+get url()
+{
+return this._url;
+},
+
+get isContentScript()
+{
+return this._isContentScript;
+},
+
+get rawSourceCode()
+{
+return this._rawSourceCode;
 },
 
 requestContent: function(callback)
@@ -47859,95 +49660,284 @@ return;
 }
 
 this._requestContentCallbacks.push(callback);
-this._requestContent();
+if (this._requestContentCallbacks.length === 1)
+this._contentProvider.requestContent(this._didRequestContent.bind(this));
 },
 
-get content()
+_didRequestContent: function(mimeType, content)
 {
-return this._content;
-},
-
-set content(content)
-{
-
+this._contentLoaded = true;
+this._mimeType = mimeType;
 this._content = content;
-},
 
-requestSourceMapping: function(callback)
-{
-if (!this._mapping)
-this._mapping = new WebInspector.SourceMapping(this._scripts);
-callback(this._mapping);
-},
-
-forceLoadContent: function(script)
-{
-if (!this._hasPendingResource())
-return;
-
-if (!this._concatenatedScripts)
-this._concatenatedScripts = {};
-if (this._concatenatedScripts[script.sourceId])
-return;
-for (var i = 0; i < this._scripts.length; ++i)
-this._concatenatedScripts[this._scripts[i].sourceId] = true;
-
-this.reload();
-
-if (!this._contentRequested) {
-this._contentRequested = true;
-this._loadAndConcatenateScriptsContent();
+for (var i = 0; i < this._requestContentCallbacks.length; ++i)
+this._requestContentCallbacks[i](mimeType, content);
 }
+}
+
+
+WebInspector.ContentProvider = function() { }
+WebInspector.ContentProvider.prototype = {
+requestContent: function(callback) { }
+}
+
+
+
+
+
+
+
+
+
+WebInspector.RawSourceCode = function(id, script, resource, formatter, formatted)
+{
+this.id = id;
+this.url = script.sourceURL;
+this.isContentScript = script.isContentScript;
+this._scripts = [script];
+this._formatter = formatter;
+this._formatted = formatted;
+this._resource = resource;
+this.messages = [];
+
+this._useTemporaryContent = this._resource && !this._resource.finished;
+this._hasNewScripts = true;
+if (!this._useTemporaryContent)
+this._updateSourceMapping();
+else if (this._resource)
+this._resource.addEventListener("finished", this._resourceFinished.bind(this));
+}
+
+WebInspector.RawSourceCode.Events = {
+SourceMappingUpdated: "source-mapping-updated"
+}
+
+WebInspector.RawSourceCode.prototype = {
+addScript: function(script)
+{
+this._scripts.push(script);
+this._hasNewScripts = true;
 },
 
-reload: function()
+get uiSourceCode()
 {
-if (this._contentLoaded) {
-this._contentLoaded = false;
-this._contentChangedDelegate(this);
-} else if (this._contentRequested)
-this._reloadContent = true;
-else if (this._requestContentCallbacks.length)
-this._requestContent();
+
+return this._sourceMapping && this._sourceMapping.uiSourceCode;
 },
 
-_requestContent: function()
+setFormatted: function(formatted)
 {
-if (this._contentRequested)
+if (this._formatted === formatted)
 return;
+this._formatted = formatted;
+this._updateSourceMapping();
+},
 
-this._contentRequested = true;
-if (this._resource && this._resource.finished)
-this._loadResourceContent(this._resource);
-else if (!this._resource)
-this._loadScriptContent();
-else if (this._concatenatedScripts)
-this._loadAndConcatenateScriptsContent();
+contentEdited: function()
+{
+this._updateSourceMapping();
+},
+
+_resourceFinished: function()
+{
+this._useTemporaryContent = false;
+this._updateSourceMapping();
+},
+
+rawLocationToUILocation: function(rawLocation)
+{
+
+return this._sourceMapping.rawLocationToUILocation(rawLocation);
+},
+
+uiLocationToRawLocation: function(lineNumber, columnNumber)
+{
+
+return this._sourceMapping.uiLocationToRawLocation(lineNumber, columnNumber);
+},
+
+_scriptForRawLocation: function(lineNumber, columnNumber)
+{
+var closestScript = this._scripts[0];
+for (var i = 1; i < this._scripts.length; ++i) {
+var script = this._scripts[i];
+if (script.lineOffset > lineNumber || (script.lineOffset === lineNumber && script.columnOffset > columnNumber))
+continue;
+if (script.lineOffset > closestScript.lineOffset ||
+(script.lineOffset === closestScript.lineOffset && script.columnOffset > closestScript.columnOffset))
+closestScript = script;
+}
+return closestScript;
+},
+
+forceUpdateSourceMapping: function(script)
+{
+if (!this._useTemporaryContent || !this._hasNewScripts)
+return;
+this._hasNewScripts = false;
+this._updateSourceMapping();
+},
+
+_updateSourceMapping: function()
+{
+if (this._updatingSourceMapping) {
+this._updateNeeded = true;
+return;
+}
+this._updatingSourceMapping = true;
+this._updateNeeded = false;
+
+var originalContentProvider = this._createContentProvider();
+this._createSourceMapping(originalContentProvider, didCreateSourceMapping.bind(this));
+
+function didCreateSourceMapping(contentProvider, mapping)
+{
+this._updatingSourceMapping = false;
+if (!this._updateNeeded)
+this._saveSourceMapping(contentProvider, mapping);
 else
-this._contentRequested = false;
+this._updateSourceMapping();
+}
 },
 
-_loadResourceContent: function(resource)
+_createContentProvider: function()
 {
-function didRequestContent(text)
+if (this._resource && this._resource.finished)
+return new WebInspector.ResourceContentProvider(this._resource);
+if (this._scripts.length === 1 && !this._scripts[0].lineOffset && !this._scripts[0].columnOffset)
+return new WebInspector.ScriptContentProvider(this._scripts[0]);
+return new WebInspector.ConcatenatedScriptsContentProvider(this._scripts);
+},
+
+_createSourceMapping: function(originalContentProvider, callback)
 {
-if (!text) {
-this._loadAndConcatenateScriptsContent();
+if (!this._formatted) {
+var uiSourceCode = new WebInspector.UISourceCode(this.id, this.url, this.isContentScript, this, originalContentProvider);
+var sourceMapping = new WebInspector.RawSourceCode.PlainSourceMapping(this, uiSourceCode);
+callback(sourceMapping);
 return;
 }
 
-var mimeType = resource.type === WebInspector.Resource.Type.Script ? "text/javascript" : "text/html";
-this._didRequestContent(mimeType, text);
-}
-resource.requestContent(didRequestContent.bind(this));
-},
-
-_loadScriptContent: function()
+function didRequestContent(mimeType, content)
 {
-this._scripts[0].requestSource(this._didRequestContent.bind(this, "text/javascript"));
+function didFormatContent(formattedContent, mapping)
+{
+var contentProvider = new WebInspector.StaticContentProvider(mimeType, formattedContent)
+var uiSourceCode = new WebInspector.UISourceCode("deobfuscated:" + this.id, this.url, this.isContentScript, this, contentProvider);
+var sourceMapping = new WebInspector.RawSourceCode.FormattedSourceMapping(this, uiSourceCode, mapping);
+callback(sourceMapping);
+}
+this._formatter.formatContent(mimeType, content, didFormatContent.bind(this));
+}
+originalContentProvider.requestContent(didRequestContent.bind(this));
 },
 
-_loadAndConcatenateScriptsContent: function()
+_saveSourceMapping: function(sourceMapping)
+{
+var oldUISourceCode;
+if (this._sourceMapping)
+oldUISourceCode = this._sourceMapping.uiSourceCode;
+this._sourceMapping = sourceMapping;
+this.dispatchEventToListeners(WebInspector.RawSourceCode.Events.SourceMappingUpdated, { oldUISourceCode: oldUISourceCode });
+}
+}
+
+WebInspector.RawSourceCode.prototype.__proto__ = WebInspector.Object.prototype;
+
+
+
+WebInspector.RawSourceCode.PlainSourceMapping = function(rawSourceCode, uiSourceCode)
+{
+this._rawSourceCode = rawSourceCode;
+this._uiSourceCode = uiSourceCode;
+}
+
+WebInspector.RawSourceCode.PlainSourceMapping.prototype = {
+rawLocationToUILocation: function(rawLocation)
+{
+return new WebInspector.UILocation(this._uiSourceCode, rawLocation.lineNumber, rawLocation.columnNumber);
+},
+
+uiLocationToRawLocation: function(lineNumber, columnNumber)
+{
+var rawLocation = { lineNumber: lineNumber, columnNumber: columnNumber };
+rawLocation.scriptId = this._rawSourceCode._scriptForRawLocation(rawLocation.lineNumber, rawLocation.columnNumber).scriptId;
+return rawLocation;
+},
+
+get uiSourceCode()
+{
+return this._uiSourceCode;
+}
+}
+
+
+WebInspector.RawSourceCode.FormattedSourceMapping = function(rawSourceCode, uiSourceCode, mapping)
+{
+this._rawSourceCode = rawSourceCode;
+this._uiSourceCode = uiSourceCode;
+this._mapping = mapping;
+}
+
+WebInspector.RawSourceCode.FormattedSourceMapping.prototype = {
+rawLocationToUILocation: function(rawLocation)
+{
+var location = this._mapping.originalToFormatted(rawLocation);
+return new WebInspector.UILocation(this._uiSourceCode, location.lineNumber, location.columnNumber);
+},
+
+uiLocationToRawLocation: function(lineNumber, columnNumber)
+{
+var rawLocation = this._mapping.formattedToOriginal({ lineNumber: lineNumber, columnNumber: columnNumber });
+rawLocation.scriptId = this._rawSourceCode._scriptForRawLocation(rawLocation.lineNumber, rawLocation.columnNumber).scriptId;
+return rawLocation;
+},
+
+get uiSourceCode()
+{
+return this._uiSourceCode;
+}
+}
+
+
+
+WebInspector.UILocation = function(uiSourceCode, lineNumber, columnNumber)
+{
+this.uiSourceCode = uiSourceCode;
+this.lineNumber = lineNumber;
+this.columnNumber = columnNumber;
+}
+
+
+
+WebInspector.ScriptContentProvider = function(script)
+{
+this._mimeType = "text/javascript";
+this._script = script;
+};
+
+WebInspector.ScriptContentProvider.prototype = {
+requestContent: function(callback)
+{
+function didRequestSource(source)
+{
+callback(this._mimeType, source);
+}
+this._script.requestSource(didRequestSource.bind(this));
+}
+}
+
+WebInspector.ScriptContentProvider.prototype.__proto__ = WebInspector.ContentProvider.prototype;
+
+
+WebInspector.ConcatenatedScriptsContentProvider = function(scripts)
+{
+this._mimeType = "text/html";
+this._scripts = scripts;
+};
+
+WebInspector.ConcatenatedScriptsContentProvider.prototype = {
+requestContent: function(callback)
 {
 var scripts = this._scripts.slice();
 scripts.sort(function(x, y) { return x.lineOffset - y.lineOffset || x.columnOffset - y.columnOffset; });
@@ -47955,12 +49945,8 @@ var sources = [];
 function didRequestSource(source)
 {
 sources.push(source);
-if (sources.length < scripts.length)
-return;
-if (scripts.length === 1 && !scripts[0].lineOffset && !scripts[0].columnOffset)
-this._didRequestContent("text/javascript", source);
-else
-this._concatenateScriptsContent(scripts, sources);
+if (sources.length == scripts.length)
+callback(this._mimeType, this._concatenateScriptsContent(scripts, sources));
 }
 for (var i = 0; i < scripts.length; ++i)
 scripts[i].requestSource(didRequestSource.bind(this));
@@ -47971,8 +49957,8 @@ _concatenateScriptsContent: function(scripts, sources)
 var content = "";
 var lineNumber = 0;
 var columnNumber = 0;
-var scriptRanges = [];
-function appendChunk(chunk, script)
+
+function appendChunk(chunk)
 {
 var start = { lineNumber: lineNumber, columnNumber: columnNumber };
 content += chunk;
@@ -47985,8 +49971,6 @@ lineNumber += lineCount - 1;
 columnNumber = lineEndings[lineCount - 1] - lineEndings[lineCount - 2] - 1;
 }
 var end = { lineNumber: lineNumber, columnNumber: columnNumber };
-if (script)
-scriptRanges.push({ start: start, end: end, sourceId: script.sourceId });
 }
 
 var scriptOpenTag = "<script>";
@@ -48000,113 +49984,227 @@ appendChunk(" ");
 
 
 appendChunk(scriptOpenTag);
-appendChunk(sources[i], scripts[i]);
+appendChunk(sources[i]);
 appendChunk(scriptCloseTag);
 }
 
-this._didRequestContent("text/html", content);
-},
+return content;
+}
+}
 
-_didRequestContent: function(mimeType, content)
+WebInspector.ConcatenatedScriptsContentProvider.prototype.__proto__ = WebInspector.ContentProvider.prototype;
+
+
+WebInspector.ResourceContentProvider = function(resource)
 {
-this._contentLoaded = true;
-this._contentRequested = false;
+this._mimeType = resource.type === WebInspector.Resource.Type.Script ? "text/javascript" : "text/html";
+this._resource = resource;
+};
+
+WebInspector.ResourceContentProvider.prototype = {
+requestContent: function(callback)
+{
+function didRequestContent(content)
+{
+callback(this._mimeType, content);
+}
+this._resource.requestContent(didRequestContent.bind(this));
+}
+}
+
+WebInspector.ResourceContentProvider.prototype.__proto__ = WebInspector.ContentProvider.prototype;
+
+
+WebInspector.StaticContentProvider = function(mimeType, content)
+{
 this._mimeType = mimeType;
 this._content = content;
+};
 
-for (var i = 0; i < this._requestContentCallbacks.length; ++i)
-this._requestContentCallbacks[i](mimeType, content);
-this._requestContentCallbacks = [];
+WebInspector.StaticContentProvider.prototype = {
+requestContent: function(callback)
+{
+callback(this._mimeType, this._content);
+}
+}
 
-if (this._reloadContent)
-this.reload();
+WebInspector.StaticContentProvider.prototype.__proto__ = WebInspector.ContentProvider.prototype;
+
+
+
+
+
+
+WebInspector.CompilerSourceMapping = function()
+{
+}
+
+WebInspector.CompilerSourceMapping.prototype = {
+compiledLocationToSourceLocation: function(lineNumber, columnNumber)
+{
+
 },
 
-_hasPendingResource: function()
+sourceLocationToCompiledLocation: function(sourceURL, lineNumber, columnNumber)
 {
-return this._resource && !this._resource.finished;
-}
-}
 
-WebInspector.FormattedSourceFile = function(sourceFileId, script, contentChangedDelegate, formatter)
-{
-WebInspector.SourceFile.call(this, sourceFileId, script, contentChangedDelegate);
-this._formatter = formatter;
-}
-
-WebInspector.FormattedSourceFile.prototype = {
-requestSourceMapping: function(callback)
-{
-function didRequestContent()
-{
-callback(this._mapping);
-}
-this.requestContent(didRequestContent.bind(this));
 },
 
-_didRequestContent: function(mimeType, text)
+sources: function()
 {
-function didFormatContent(formattedText, mapping)
-{
-this._mapping = new WebInspector.SourceMappingForFormattedSourceFile(this._scripts, mapping);
-WebInspector.SourceFile.prototype._didRequestContent.call(this, mimeType, formattedText);
-}
-this._formatter.formatContent(mimeType, text, didFormatContent.bind(this));
+
 }
 }
 
-WebInspector.FormattedSourceFile.prototype.__proto__ = WebInspector.SourceFile.prototype;
 
-WebInspector.SourceMapping = function(scripts)
+WebInspector.ClosureCompilerSourceMapping = function(payload)
 {
-this._sortedScripts = scripts.slice();
-this._sortedScripts.sort(function(x, y) { return x.lineOffset - y.lineOffset || x.columnOffset - y.columnOffset; });
+if (!WebInspector.ClosureCompilerSourceMapping.prototype._base64Map) {
+base64Digits = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+WebInspector.ClosureCompilerSourceMapping.prototype._base64Map = {};
+for (var i = 0; i < base64Digits.length; ++i)
+WebInspector.ClosureCompilerSourceMapping.prototype._base64Map[base64Digits.charAt(i)] = i;
 }
 
-WebInspector.SourceMapping.prototype = {
-scriptLocationToSourceLine: function(location)
+this._sources = payload.sources;
+this._mappings = [];
+this._reverseMappingsBySourceURL = {};
+for (var i = 0; i < this._sources.length; ++i)
+this._reverseMappingsBySourceURL[this._sources[i]] = [];
+this._parseMappings(payload.mappings);
+}
+
+WebInspector.ClosureCompilerSourceMapping.prototype = {
+compiledLocationToSourceLocation: function(lineNumber, columnNumber)
 {
-return location.lineNumber;
+var mapping = this._findMapping(lineNumber, columnNumber);
+return { sourceURL: mapping[2], lineNumber: mapping[3], columnNumber: mapping[4] };
 },
 
-sourceLineToScriptLocation: function(lineNumber)
+sourceLocationToCompiledLocation: function(sourceURL, lineNumber)
 {
-return this._sourceLocationToScriptLocation(lineNumber, 0);
+var mappings = this._reverseMappingsBySourceURL[sourceURL];
+for ( ; lineNumber < mappings.length; ++lineNumber) {
+var mapping = mappings[lineNumber];
+if (mapping)
+return { lineNumber: mapping[0], columnNumber: mapping[1] };
+}
 },
 
-_sourceLocationToScriptLocation: function(lineNumber, columnNumber)
+sources: function()
 {
-var closestScript = this._sortedScripts[0];
-for (var i = 1; i < this._sortedScripts.length; ++i) {
-script = this._sortedScripts[i];
-if (script.lineOffset > lineNumber || (script.lineOffset === lineNumber && script.columnOffset > columnNumber))
-break;
-closestScript = script;
-}
-return { sourceId: closestScript.sourceId, lineNumber: lineNumber, columnNumber: columnNumber };
-}
-}
-
-WebInspector.SourceMappingForFormattedSourceFile = function(scripts, mapping)
-{
-WebInspector.SourceMapping.call(this, scripts);
-this._mapping = mapping;
-}
-
-WebInspector.SourceMappingForFormattedSourceFile.prototype = {
-scriptLocationToSourceLine: function(location)
-{
-return this._mapping.originalToFormatted(location).lineNumber;
+return this._sources;
 },
 
-sourceLineToScriptLocation: function(lineNumber)
+_findMapping: function(lineNumber, columnNumber)
 {
-var originalLocation = this._mapping.formattedToOriginal({ lineNumber: lineNumber, columnNumber: 0 });
-return WebInspector.SourceMapping.prototype._sourceLocationToScriptLocation.call(this, originalLocation.lineNumber, originalLocation.columnNumber);
+var first = 0;
+var count = this._mappings.length;
+while (count > 1) {
+var step = count >> 1;
+var middle = first + step;
+var mapping = this._mappings[middle];
+if (lineNumber < mapping[0] || (lineNumber == mapping[0] && columnNumber < mapping[1]))
+count = step;
+else {
+first = middle;
+count -= step;
+}
+}
+return this._mappings[first];
+},
+
+_parseMappings: function(mappingsPayload)
+{
+var stringCharIterator = new WebInspector.ClosureCompilerSourceMapping.StringCharIterator(mappingsPayload);
+
+var lineNumber = 0;
+var columnNumber = 0;
+var sourceIndex = 0;
+var sourceLineNumber = 0;
+var sourceColumnNumber = 0;
+var nameIndex = 0;
+
+var sourceURL = this._sources[0];
+var reverseMappings = this._reverseMappingsBySourceURL[sourceURL];
+
+do {
+columnNumber += this._decodeVLQ(stringCharIterator);
+if (this._isSeparator(stringCharIterator.peek()))
+continue;
+var sourceIndexDelta = this._decodeVLQ(stringCharIterator);
+if (sourceIndexDelta) {
+sourceIndex += sourceIndexDelta;
+sourceURL = this._sources[sourceIndex];
+reverseMappings = this._reverseMappingsBySourceURL[sourceURL];
+}
+sourceLineNumber += this._decodeVLQ(stringCharIterator);
+sourceColumnNumber += this._decodeVLQ(stringCharIterator);
+if (!this._isSeparator(stringCharIterator.peek()))
+nameIndex += this._decodeVLQ(stringCharIterator);
+
+this._mappings.push([lineNumber, columnNumber, sourceURL, sourceLineNumber, sourceColumnNumber]);
+if (!reverseMappings[sourceLineNumber])
+reverseMappings[sourceLineNumber] = [lineNumber, columnNumber];
+
+if (stringCharIterator.next() === ";") {
+lineNumber += 1;
+columnNumber = 0;
+}
+} while(stringCharIterator.hasNext());
+},
+
+_isSeparator: function(char)
+{
+return char === "," || char === ";";
+},
+
+_decodeVLQ: function(stringCharIterator)
+{
+
+var result = 0;
+var shift = 0;
+do {
+var digit = this._base64Map[stringCharIterator.next()];
+result += (digit & this._VLQ_BASE_MASK) << shift;
+shift += this._VLQ_BASE_SHIFT;
+} while (digit & this._VLQ_CONTINUATION_MASK);
+
+
+var negative = result & 1;
+result >>= 1;
+return negative ? -result : result;
+},
+
+_VLQ_BASE_SHIFT: 5,
+_VLQ_BASE_MASK: (1 << 5) - 1,
+_VLQ_CONTINUATION_MASK: 1 << 5
+}
+
+
+WebInspector.ClosureCompilerSourceMapping.StringCharIterator = function(string)
+{
+this._string = string;
+this._position = 0;
+}
+
+WebInspector.ClosureCompilerSourceMapping.StringCharIterator.prototype = {
+next: function()
+{
+return this._string.charAt(this._position++);
+},
+
+peek: function()
+{
+return this._string.charAt(this._position);
+},
+
+hasNext: function()
+{
+return this._position < this._string.length;
 }
 }
 
-WebInspector.SourceMappingForFormattedSourceFile.prototype.__proto__ = WebInspector.SourceMapping.prototype;
 
 
 
@@ -48115,7 +50213,7 @@ WebInspector.SourceMappingForFormattedSourceFile.prototype.__proto__ = WebInspec
 WebInspector.DOMNode = function(doc, payload) {
 this.ownerDocument = doc;
 
-this.id = payload.id;
+this.id = payload.nodeId;
 this._nodeType = payload.nodeType;
 this._nodeName = payload.nodeName;
 this._localName = payload.localName;
@@ -48212,7 +50310,7 @@ return attr ? attr.value : undefined;
 
 setAttribute: function(name, text, callback)
 {
-DOMAgent.setAttributesText(this.id, name, text, callback);
+DOMAgent.setAttributesAsText(this.id, text, name, callback);
 },
 
 setAttributeValue: function(name, value, callback)
@@ -48257,7 +50355,7 @@ function mycallback(error) {
 if (!error && callback)
 callback(this.children);
 }
-DOMAgent.getChildNodes(this.id, mycallback.bind(this));
+DOMAgent.requestChildNodes(this.id, mycallback.bind(this));
 },
 
 getOuterHTML: function(callback)
@@ -48299,7 +50397,7 @@ return path.join(",");
 
 appropriateSelectorFor: function(justSelector)
 {
-var lowerCaseName = this.localName() || node.nodeName().toLowerCase();
+var lowerCaseName = this.localName() || this.nodeName().toLowerCase();
 
 var id = this.getAttribute("id");
 if (id) {
@@ -48317,6 +50415,34 @@ if (lowerCaseName === "input" && this.getAttribute("type"))
 return lowerCaseName + "[type=\"" + this.getAttribute("type") + "\"]";
 
 return lowerCaseName;
+},
+
+isAncestor: function(node)
+{
+if (!node)
+return false;
+
+var currentNode = node.parentNode;
+while (currentNode) {
+if (this === currentNode)
+return true;
+currentNode = currentNode.parentNode;
+}
+return false;
+},
+
+isDescendant: function(descendant)
+{
+return descendant !== null && descendant.isAncestor(this);
+},
+
+isWhitespace: function()
+{
+if (this.nodeType !== Node.TEXT_NODE)
+return false;
+if (!this.nodeValue.length)
+return true;
+return this.nodeValue.match(/^[\s\xA0]+$/);
 },
 
 _setAttributesPayload: function(attrs)
@@ -48342,7 +50468,7 @@ this._renumber();
 return node;
 },
 
-removeChild_: function(node)
+_removeChild: function(node)
 {
 this.children.splice(this.children.indexOf(node), 1);
 node.parentNode = null;
@@ -48398,8 +50524,14 @@ var node = this;
 while (node.parentNode && !node.parentNode.documentURL)
 node = node.parentNode;
 return node;
+},
+
+moveTo: function(targetNode, anchorNode, callback)
+{
+DOMAgent.moveTo(this.id, targetNode.id, anchorNode ? anchorNode.id : undefined, callback);
 }
 }
+
 
 WebInspector.DOMDocument = function(domAgent, payload)
 {
@@ -48410,11 +50542,12 @@ this._domAgent = domAgent;
 
 WebInspector.DOMDocument.prototype.__proto__ = WebInspector.DOMNode.prototype;
 
+
 WebInspector.DOMAgent = function() {
 this._idToDOMNode = null;
 this._document = null;
 this._attributeLoadNodeIds = {};
-InspectorBackend.registerDomainDispatcher("DOM", new WebInspector.DOMDispatcher(this));
+InspectorBackend.registerDOMDispatcher(new WebInspector.DOMDispatcher(this));
 }
 
 WebInspector.DOMAgent.Events = {
@@ -48423,7 +50556,8 @@ CharacterDataModified: "CharacterDataModified",
 NodeInserted: "NodeInserted",
 NodeRemoved: "NodeRemoved",
 DocumentUpdated: "DocumentUpdated",
-ChildNodeCountUpdated: "ChildNodeCountUpdated"
+ChildNodeCountUpdated: "ChildNodeCountUpdated",
+InspectElementRequested: "InspectElementRequested"
 }
 
 WebInspector.DOMAgent.prototype = {
@@ -48460,7 +50594,7 @@ DOMAgent.getDocument(onDocumentAvailable.bind(this));
 
 pushNodeToFrontend: function(objectId, callback)
 {
-this._dispatchWhenDocumentAvailable(DOMAgent.pushNodeToFrontend.bind(DOMAgent), objectId, callback);
+this._dispatchWhenDocumentAvailable(DOMAgent.requestNode.bind(DOMAgent), objectId, callback);
 },
 
 pushNodeByPathToFrontend: function(path, callback)
@@ -48507,6 +50641,12 @@ _attributesUpdated: function(nodeIds)
 this._loadNodeAttributesSoon(nodeIds);
 },
 
+_inlineStyleInvalidated: function(nodeIds)
+{
+
+this._loadNodeAttributesSoon(nodeIds);
+},
+
 _loadNodeAttributesSoon: function(nodeIds)
 {
 for (var i = 0; i < nodeIds.length; ++i)
@@ -48518,24 +50658,21 @@ this._loadNodeAttributesTimeout = setTimeout(this._loadNodeAttributes.bind(this)
 
 _loadNodeAttributes: function()
 {
-function callback(nodeAttributes)
+function callback(nodeId, attributes)
 {
-if (!nodeAttributes)
+if (!attributes)
 return;
-for (var i = 0; i < nodeAttributes.length; ++i) {
-var entry = nodeAttributes[i];
-var node = this._idToDOMNode[entry.id];
-node._setAttributesPayload(entry.attributes);
+var node = this._idToDOMNode[nodeId];
+if (node) {
+node._setAttributesPayload(attributes);
 this.dispatchEventToListeners(WebInspector.DOMAgent.Events.AttrModified, node);
 }
 }
 
 delete this._loadNodeAttributesTimeout;
 
-var nodeIds = [];
 for (var nodeId in this._attributeLoadNodeIds)
-nodeIds.push(Number(nodeId));
-DOMAgent.getAttributes(nodeIds, this._wrapClientCallback(callback.bind(this)));
+DOMAgent.getAttributes(parseInt(nodeId, 10), this._wrapClientCallback(callback.bind(this, nodeId)));
 this._attributeLoadNodeIds = {};
 },
 
@@ -48557,12 +50694,13 @@ this._setDocument(null);
 this.requestDocument();
 },
 
+
 _setDocument: function(payload)
 {
 this._idToDOMNode = {};
-if (payload && "id" in payload) {
+if (payload && "nodeId" in payload) {
 this._document = new WebInspector.DOMDocument(this, payload);
-this._idToDOMNode[payload.id] = this._document;
+this._idToDOMNode[payload.nodeId] = this._document;
 if (this._document.children)
 this._bindNodes(this._document.children);
 } else
@@ -48570,10 +50708,11 @@ this._document = null;
 this.dispatchEventToListeners(WebInspector.DOMAgent.Events.DocumentUpdated, this._document);
 },
 
+
 _setDetachedRoot: function(payload)
 {
 var root = new WebInspector.DOMNode(this._document, payload);
-this._idToDOMNode[payload.id] = root;
+this._idToDOMNode[payload.nodeId] = root;
 },
 
 _setChildNodes: function(parentId, payloads)
@@ -48618,11 +50757,16 @@ _childNodeRemoved: function(parentId, nodeId)
 {
 var parent = this._idToDOMNode[parentId];
 var node = this._idToDOMNode[nodeId];
-parent.removeChild_(node);
+parent._removeChild(node);
 this.dispatchEventToListeners(WebInspector.DOMAgent.Events.NodeRemoved, {node:node, parent:parent});
 delete this._idToDOMNode[nodeId];
-if (Preferences.nativeInstrumentationEnabled)
-WebInspector.panels.elements.sidebarPanes.domBreakpoints.nodeRemoved(node);
+},
+
+_inspectElementRequested: function(nodeId)
+{
+var node = this._idToDOMNode[nodeId];
+if (node)
+this.dispatchEventToListeners(WebInspector.DOMAgent.Events.InspectElementRequested, node);
 },
 
 performSearch: function(query, searchResultCollector, searchSynchronously)
@@ -48650,6 +50794,7 @@ DOMAgent.querySelectorAll(nodeId, selectors, this._wrapClientCallback(callback))
 
 WebInspector.DOMAgent.prototype.__proto__ = WebInspector.Object.prototype;
 
+
 WebInspector.DOMDispatcher = function(domAgent)
 {
 this._domAgent = domAgent;
@@ -48668,7 +50813,7 @@ this._domAgent._attributesUpdated([nodeId]);
 
 inlineStyleInvalidated: function(nodeIds)
 {
-this._domAgent._attributesUpdated(nodeIds);
+this._domAgent._inlineStyleInvalidated(nodeIds);
 },
 
 characterDataModified: function(nodeId, newValue)
@@ -48698,7 +50843,7 @@ this._domAgent._childNodeRemoved(parentId, nodeId);
 
 inspectElementRequested: function(nodeId)
 {
-WebInspector.updateFocusedNode(nodeId);
+this._domAgent._inspectElementRequested(nodeId);
 },
 
 searchResults: function(nodeIds)
@@ -48707,6 +50852,9 @@ if (this._domAgent._searchResultCollector)
 this._domAgent._searchResultCollector(nodeIds);
 }
 }
+
+
+WebInspector.domAgent = null;
 
 
 
@@ -48724,6 +50872,7 @@ RecalculateStyles: "RecalculateStyles",
 Paint: "Paint",
 ParseHTML: "ParseHTML",
 
+
 TimerInstall: "TimerInstall",
 TimerRemove: "TimerRemove",
 TimerFire: "TimerFire",
@@ -48732,7 +50881,8 @@ XHRReadyStateChange: "XHRReadyStateChange",
 XHRLoad: "XHRLoad",
 EvaluateScript: "EvaluateScript",
 
-MarkTimeline: "MarkTimeline",
+TimeStamp: "TimeStamp",
+
 MarkLoad: "MarkLoad",
 MarkDOMContent: "MarkDOMContent",
 
@@ -48743,7 +50893,11 @@ ResourceReceivedData: "ResourceReceivedData",
 ResourceFinish: "ResourceFinish",
 
 FunctionCall: "FunctionCall",
-GCEvent: "GCEvent"
+GCEvent: "GCEvent",
+
+RegisterAnimationFrameCallback: "RegisterAnimationFrameCallback",
+CancelAnimationFrameCallback: "CancelAnimationFrameCallback",
+FireAnimationFrameEvent: "FireAnimationFrameEvent"
 };
 
 
@@ -48755,6 +50909,7 @@ WebInspector.TimelinePanel = function()
 WebInspector.Panel.call(this, "timeline");
 
 this.element.appendChild(this._createTopPane());
+this.element.addEventListener("contextmenu", this._contextMenu.bind(this), true);
 this.element.tabIndex = 0;
 
 this._sidebarBackgroundElement = document.createElement("div");
@@ -48803,6 +50958,7 @@ this._rootRecord = this._createRootRecord();
 this._sendRequestRecords = {};
 this._scheduledResourceRequests = {};
 this._timerRecords = {};
+this._registeredAnimationCallbackRecords = {};
 
 this._calculator = new WebInspector.TimelineCalculator();
 this._calculator._showShortEvents = false;
@@ -48814,14 +50970,20 @@ this._createStatusbarButtons();
 this._boundariesAreValid = true;
 this._scrollTop = 0;
 
-this._popoverHelper = new WebInspector.PopoverHelper(this._containerElement, this._getPopoverAnchor.bind(this), this._showPopover.bind(this), true);
+this._popoverHelper = new WebInspector.PopoverHelper(this._containerElement, this._getPopoverAnchor.bind(this), this._showPopover.bind(this));
+this._containerElement.addEventListener("mousemove", this._mouseMove.bind(this), false);
+this._containerElement.addEventListener("mouseout", this._mouseOut.bind(this), false);
 
 
 this.toggleFilterButton.toggled = true;
 this._calculator._showShortEvents = this.toggleFilterButton.toggled;
-this._markTimelineRecords = [];
+this._timeStampRecords = [];
 this._expandOffset = 15;
 
+this._createFileSelector();
+this._model = new WebInspector.TimelineModel(this);
+
+this._registerShortcuts();
 WebInspector.timelineManager.addEventListener(WebInspector.TimelineManager.EventTypes.TimelineEventRecorded, this._onTimelineEventRecorded, this);
 }
 
@@ -48845,8 +51007,8 @@ topPaneElement.appendChild(this._topPaneSidebarElement);
 var topPaneSidebarTree = new TreeOutline(overviewTreeElement);
 var timelinesOverviewItem = new WebInspector.SidebarTreeElement("resources-time-graph-sidebar-item", WebInspector.UIString("Timelines"));
 topPaneSidebarTree.appendChild(timelinesOverviewItem);
+timelinesOverviewItem.revealAndSelect(false);
 timelinesOverviewItem.onselect = this._timelinesOverviewItemSelected.bind(this);
-timelinesOverviewItem.select(true);
 
 var memoryOverviewItem = new WebInspector.SidebarTreeElement("resources-size-graph-sidebar-item", WebInspector.UIString("Memory"));
 topPaneSidebarTree.appendChild(memoryOverviewItem);
@@ -48906,7 +51068,7 @@ recordStyles[recordTypes.TimerFire] = { title: WebInspector.UIString("Timer Fire
 recordStyles[recordTypes.XHRReadyStateChange] = { title: WebInspector.UIString("XHR Ready State Change"), category: this.categories.scripting };
 recordStyles[recordTypes.XHRLoad] = { title: WebInspector.UIString("XHR Load"), category: this.categories.scripting };
 recordStyles[recordTypes.EvaluateScript] = { title: WebInspector.UIString("Evaluate Script"), category: this.categories.scripting };
-recordStyles[recordTypes.MarkTimeline] = { title: WebInspector.UIString("Mark"), category: this.categories.scripting };
+recordStyles[recordTypes.TimeStamp] = { title: WebInspector.UIString("Stamp"), category: this.categories.scripting };
 recordStyles[recordTypes.ResourceSendRequest] = { title: WebInspector.UIString("Send Request"), category: this.categories.loading };
 recordStyles[recordTypes.ResourceReceiveResponse] = { title: WebInspector.UIString("Receive Response"), category: this.categories.loading };
 recordStyles[recordTypes.ResourceFinish] = { title: WebInspector.UIString("Finish Loading"), category: this.categories.loading };
@@ -48916,6 +51078,9 @@ recordStyles[recordTypes.GCEvent] = { title: WebInspector.UIString("GC Event"), 
 recordStyles[recordTypes.MarkDOMContent] = { title: WebInspector.UIString("DOMContent event"), category: this.categories.scripting };
 recordStyles[recordTypes.MarkLoad] = { title: WebInspector.UIString("Load event"), category: this.categories.scripting };
 recordStyles[recordTypes.ScheduleResourceRequest] = { title: WebInspector.UIString("Schedule Request"), category: this.categories.loading };
+recordStyles[recordTypes.RegisterAnimationFrameCallback] = { title: WebInspector.UIString("Register Animation Callback"), category: this.categories.scripting };
+recordStyles[recordTypes.CancelAnimationFrameCallback] = { title: WebInspector.UIString("Cancel Animation Callback"), category: this.categories.scripting };
+recordStyles[recordTypes.FireAnimationFrameEvent] = { title: WebInspector.UIString("Animation Frame Event"), category: this.categories.scripting };
 this._recordStylesArray = recordStyles;
 }
 return this._recordStylesArray;
@@ -48939,6 +51104,63 @@ this.recordsCounter = document.createElement("span");
 this.recordsCounter.className = "timeline-records-counter";
 },
 
+_registerShortcuts: function()
+{
+var shortcut = WebInspector.KeyboardShortcut;
+var modifiers = shortcut.Modifiers;
+var section = WebInspector.shortcutsScreen.section(WebInspector.UIString("Timeline Panel"));
+
+this._shortcuts[shortcut.makeKey("e", modifiers.CtrlOrMeta)] = this._toggleTimelineButtonClicked.bind(this);
+section.addKey(shortcut.shortcutToString("e", modifiers.CtrlOrMeta), WebInspector.UIString("Start/stop recording"));
+
+var shortRecordThresholdTitle = Number.secondsToString(WebInspector.TimelinePanel.shortRecordThreshold);
+this._shortcuts[shortcut.makeKey("f", modifiers.Shift | modifiers.CtrlOrMeta)] = this._toggleFilterButtonClicked.bind(this);
+section.addKey(shortcut.shortcutToString("f", modifiers.Shift | modifiers.CtrlOrMeta), WebInspector.UIString("Toggle filter for the records that are shorter than %s", shortRecordThresholdTitle));
+
+this._shortcuts[shortcut.makeKey("s", modifiers.CtrlOrMeta)] = this._saveToFile.bind(this);
+section.addKey(shortcut.shortcutToString("s", modifiers.CtrlOrMeta), WebInspector.UIString("Save Timeline data\u2026"));
+
+this._shortcuts[shortcut.makeKey("o", modifiers.CtrlOrMeta)] = this._fileSelectorElement.click.bind(this._fileSelectorElement);
+section.addKey(shortcut.shortcutToString("o", modifiers.CtrlOrMeta), WebInspector.UIString("Load Timeline data\u2026"));
+},
+
+_createFileSelector: function()
+{
+if (this._fileSelectorElement)
+this.element.removeChild(this._fileSelectorElement);
+
+var fileSelectorElement = document.createElement("input");
+fileSelectorElement.type = "file";
+fileSelectorElement.style.display = "none";
+fileSelectorElement.onchange = this._loadFromFile.bind(this);
+this.element.appendChild(fileSelectorElement);
+this._fileSelectorElement = fileSelectorElement;
+},
+
+_contextMenu: function(event)
+{
+var contextMenu = new WebInspector.ContextMenu();
+contextMenu.appendItem(WebInspector.UIString("&Save Timeline data\u2026"), this._saveToFile.bind(this));
+contextMenu.appendItem(WebInspector.UIString("L&oad Timeline data\u2026"), this._fileSelectorElement.click.bind(this._fileSelectorElement));
+contextMenu.show(event);
+},
+
+_saveToFile: function()
+{
+this._model._saveToFile();
+},
+
+_loadFromFile: function()
+{
+if (this.toggleTimelineButton.toggled)
+WebInspector.timelineManager.stop();
+
+this._clearPanel();
+
+this._model._loadFromFile(this._fileSelectorElement.files[0]);
+this._createFileSelector();
+},
+
 _updateRecordsCounter: function()
 {
 this.recordsCounter.textContent = WebInspector.UIString("%d of %d captured records are visible", this._rootRecord._visibleRecordsCount, this._rootRecord._allRecordsCount);
@@ -48949,8 +51171,8 @@ _updateEventDividers: function()
 this._timelineGrid.removeEventDividers();
 var clientWidth = this._graphRowsElement.offsetWidth - this._expandOffset;
 var dividers = [];
-for (var i = 0; i < this._markTimelineRecords.length; ++i) {
-var record = this._markTimelineRecords[i];
+for (var i = 0; i < this._timeStampRecords.length; ++i) {
+var record = this._timeStampRecords[i];
 var positions = this._calculator.computeBarGraphWindowPosition(record, clientWidth);
 var dividerPosition = Math.round(positions.left);
 if (dividerPosition < 0 || dividerPosition >= clientWidth || dividers[dividerPosition])
@@ -48960,7 +51182,7 @@ divider.style.left = (dividerPosition + this._expandOffset) + "px";
 dividers[dividerPosition] = divider;
 }
 this._timelineGrid.addEventDividers(dividers);
-this._overviewPane.updateEventDividers(this._markTimelineRecords, this._createEventDivider.bind(this));
+this._overviewPane.updateEventDividers(this._timeStampRecords, this._createEventDivider.bind(this));
 },
 
 _createEventDivider: function(record)
@@ -48977,7 +51199,7 @@ if (record.type === recordTypes.MarkDOMContent)
 eventDivider.className += " resources-blue-divider";
 else if (record.type === recordTypes.MarkLoad)
 eventDivider.className += " resources-red-divider";
-else if (record.type === recordTypes.MarkTimeline) {
+else if (record.type === recordTypes.TimeStamp) {
 eventDivider.className += " resources-orange-divider";
 eventDividerPadding.title = record.data.message;
 }
@@ -48985,11 +51207,13 @@ eventDividerPadding.appendChild(eventDivider);
 return eventDividerPadding;
 },
 
-_timelinesOverviewItemSelected: function(event) {
+_timelinesOverviewItemSelected: function(event)
+{
 this._overviewPane.showTimelines();
 },
 
-_memoryOverviewItemSelected: function(event) {
+_memoryOverviewItemSelected: function(event)
+{
 this._overviewPane.showMemoryGraph(this._rootRecord.children);
 },
 
@@ -48999,7 +51223,8 @@ if (this.toggleTimelineButton.toggled)
 WebInspector.timelineManager.stop();
 else {
 this._clearPanel();
-WebInspector.timelineManager.start();
+WebInspector.timelineManager.start(30);
+WebInspector.userMetrics.TimelineStarted.record();
 }
 this.toggleTimelineButton.toggled = !this.toggleTimelineButton.toggled;
 },
@@ -49026,15 +51251,16 @@ this._addRecordToTimeline(event.data);
 _addRecordToTimeline: function(record)
 {
 if (record.type === WebInspector.TimelineAgent.RecordType.ResourceSendRequest) {
-var isMainResource = (record.data.identifier === WebInspector.mainResource.identifier);
-if (isMainResource && this._mainResourceIdentifier !== record.data.identifier) {
+var isMainResource = (record.data.requestId === WebInspector.mainResource.requestId);
+if (isMainResource && this._mainRequestId !== record.data.requestId) {
 
 
 
-this._mainResourceIdentifier = record.data.identifier;
+this._mainRequestId = record.data.requestId;
 this._clearPanel();
 }
 }
+this._model._addRecord(record);
 this._innerAddRecordToTimeline(record, this._rootRecord);
 this._scheduleRefresh();
 },
@@ -49046,7 +51272,7 @@ var parentRecord;
 if (record.type === recordTypes.ResourceReceiveResponse ||
 record.type === recordTypes.ResourceFinish ||
 record.type === recordTypes.ResourceReceivedData)
-parentRecord = this._sendRequestRecords[record.data.identifier];
+parentRecord = this._sendRequestRecords[record.data.requestId];
 else if (record.type === recordTypes.TimerFire)
 parentRecord = this._timerRecords[record.data.timerId];
 else if (record.type === recordTypes.ResourceSendRequest)
@@ -49058,9 +51284,18 @@ _innerAddRecordToTimeline: function(record, parentRecord)
 {
 var connectedToOldRecord = false;
 var recordTypes = WebInspector.TimelineAgent.RecordType;
+
+if (record.type === recordTypes.RegisterAnimationFrameCallback) {
+this._registeredAnimationCallbackRecords[record.data.id] = record;
+return;
+}
+
 if (record.type === recordTypes.MarkDOMContent || record.type === recordTypes.MarkLoad)
 parentRecord = null; 
-else if (parentRecord === this._rootRecord) {
+else if (parentRecord === this._rootRecord ||
+record.type === recordTypes.ResourceReceiveResponse ||
+record.type === recordTypes.ResourceFinish ||
+record.type === recordTypes.ResourceReceivedData) {
 var newParentRecord = this._findParentRecord(record);
 if (newParentRecord) {
 parentRecord = newParentRecord;
@@ -49076,7 +51311,8 @@ scriptName: record.data.scriptName,
 scriptLine: record.data.scriptLine
 }
 };
-if (record.type === recordTypes.TimerFire && children && children.length) {
+
+if ((record.type === recordTypes.TimerFire || record.type === recordTypes.FireAnimationFrameEvent) && children && children.length) {
 var childRecord = children[0];
 if (childRecord.type === recordTypes.FunctionCall) {
 scriptDetails = {
@@ -49090,7 +51326,7 @@ children = childRecord.children.concat(children.slice(1));
 var formattedRecord = new WebInspector.TimelinePanel.FormattedRecord(record, parentRecord, this, scriptDetails);
 
 if (record.type === recordTypes.MarkDOMContent || record.type === recordTypes.MarkLoad) {
-this._markTimelineRecords.push(formattedRecord);
+this._timeStampRecords.push(formattedRecord);
 return;
 }
 
@@ -49119,8 +51355,8 @@ if (parentRecord !== this._rootRecord)
 parentRecord._selfTime -= formattedRecord.endTime - formattedRecord.startTime;
 
 
-if (record.type === recordTypes.MarkTimeline)
-this._markTimelineRecords.push(formattedRecord);
+if (record.type === recordTypes.TimeStamp)
+this._timeStampRecords.push(formattedRecord);
 },
 
 setSidebarWidth: function(width)
@@ -49137,7 +51373,7 @@ this._scheduleRefresh();
 this._overviewPane.updateMainViewWidth(width);
 },
 
-resize: function()
+onResize: function()
 {
 this._closeRecordDetails();
 this._scheduleRefresh();
@@ -49155,23 +51391,28 @@ return rootRecord;
 
 _clearPanel: function()
 {
-this._markTimelineRecords = [];
+this._timeStampRecords = [];
 this._sendRequestRecords = {};
 this._scheduledResourceRequests = {};
 this._timerRecords = {};
+this._registeredAnimationCallbackRecords = {};
 this._rootRecord = this._createRootRecord();
 this._boundariesAreValid = false;
 this._overviewPane.reset();
 this._adjustScrollPosition(0);
 this._refresh();
 this._closeRecordDetails();
+this._model._reset();
+},
+
+elementsToRestoreScrollPositionsFor: function()
+{
+return [this._containerElement];
 },
 
 show: function()
 {
 WebInspector.Panel.prototype.show.call(this);
-if (typeof this._scrollTop === "number")
-this._containerElement.scrollTop = this._scrollTop;
 this._refresh();
 WebInspector.drawer.currentPanelCounters = this.recordsCounter;
 },
@@ -49364,17 +51605,46 @@ _getPopoverAnchor: function(element)
 return element.enclosingNodeOrSelfWithClass("timeline-graph-bar") || element.enclosingNodeOrSelfWithClass("timeline-tree-item");
 },
 
-_showPopover: function(anchor)
+_mouseOut: function(e)
+{
+this._hideRectHighlight();
+},
+
+_mouseMove: function(e)
+{
+var anchor = this._getPopoverAnchor(e.target);
+
+if (anchor && anchor.row._record.type === "Paint")
+this._highlightRect(anchor.row._record);
+else
+this._hideRectHighlight();
+},
+
+_highlightRect: function(record)
+{
+if (this._highlightedRect === record.data)
+return;
+this._highlightedRect = record.data;
+DOMAgent.highlightRect(this._highlightedRect.x, this._highlightedRect.y, this._highlightedRect.width, this._highlightedRect.height, WebInspector.Color.PageHighlight.Content.toProtocolRGBA(), WebInspector.Color.PageHighlight.ContentOutline.toProtocolRGBA());
+},
+
+_hideRectHighlight: function()
+{
+if (this._highlightedRect) {
+delete this._highlightedRect;
+DOMAgent.hideHighlight();
+}
+},
+
+_showPopover: function(anchor, popover)
 {
 var record = anchor.row._record;
-var popover = new WebInspector.Popover(record._generatePopupContent(this._calculator, this.categories));
-popover.show(anchor);
-return popover;
+popover.show(record._generatePopupContent(this._calculator, this.categories), anchor);
 },
 
 _closeRecordDetails: function()
 {
-this._popoverHelper.hidePopup();
+this._popoverHelper.hidePopover();
 }
 }
 
@@ -49591,11 +51861,11 @@ this.scriptLine = scriptDetails.scriptLine;
 }
 
 if (record.type === recordTypes.ResourceSendRequest) {
-panel._sendRequestRecords[record.data.identifier] = this;
+panel._sendRequestRecords[record.data.requestId] = this;
 } else if (record.type === recordTypes.ScheduleResourceRequest) {
 panel._scheduledResourceRequests[record.data.url] = this;
 } else if (record.type === recordTypes.ResourceReceiveResponse) {
-var sendRequestRecord = panel._sendRequestRecords[record.data.identifier];
+var sendRequestRecord = panel._sendRequestRecords[record.data.requestId];
 if (sendRequestRecord) { 
 this.url = sendRequestRecord.url;
 
@@ -49604,7 +51874,7 @@ if (sendRequestRecord.parent !== panel._rootRecord && sendRequestRecord.parent.t
 sendRequestRecord.parent._refreshDetails();
 }
 } else if (record.type === recordTypes.ResourceReceivedData || record.type === recordTypes.ResourceFinish) {
-var sendRequestRecord = panel._sendRequestRecords[record.data.identifier];
+var sendRequestRecord = panel._sendRequestRecords[record.data.requestId];
 if (sendRequestRecord) 
 this.url = sendRequestRecord.url;
 } else if (record.type === recordTypes.TimerInstall) {
@@ -49618,6 +51888,10 @@ this.callSiteStackTrace = timerInstalledRecord.stackTrace;
 this.timeout = timerInstalledRecord.timeout;
 this.singleShot = timerInstalledRecord.singleShot;
 }
+} else if (record.type === recordTypes.FireAnimationFrameEvent) {
+var registerCallbackRecord = panel._registeredAnimationCallbackRecords[record.data.id];
+if (registerCallbackRecord)
+this.callSiteStackTrace = registerCallbackRecord.stackTrace;
 }
 this._refreshDetails();
 }
@@ -49677,6 +51951,9 @@ contentHelper._appendTextRow(WebInspector.UIString("Timeout"), Number.secondsToS
 contentHelper._appendTextRow(WebInspector.UIString("Repeats"), !this.singleShot);
 }
 break;
+case recordTypes.FireAnimationFrameEvent:
+contentHelper._appendTextRow(WebInspector.UIString("Callback ID"), this.data.id);
+break;
 case recordTypes.FunctionCall:
 contentHelper._appendLinkRow(WebInspector.UIString("Location"), this.scriptName, this.scriptLine);
 break;
@@ -49734,21 +52011,26 @@ switch (this.type) {
 case WebInspector.TimelineAgent.RecordType.GCEvent:
 return WebInspector.UIString("%s collected", Number.bytesToString(this.data.usedHeapSizeDelta));
 case WebInspector.TimelineAgent.RecordType.TimerFire:
-return this.scriptName ? WebInspector.linkifyResourceAsNode(this.scriptName, "scripts", this.scriptLine, "", "") : this.data.timerId;
+return this.scriptName ? this._linkifyLocation(this.scriptName, this.scriptLine, 0) : this.data.timerId;
 case WebInspector.TimelineAgent.RecordType.FunctionCall:
-return this.scriptName ? WebInspector.linkifyResourceAsNode(this.scriptName, "scripts", this.scriptLine, "", "") : null;
+return this.scriptName ? this._linkifyLocation(this.scriptName, this.scriptLine, 0) : null;
+case WebInspector.TimelineAgent.RecordType.FireAnimationFrameEvent:
+return this.scriptName ? this._linkifyLocation(this.scriptName, this.scriptLine, 0) : this.data.id;
 case WebInspector.TimelineAgent.RecordType.EventDispatch:
 return this.data ? this.data.type : null;
 case WebInspector.TimelineAgent.RecordType.Paint:
 return this.data.width + "\u2009\u00d7\u2009" + this.data.height;
 case WebInspector.TimelineAgent.RecordType.TimerInstall:
 case WebInspector.TimelineAgent.RecordType.TimerRemove:
-return this.stackTrace ? WebInspector.linkifyCallFrameAsNode(this.stackTrace[0], "") : this.data.timerId;
+return this.stackTrace ? this._linkifyCallFrame(this.stackTrace[0]) : this.data.timerId;
+case WebInspector.TimelineAgent.RecordType.RegisterAnimationFrameCallback:
+case WebInspector.TimelineAgent.RecordType.CancelAnimationFrameCallback:
+return this.stackTrace ? this._linkifyCallFrame(this.stackTrace[0]) : this.data.id;
 case WebInspector.TimelineAgent.RecordType.ParseHTML:
 case WebInspector.TimelineAgent.RecordType.RecalculateStyles:
-return this.stackTrace ? WebInspector.linkifyCallFrameAsNode(this.stackTrace[0], "") : null;
+return this.stackTrace ? this._linkifyCallFrame(this.stackTrace[0]) : null;
 case WebInspector.TimelineAgent.RecordType.EvaluateScript:
-return this.url ? WebInspector.linkifyResourceAsNode(this.url, "scripts", this.data.lineNumber, "", "") : null;
+return this.url ? this._linkifyLocation(this.url, this.data.lineNumber, 0) : null;
 case WebInspector.TimelineAgent.RecordType.XHRReadyStateChange:
 case WebInspector.TimelineAgent.RecordType.XHRLoad:
 case WebInspector.TimelineAgent.RecordType.ScheduleResourceRequest:
@@ -49757,11 +52039,24 @@ case WebInspector.TimelineAgent.RecordType.ResourceReceivedData:
 case WebInspector.TimelineAgent.RecordType.ResourceReceiveResponse:
 case WebInspector.TimelineAgent.RecordType.ResourceFinish:
 return WebInspector.displayNameForURL(this.url);
-case WebInspector.TimelineAgent.RecordType.MarkTimeline:
+case WebInspector.TimelineAgent.RecordType.TimeStamp:
 return this.data.message;
 default:
 return null;
 }
+},
+
+_linkifyLocation: function(url, lineNumber, columnNumber)
+{
+
+lineNumber = lineNumber ? lineNumber - 1 : lineNumber;
+columnNumber = columnNumber ? columnNumber - 1 : 0;
+return WebInspector.debuggerPresentationModel.linkifyLocation(url, lineNumber, columnNumber, "timeline-details");
+},
+
+_linkifyCallFrame: function(callFrame)
+{
+return this._linkifyLocation(callFrame.url, callFrame.lineNumber, callFrame.columnNumber);
 },
 
 _calculateAggregatedStats: function(categories)
@@ -49831,7 +52126,7 @@ this._contentTable.appendChild(row);
 
 _appendLinkRow: function(title, scriptName, scriptLine)
 {
-var link = WebInspector.linkifyResourceAsNode(scriptName, "scripts", scriptLine, "timeline-details");
+var link = WebInspector.TimelinePanel.FormattedRecord.prototype._linkifyLocation(scriptName, scriptLine, 0, "timeline-details");
 this._appendElementRow(title, link);
 },
 
@@ -49846,7 +52141,8 @@ row.className = "timeline-details";
 row.appendChild(this._createCell(stackFrame.functionName ? stackFrame.functionName : WebInspector.UIString("(anonymous function)"), "timeline-function-name"));
 row.appendChild(this._createCell(" @ "));
 var linkCell = document.createElement("td");
-linkCell.appendChild(WebInspector.linkifyCallFrameAsNode(stackFrame, "timeline-details"));
+var urlElement = WebInspector.TimelinePanel.FormattedRecord.prototype._linkifyCallFrame(stackFrame);
+linkCell.appendChild(urlElement);
 row.appendChild(linkCell);
 framesTable.appendChild(row);
 }
@@ -49891,6 +52187,76 @@ this._element.addStyleClass("hidden");
 _dispose: function()
 {
 this._element.parentElement.removeChild(this._element);
+}
+}
+
+WebInspector.TimelineModel = function(timelinePanel)
+{
+this._panel = timelinePanel;
+this._records = [];
+}
+
+WebInspector.TimelineModel.prototype = {
+_addRecord: function(record)
+{
+this._records.push(record);
+},
+
+_loadNextChunk: function(data, index)
+{
+for (var i = 0; i < 20 && index < data.length; ++i, ++index)
+this._panel._addRecordToTimeline(data[index]);
+
+if (index !== data.length)
+setTimeout(this._loadNextChunk.bind(this, data, index), 0);
+},
+
+_loadFromFile: function(file)
+{
+function onLoad(e)
+{
+var data = JSON.parse(e.target.result);
+var version = data[0];
+this._loadNextChunk(data, 1);
+}
+
+function onError(e)
+{
+switch(e.target.error.code) {
+case e.target.error.NOT_FOUND_ERR:
+WebInspector.log(WebInspector.UIString('Timeline.loadFromFile: File "%s" not found.', file.name));
+break;
+case e.target.error.NOT_READABLE_ERR:
+WebInspector.log(WebInspector.UIString('Timeline.loadFromFile: File "%s" is not readable', file.name));
+break;
+case e.target.error.ABORT_ERR:
+break;
+default:
+WebInspector.log(WebInspector.UIString('Timeline.loadFromFile: An error occurred while reading the file "%s"', file.name));
+}
+}
+
+var reader = new FileReader();
+reader.onload = onLoad.bind(this);
+reader.onerror = onError;
+reader.readAsText(file);
+},
+
+_saveToFile: function()
+{
+var records = ['[' + JSON.stringify(window.navigator.appVersion)];
+for (var i = 0; i < this._records.length; ++i)
+records.push(JSON.stringify(this._records[i]));
+records[records.length - 1] = records[records.length - 1] + "]";
+
+var now= new Date();
+var suggestedFileName = "TimelineRawData-" + now.toISO8601Compact() + ".json";
+InspectorFrontendHost.saveAs(suggestedFileName, records.join(",\n"));
+},
+
+_reset: function()
+{
+this._records = [];
 }
 }
 
@@ -50010,7 +52376,7 @@ this._categoryGraphs[category].clearChunks();
 this._overviewCalculator.reset();
 this._forAllRecords(records, this._overviewCalculator.updateBoundaries.bind(this._overviewCalculator));
 
-function markTimeline(record)
+function markPercentagesForRecord(record)
 {
 if (!(this._showShortEvents || record.isLong()))
 return;
@@ -50021,7 +52387,7 @@ var categoryName = record.category.name;
 for (var j = Math.round(percentages.start); j <= end; ++j)
 timelines[categoryName][j] = true;
 }
-this._forAllRecords(records, markTimeline.bind(this));
+this._forAllRecords(records, markPercentagesForRecord.bind(this));
 
 
 for (var category in this._categories) {
@@ -50072,7 +52438,8 @@ this._overviewGrid.addEventDividers(dividers);
 updateMainViewWidth: function(width, records)
 {
 this._overviewGrid.element.style.left = width + "px";
-this.statusBarFilters.style.left = Math.max(155, width) + "px";
+
+this.statusBarFilters.style.left = Math.max(7 * 31, width) + "px";
 },
 
 reset: function()
@@ -50540,38 +52907,45 @@ this.contentElement.addEventListener("blur", this._onBlur.bind(this), false);
 captionWindow.createChild("h1", "help-window-title").textContent = title;
 
 closeButton.textContent = "\u2716"; 
-closeButton.addEventListener("click", this._hide.bind(this), false);
+closeButton.addEventListener("click", this.hide.bind(this), false);
 this._closeKeys = [
 WebInspector.KeyboardShortcut.Keys.Enter.code,
 WebInspector.KeyboardShortcut.Keys.Esc.code,
 WebInspector.KeyboardShortcut.Keys.Space.code,
 ];
-document.body.appendChild(this._element);
 }
 
 WebInspector.HelpScreen.prototype = {
-show: function()
+show: function(onHide)
 {
 if (this._isShown)
 return;
 
-this._element.style.visibility = "visible";
+document.body.appendChild(this._element);
 this._isShown = true;
+this._onHide = onHide;
 this._previousFocusElement = WebInspector.currentFocusElement;
 WebInspector.currentFocusElement = this.contentElement;
 },
 
-_hide: function()
+hide: function()
 {
+if (!this._isShown)
+return;
+
 this._isShown = false;
-this._element.style.visibility = "hidden";
+document.body.removeChild(this._element);
 WebInspector.currentFocusElement = this._previousFocusElement;
+if (this._onHide) {
+this._onHide();
+delete this._onHide;
+}
 },
 
 _onKeyDown: function(event)
 {
 if (this._isShown && this._closeKeys.indexOf(event.keyCode) >= 0) {
-this._hide();
+this.hide();
 event.stopPropagation();
 }
 },
@@ -50697,12 +53071,133 @@ this._view.highlightLine(lineNumber);
 
 
 
-WebInspector.ShortcutsHelp = function()
+WebInspector.SettingsScreen = function()
+{
+WebInspector.HelpScreen.call(this, WebInspector.UIString("Settings"));
+
+this._leftColumnElement = document.createElement("td");
+this._rightColumnElement = document.createElement("td");
+
+var p = this._appendSection(WebInspector.UIString("Elements"));
+p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Word wrap"), WebInspector.settings.domWordWrap));
+
+p = this._appendSection(WebInspector.UIString("Styles"));
+p.appendChild(this._createRadioSetting(WebInspector.UIString("Color format"), [
+[ WebInspector.StylesSidebarPane.ColorFormat.Original, WebInspector.UIString("As authored") ],
+[ WebInspector.StylesSidebarPane.ColorFormat.HEX, "HEX: #DAC0DE" ],
+[ WebInspector.StylesSidebarPane.ColorFormat.RGB, "RGB: rgb(128, 255, 255)" ],
+[ WebInspector.StylesSidebarPane.ColorFormat.HSL, "HSL: hsl(300, 80%, 90%)" ] ], WebInspector.settings.colorFormat));
+p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Show user agent styles"), WebInspector.settings.showUserAgentStyles));
+
+if (Preferences.canDisableCache) {
+p = this._appendSection(WebInspector.UIString("Network"), true);
+p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Disable cache"), WebInspector.settings.cacheDisabled));
+}
+
+p = this._appendSection(WebInspector.UIString("Scripts"), true);
+p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Show script folders"), WebInspector.settings.showScriptFolders));
+
+p = this._appendSection(WebInspector.UIString("Console"), true);
+p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Log XMLHttpRequests"), WebInspector.settings.monitoringXHREnabled));
+p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Preserve log upon navigation"), WebInspector.settings.preserveConsoleLog));
+
+var table = document.createElement("table");
+table.className = "help-table";
+var tr = document.createElement("tr");
+tr.appendChild(this._leftColumnElement);
+tr.appendChild(this._rightColumnElement);
+table.appendChild(tr);
+this.contentElement.appendChild(table);
+}
+
+WebInspector.SettingsScreen.prototype = {
+_appendSection: function(name, right)
+{
+var p = document.createElement("p");
+p.className = "help-section";
+var title = document.createElement("div");
+title.className = "help-section-title";
+title.textContent = name;
+p.appendChild(title);
+this._columnElement(right).appendChild(p);
+return p;
+},
+
+_columnElement: function(right)
+{
+return right ? this._rightColumnElement : this._leftColumnElement;
+},
+
+_createCheckboxSetting: function(name, setting)
+{
+var input = document.createElement("input");
+input.type = "checkbox";
+input.name = name;
+input.checked = setting.get();
+function listener()
+{
+setting.set(input.checked);
+}
+input.addEventListener("click", listener, false);
+
+var p = document.createElement("p");
+var label = document.createElement("label");
+label.appendChild(input);
+label.appendChild(document.createTextNode(name));
+p.appendChild(label);
+return p;
+},
+
+_createRadioSetting: function(name, options, setting)
+{
+var pp = document.createElement("p");
+var fieldsetElement = document.createElement("fieldset");
+var legendElement = document.createElement("legend");
+legendElement.textContent = name;
+fieldsetElement.appendChild(legendElement);
+
+function clickListener(e)
+{
+setting.set(e.target.value);
+}
+
+var settingValue = setting.get();
+for (var i = 0; i < options.length; ++i) {
+var p = document.createElement("p");
+var label = document.createElement("label");
+p.appendChild(label);
+
+var input = document.createElement("input");
+input.type = "radio";
+input.name = setting.name;
+input.value = options[i][0];
+input.addEventListener("click", clickListener, false);
+if (settingValue == input.value)
+input.checked = true;
+
+label.appendChild(input);
+label.appendChild(document.createTextNode(options[i][1]));
+
+fieldsetElement.appendChild(p);
+}
+
+pp.appendChild(fieldsetElement);
+return pp;
+}
+};
+
+WebInspector.SettingsScreen.prototype.__proto__ = WebInspector.HelpScreen.prototype;
+
+
+
+
+
+WebInspector.ShortcutsScreen = function()
 {
 this._sections = {};
 }
 
-WebInspector.ShortcutsHelp.prototype = {
+WebInspector.ShortcutsScreen.prototype = {
 section: function(name)
 {
 var section = this._sections[name];
@@ -50718,6 +53213,12 @@ this._helpScreen = new WebInspector.HelpScreen(WebInspector.UIString("Keyboard S
 this._buildTable(this._helpScreen.contentElement, 2);
 }
 this._helpScreen.show();
+},
+
+hide: function()
+{
+if (this._helpScreen)
+this._helpScreen.hide();
 },
 
 _buildTable: function(parent, nColumns)
@@ -50755,7 +53256,7 @@ parent.appendChild(table);
 }
 };
 
-WebInspector.shortcutsHelp = new WebInspector.ShortcutsHelp();
+WebInspector.shortcutsScreen = new WebInspector.ShortcutsScreen();
 
 WebInspector.ShortcutsSection = function(name)
 {
@@ -51009,8 +53510,9 @@ WebInspector.HAREntry._toMilliseconds = function(time)
 return time === -1 ? -1 : Math.round(time * 1000);
 }
 
-WebInspector.HARLog = function()
+WebInspector.HARLog = function(resources)
 {
+this._resources = resources;
 }
 
 WebInspector.HARLog.prototype = {
@@ -51025,7 +53527,7 @@ name: "WebInspector",
 version: webKitVersion ? webKitVersion[1] : "n/a"
 },
 pages: this._buildPages(),
-entries: WebInspector.networkResources.map(this._convertResource.bind(this))
+entries: this._resources.map(this._convertResource.bind(this))
 }
 },
 
@@ -51074,6 +53576,7 @@ return WebInspector.HAREntry._toMilliseconds(time - startTime);
 
 
 
+
 WebInspector.CookieParser = function()
 {
 }
@@ -51107,7 +53610,7 @@ return;
 for (var kv = this._extractKeyValue(); kv; kv = this._extractKeyValue()) {
 if (this._lastCookie)
 this._lastCookie.addAttribute(kv.key, kv.value);
-else 
+else
 this._addCookie(kv, WebInspector.Cookie.Type.Response);
 if (this._advanceAndCheckCookieDelimiter())
 this._flushCookie();
@@ -51189,6 +53692,7 @@ WebInspector.CookieParser.parseSetCookie = function(header)
 {
 return (new WebInspector.CookieParser()).parseSetCookie(header);
 }
+
 
 WebInspector.Cookie = function(name, value, type)
 {
@@ -51376,7 +53880,7 @@ toolbarItem.addStyleClass(panel._panelName);
 function onToolbarItemClicked()
 {
 WebInspector.toolbar._updateDropdownButtonAndHideDropdown();
-WebInspector.currentPanel = panel;
+WebInspector.setCurrentPanel(panel);
 }
 toolbarItem.addEventListener("click", onToolbarItemClicked);
 
@@ -51385,7 +53889,7 @@ var iconElement = toolbarItem.createChild("div", "toolbar-icon");
 if ("toolbarItemLabel" in panel)
 toolbarItem.createChild("div", "toolbar-label").textContent = panel.toolbarItemLabel;
 
-if (panel === WebInspector.currentPanel)
+if (panel === WebInspector.currentPanel())
 toolbarItem.addStyleClass("toggled-on");
 
 return toolbarItem;
@@ -51410,10 +53914,10 @@ if (this.visible)
 return;
 var style = this.element.style;
 this._populate();
-var top = this._arrow.totalOffsetTop + this._arrow.clientHeight;
+var top = this._arrow.totalOffsetTop() + this._arrow.clientHeight;
 this._arrow.addStyleClass("dropdown-visible");
 this.element.style.top = top + "px";
-this.element.style.left = this._arrow.totalOffsetLeft + "px";
+this.element.style.left = this._arrow.totalOffsetLeft() + "px";
 this._contentElement.style.maxHeight = window.innerHeight - top - 20 + "px";
 this._toolbar.appendChild(this.element);
 WebInspector.currentFocusElement = this.contentElement;
@@ -51471,17 +53975,23 @@ WebInspector.SearchController.prototype = {
 updateSearchMatchesCount: function(matches, panel)
 {
 if (!panel)
-panel = WebInspector.currentPanel;
+panel = WebInspector.currentPanel();
 
 panel.currentSearchMatches = matches;
 
-if (panel === WebInspector.currentPanel)
-this._updateSearchMatchesCount(WebInspector.currentPanel.currentQuery && matches);
+if (panel === WebInspector.currentPanel())
+this._updateSearchMatchesCountAndCurrentMatchIndex(WebInspector.currentPanel().currentQuery && matches);
+},
+
+updateCurrentMatchIndex: function(currentMatchIndex, panel)
+{
+if (panel === WebInspector.currentPanel())
+this._updateSearchMatchesCountAndCurrentMatchIndex(panel.currentSearchMatches, currentMatchIndex);
 },
 
 updateSearchLabel: function()
 {
-var panelName = WebInspector.currentPanel && WebInspector.currentPanel.toolbarItemLabel;
+var panelName = WebInspector.currentPanel() && WebInspector.currentPanel().toolbarItemLabel;
 if (!panelName)
 return;
 var newLabel = WebInspector.UIString("Search %s", panelName);
@@ -51525,7 +54035,7 @@ event.handled = true;
 break;
 
 case "U+0047": 
-var currentPanel = WebInspector.currentPanel;
+var currentPanel = WebInspector.currentPanel();
 
 if (isMac && event.metaKey && !event.ctrlKey && !event.altKey) {
 if (event.shiftKey) {
@@ -51546,11 +54056,11 @@ this.updateSearchLabel();
 if (!this._currentQuery)
 return;
 
-panel = WebInspector.currentPanel;
+panel = WebInspector.currentPanel();
 if (panel.performSearch) {
 function performPanelSearch()
 {
-this._updateSearchMatchesCount();
+this._updateSearchMatchesCountAndCurrentMatchIndex();
 
 panel.currentQuery = this._currentQuery;
 panel.performSearch(this._currentQuery);
@@ -51560,11 +54070,11 @@ panel.performSearch(this._currentQuery);
 setTimeout(performPanelSearch.bind(this), 0);
 } else {
 
-this._updateSearchMatchesCount();
+this._updateSearchMatchesCountAndCurrentMatchIndex();
 }
 },
 
-_updateSearchMatchesCount: function(matches)
+_updateSearchMatchesCountAndCurrentMatchIndex: function(matches, currentMatchIndex)
 {
 if (matches == null) {
 this._matchesElement.addStyleClass("hidden");
@@ -51572,10 +54082,17 @@ return;
 }
 
 if (matches) {
-if (matches === 1)
+if (matches === 1) {
+if (currentMatchIndex === 1)
+var matchesString = WebInspector.UIString("1 of 1 match");
+else
 var matchesString = WebInspector.UIString("1 match");
+} else {
+if (currentMatchIndex)
+var matchesString = WebInspector.UIString("%d of %d matches", currentMatchIndex, matches);
 else
 var matchesString = WebInspector.UIString("%d matches", matches);
+}
 } else
 var matchesString = WebInspector.UIString("Not Found");
 
@@ -51665,12 +54182,12 @@ if (hadCurrentQuery && panel.searchCanceled)
 panel.searchCanceled();
 }
 
-this._updateSearchMatchesCount();
+this._updateSearchMatchesCountAndCurrentMatchIndex();
 
 return;
 }
 
-var currentPanel = WebInspector.currentPanel;
+var currentPanel = WebInspector.currentPanel();
 if (!repeatSearch && query === currentPanel.currentQuery && currentPanel.currentQuery === this._currentQuery) {
 
 
@@ -51685,7 +54202,7 @@ return;
 
 this._currentQuery = query;
 
-this._updateSearchMatchesCount();
+this._updateSearchMatchesCountAndCurrentMatchIndex();
 
 if (!currentPanel.performSearch)
 return;
@@ -51702,17 +54219,18 @@ currentPanel.performSearch(query);
 WebInspector.WorkerManager = function()
 {
 this._workerIdToWindow = {};
-InspectorBackend.registerDomainDispatcher("Worker", new WebInspector.WorkerMessageForwarder(this));
+InspectorBackend.registerWorkerDispatcher(new WebInspector.DedicatedWorkerMessageForwarder(this));
 }
 
 WebInspector.WorkerManager.isWorkerFrontend = function()
 {
-return !!WebInspector.queryParamsObject["workerId"];
+return !!WebInspector.queryParamsObject["dedicatedWorkerId"] ||
+!!WebInspector.queryParamsObject["isSharedWorker"];
 }
 
 WebInspector.WorkerManager.loaded = function()
 {
-var workerId = WebInspector.queryParamsObject["workerId"];
+var workerId = WebInspector.queryParamsObject["dedicatedWorkerId"];
 if (!workerId) {
 WebInspector.workerManager = new WebInspector.WorkerManager();
 return;
@@ -51773,11 +54291,16 @@ WorkerAgent.connectToWorker(workerId);
 
 _openInspectorWindow: function(workerId)
 {
-var url = location.href + "&workerId=" + workerId;
+var url = location.href + "&dedicatedWorkerId=" + workerId;
 url = url.replace("docked=true&", "");
-var workerInspectorWindow = window.open(url);
+
+var workerInspectorWindow = window.open(url, undefined, "location=0");
 this._workerIdToWindow[workerId] = workerInspectorWindow;
 workerInspectorWindow.addEventListener("beforeunload", this._workerInspectorClosing.bind(this, workerId), true);
+
+
+window.addEventListener("beforeunload", this._pageInspectorClosing.bind(this), true);
+WebInspector.notifications.addEventListener(WebInspector.Events.InspectorClosing, this._pageInspectorClosing, this);
 },
 
 closeWorkerInspector: function(workerId)
@@ -51794,8 +54317,19 @@ this.closeWorkerInspector(workerId);
 this.dispatchEventToListeners(WebInspector.WorkerManager.Events.WorkersCleared);
 },
 
+_pageInspectorClosing: function()
+{
+this._ignoreWorkerInspectorClosing = true;
+for (var workerId in this._workerIdToWindow) {
+this._workerIdToWindow[workerId].close();
+WorkerAgent.disconnectFromWorker(workerId);
+}
+},
+
 _workerInspectorClosing: function(workerId, event)
 {
+if (this._ignoreWorkerInspectorClosing)
+return;
 delete this._workerIdToWindow[workerId];
 WorkerAgent.disconnectFromWorker(workerId);
 this.dispatchEventToListeners(WebInspector.WorkerManager.Events.WorkerInspectorClosed, workerId);
@@ -51804,13 +54338,13 @@ this.dispatchEventToListeners(WebInspector.WorkerManager.Events.WorkerInspectorC
 
 WebInspector.WorkerManager.prototype.__proto__ = WebInspector.Object.prototype;
 
-WebInspector.WorkerMessageForwarder = function(workerManager)
+WebInspector.DedicatedWorkerMessageForwarder = function(workerManager)
 {
 this._workerManager = workerManager;
 window.addEventListener("message", this._receiveMessage.bind(this), true);
 }
 
-WebInspector.WorkerMessageForwarder.prototype = {
+WebInspector.DedicatedWorkerMessageForwarder.prototype = {
 _receiveMessage: function(event)
 {
 var workerId = event.data.workerId;
@@ -51843,6 +54377,179 @@ this._workerManager._sendMessageToWorkerInspector(workerId, message);
 
 
 
+WebInspector.UserMetrics = function()
+{
+for (var actionName in WebInspector.UserMetrics._ActionCodes) {
+var actionCode = WebInspector.UserMetrics._ActionCodes[actionName];
+this[actionName] = new WebInspector.UserMetrics._Recorder(actionCode);
+}
+
+function settingChanged(trueCode, falseCode, event)
+{
+if (event.data)
+InspectorFrontendHost.recordSettingChanged(trueCode);
+else
+InspectorFrontendHost.recordSettingChanged(falseCode);
+}
+
+WebInspector.settings.domWordWrap.addChangeListener(settingChanged.bind(this, WebInspector.UserMetrics._SettingCodes.ElementsDOMWrapOn, WebInspector.UserMetrics._SettingCodes.ElementsDOMWrapOff));
+WebInspector.settings.monitoringXHREnabled.addChangeListener(settingChanged.bind(this, WebInspector.UserMetrics._SettingCodes.ConsoleMonitorXHROn, WebInspector.UserMetrics._SettingCodes.ConsoleMonitorXHROff));
+WebInspector.settings.preserveConsoleLog.addChangeListener(settingChanged.bind(this, WebInspector.UserMetrics._SettingCodes.ConsolePreserveLogOn, WebInspector.UserMetrics._SettingCodes.ConsolePreserveLogOff));
+WebInspector.settings.resourcesLargeRows.addChangeListener(settingChanged.bind(this, WebInspector.UserMetrics._SettingCodes.NetworkShowLargeRowsOn, WebInspector.UserMetrics._SettingCodes.NetworkShowLargeRowsOff));
+}
+
+
+
+
+
+WebInspector.UserMetrics._ActionCodes = {
+WindowDocked: 1,
+WindowUndocked: 2,
+ScriptsBreakpointSet: 3,
+TimelineStarted: 4,
+ProfilesCPUProfileTaken: 5,
+ProfilesHeapProfileTaken: 6,
+AuditsStarted: 7,
+ConsoleEvaluated: 8
+}
+
+WebInspector.UserMetrics._SettingCodes = {
+ElementsDOMWrapOn: 1,
+ElementsDOMWrapOff: 2,
+ConsoleMonitorXHROn: 3,
+ConsoleMonitorXHROff: 4,
+ConsolePreserveLogOn: 5,
+ConsolePreserveLogOff: 6,
+NetworkShowLargeRowsOn: 7,
+NetworkShowLargeRowsOff: 8
+}
+
+WebInspector.UserMetrics._PanelCodes = {
+elements: 1,
+resources: 2,
+network: 3,
+scripts: 4,
+timeline: 5,
+profiles: 6,
+audits: 7,
+console: 8
+}
+
+WebInspector.UserMetrics.prototype = {
+panelShown: function(panelName)
+{
+InspectorFrontendHost.recordPanelShown(WebInspector.UserMetrics._PanelCodes[panelName] || 0);
+}
+}
+
+
+WebInspector.UserMetrics._Recorder = function(actionCode)
+{
+this._actionCode = actionCode;
+}
+
+WebInspector.UserMetrics._Recorder.prototype = {
+record: function()
+{
+InspectorFrontendHost.recordActionTaken(this._actionCode);
+}
+}
+
+WebInspector.userMetrics = new WebInspector.UserMetrics();
+
+
+
+
+
+WebInspector.JavaScriptContextManager = function(resourceTreeModel, consoleView)
+{
+resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.FrameAdded, this._frameAdded, this);
+resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.FrameNavigated, this._frameNavigated, this);
+resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.FrameDetached, this._frameDetached, this);
+this._consoleView = consoleView;
+this._frameIdToContext = {};
+}
+
+WebInspector.JavaScriptContextManager.prototype = {
+_frameAdded: function(event)
+{
+var frame = event.data;
+var parentFrameId = frame.parentId;
+var context = new WebInspector.FrameEvaluationContext(frame);
+this._frameIdToContext[frame.id] = context;
+this._consoleView.addContext(context);
+},
+
+_frameNavigated: function(event)
+{
+var frame = event.data.frame;
+var context = this._frameIdToContext[frame.id];
+if (context)
+context._frameNavigated(frame);
+},
+
+_frameDetached: function(event)
+{
+var frameId = event.data;
+var context = this._frameIdToContext[frameId];
+if (!context)
+return;
+this._consoleView.removeContext(context);
+delete this._frameIdToContext[frameId];
+},
+}
+
+WebInspector.JavaScriptContextManager.prototype.__proto__ = WebInspector.Object.prototype;
+
+WebInspector.FrameEvaluationContext = function(frame)
+{
+this._frame = frame;
+}
+
+WebInspector.FrameEvaluationContext.EventTypes = {
+Updated: "updated"
+}
+
+WebInspector.FrameEvaluationContext.prototype =
+{
+_frameNavigated: function(frame)
+{
+this._frame = frame;
+this.dispatchEventToListeners(WebInspector.FrameEvaluationContext.EventTypes.Updated, this);
+},
+
+get frameId()
+{
+return this._frame.id
+},
+
+get url()
+{
+return this._frame.url;
+},
+
+get displayName()
+{
+if (!this._frame.parentId)
+return "<top frame>";
+var name = this._frame.name || "";
+var subtitle = new WebInspector.Resource(null, this._frame.url).displayName;
+if (subtitle) {
+if (!name)
+return subtitle;
+return name + "( " + subtitle + " )";
+}
+return "<iframe>";
+}
+}
+
+WebInspector.FrameEvaluationContext.prototype.__proto__ = WebInspector.Object.prototype;
+
+
+
+
+
+
 
 var context = {};  
 
@@ -51862,6 +54569,9 @@ Preferences.showCookiesTab = true;
 Preferences.saveAsAvailable = true;
 Preferences.useLowerCaseMenuTitlesOnWindows = true;
 Preferences.canInspectWorkers = true;
+Preferences.canClearCacheAndCookies = true;
+Preferences.canDisableCache = true;
+Preferences.showNetworkPanelInitiatorColumn = true;
 })();
 
 
@@ -51871,9 +54581,8 @@ var devtools = devtools || {};
 
 devtools.domContentLoaded = function()
 {
-WebInspector.setAttachedWindow(WebInspector.queryParamsObject.docked === "true");
-if (WebInspector.queryParamsObject.toolbar_color && WebInspector.queryParamsObject.text_color)
-WebInspector.setToolbarColors(WebInspector.queryParamsObject.toolbar_color, WebInspector.queryParamsObject.text_color);
+if (WebInspector.queryParamsObject.toolbarColor && WebInspector.queryParamsObject.textColor)
+WebInspector.setToolbarColors(WebInspector.queryParamsObject.toolbarColor, WebInspector.queryParamsObject.textColor);
 }
 document.addEventListener("DOMContentLoaded", devtools.domContentLoaded, false);
 
@@ -51972,8 +54681,12 @@ webInspector.inspectedWindow.__proto__.__defineGetter__("tabId", getTabId);
 chrome = window.chrome || {};
 chrome.experimental = chrome.experimental || {};
 chrome.experimental.devtools = chrome.experimental.devtools || {};
-for (var property in webInspector)
-chrome.experimental.devtools[property] = webInspector[property];
+
+var properties = Object.getOwnPropertyNames(webInspector);
+for (var i = 0; i < properties.length; ++i) {
+var descriptor = Object.getOwnPropertyDescriptor(webInspector, properties[i]);
+Object.defineProperty(chrome.experimental.devtools, properties[i], descriptor);
+}
 }
 
 WebInspector.buildPlatformExtensionAPI = function()
@@ -52109,7 +54822,7 @@ TestSuite.prototype.showPanel = function(panelName)
 var toolbar = document.getElementById("toolbar");
 var button = toolbar.getElementsByClassName(panelName)[0];
 button.click();
-this.assertEquals(WebInspector.panels[panelName], WebInspector.currentPanel);
+this.assertEquals(WebInspector.panels[panelName], WebInspector.currentPanel());
 };
 
 
@@ -52170,7 +54883,7 @@ this.takeControl();
 TestSuite.prototype.testScriptsTabIsPopulatedOnInspectedPageRefresh = function()
 {
 var test = this;
-this.assertEquals(WebInspector.panels.elements, WebInspector.currentPanel, "Elements panel should be current one.");
+this.assertEquals(WebInspector.panels.elements, WebInspector.currentPanel(), "Elements panel should be current one.");
 
 this.addSniffer(WebInspector.panels.scripts, "reset", waitUntilScriptIsParsed);
 
@@ -52278,8 +54991,8 @@ lineText: "  debugger;"
 
 
 
-if (WebInspector.currentPanel.paused) {
-var callFrame = WebInspector.currentPanel._presentationModel.selectedCallFrame;
+if (WebInspector.currentPanel().paused) {
+var callFrame = WebInspector.currentPanel()._presentationModel.selectedCallFrame;
 this.assertEquals(expectations.functionsOnStack[0], callFrame.functionName);
 var callbackInvoked = false;
 this._checkSourceFrameWhenLoaded(expectations, function() {
@@ -52442,6 +55155,17 @@ this.takeControl();
 };
 
 
+TestSuite.prototype.testSharedWorker = function()
+{
+function didEvaluateInConsole(resultText) {
+this.assertEquals("2011", resultText);
+this.releaseControl();
+}
+this.evaluateInConsole_("globalVar", didEvaluateInConsole.bind(this));
+this.takeControl();
+};
+
+
 
 TestSuite.prototype.optionsToString_ = function(options)
 {
@@ -52478,7 +55202,7 @@ test.assertTrue(-1 !== pageScriptIndex, "Script with url " + scriptName + " not 
 scriptResource = options[pageScriptIndex].representedObject;
 
 
-WebInspector.currentPanel._showScriptOrResource(scriptResource);
+WebInspector.currentPanel()._showScriptOrResource(scriptResource);
 test.assertEquals(pageScriptIndex, scriptSelect.selectedIndex, "Unexpected selected option index.");
 }
 
@@ -52505,10 +55229,10 @@ callback(view, scriptResource.url);
 TestSuite.prototype.evaluateInConsole_ = function(code, callback)
 {
 WebInspector.showConsole();
-WebInspector.console.prompt.text = code;
-WebInspector.console.promptElement.dispatchEvent( TestSuite.createKeyEvent("Enter"));
+WebInspector.consoleView.prompt.text = code;
+WebInspector.consoleView.promptElement.dispatchEvent(TestSuite.createKeyEvent("Enter"));
 
-this.addSniffer(WebInspector.ConsoleView.prototype, "addMessage",
+this.addSniffer(WebInspector.ConsoleView.prototype, "_appendConsoleMessage",
 function(commandResult) {
 callback(commandResult.toMessageElement().textContent);
 });
@@ -52571,7 +55295,7 @@ TestSuite.prototype._checkSourceFrameWhenLoaded = function(expectations, callbac
 {
 var test = this;
 
-var frame = WebInspector.currentPanel.visibleView;
+var frame = WebInspector.currentPanel().visibleView;
 
 if (frame._textViewer)
 checkExecLine();

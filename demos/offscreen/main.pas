@@ -24,11 +24,6 @@ type
     procedure AppEventsMessage(var Msg: tagMSG; var Handled: Boolean);
     procedure chrmosrCursorChange(Sender: TObject; const browser: ICefBrowser;
       cursor: HICON);
-  private
-    { Déclarations privées }
-    FResizing: Boolean;
-  public
-    { Déclarations publiques }
   end;
 
 var
