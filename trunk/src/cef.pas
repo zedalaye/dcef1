@@ -1919,7 +1919,7 @@ begin
       end;
       //InvalidateRect(ClipRect);
       InvalidateRect(RectF(dirtyRect.x, dirtyRect.y,
-          dirtyRect.x + dirtyRect.width,  dirtyRect.y + dirtyRect.height));
+        dirtyRect.x + dirtyRect.width,  dirtyRect.y + dirtyRect.height));
     end;
 {$ENDIF}
 end;
@@ -2109,9 +2109,12 @@ begin
    for i := 0 to Scene.GetUpdateRectsCount - 1 do
    begin
      r := Scene.GetUpdateRect(i);
-     r.TopLeft := AbsoluteToLocal(r.TopLeft);
-     r.BottomRight := AbsoluteToLocal(r.BottomRight);
-     Canvas.DrawBitmap(FBuffer, r, r, 1, False);
+     if IntersectRectF(r, r, ClipRect) then
+     begin
+       r.TopLeft := AbsoluteToLocal(r.TopLeft);
+       r.BottomRight := AbsoluteToLocal(r.BottomRight);
+       Canvas.DrawBitmap(FBuffer, r, r, 1, False);
+     end;
    end;
 end;
 
