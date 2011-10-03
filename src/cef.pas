@@ -1912,8 +1912,9 @@ begin
       offset := dirtyRect.width * 4;
       for i := 0 to dirtyRect.height - 1 do
       begin
-        for j := 0 to offset div 4 do
-          PAlphaColorArray(dst)[j] := PAlphaColorArray(src)[j] or $FF000000;
+        //for j := 0 to offset div 4 do
+          //PAlphaColorArray(dst)[j] := PAlphaColorArray(src)[j];// or $FF000000;
+        Move(src^, dst^, offset);
         Inc(dst, w);
         Inc(src, w);
       end;
@@ -2106,16 +2107,18 @@ var
   i: Integer;
 begin
  if FBuffer <> nil then
+ begin
+   FBuffer.Canvas.BeginScene;
    for i := 0 to Scene.GetUpdateRectsCount - 1 do
    begin
      r := Scene.GetUpdateRect(i);
+     r.TopLeft := AbsoluteToLocal(r.TopLeft);
+     r.BottomRight := AbsoluteToLocal(r.BottomRight);
      if IntersectRectF(r, r, ClipRect) then
-     begin
-       r.TopLeft := AbsoluteToLocal(r.TopLeft);
-       r.BottomRight := AbsoluteToLocal(r.BottomRight);
        Canvas.DrawBitmap(FBuffer, r, r, 1, False);
-     end;
    end;
+   FBuffer.Canvas.EndScene;
+ end;
 end;
 
 procedure TCustomChromium.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Single);
