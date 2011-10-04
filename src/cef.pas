@@ -1912,9 +1912,9 @@ begin
       offset := dirtyRect.width * 4;
       for i := 0 to dirtyRect.height - 1 do
       begin
-        //for j := 0 to offset div 4 do
-          //PAlphaColorArray(dst)[j] := PAlphaColorArray(src)[j];// or $FF000000;
-        Move(src^, dst^, offset);
+        for j := 0 to offset div 4 do
+          PAlphaColorArray(dst)[j] := PAlphaColorArray(src)[j] or $FF000000;
+        //Move(src^, dst^, offset);
         Inc(dst, w);
         Inc(src, w);
       end;
