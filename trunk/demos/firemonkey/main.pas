@@ -4,11 +4,11 @@ interface
 
 uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
-  FMX.Types, FMX.Controls, FMX.Forms, cef, ceflib, FMX.Edit;
+  FMX.Types, FMX.Controls, FMX.Forms, ceflib, FMX.Edit, ceffmx;
 
 type
   TMainForm = class(TForm)
-    crm: TChromium;
+    crm: TChromiumFMX;
     btPrev: TButton;
     btNext: TButton;
     btHome: TButton;
