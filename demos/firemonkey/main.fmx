@@ -9,7 +9,7 @@ object MainForm: TMainForm
   Visible = False
   OnCreate = FormCreate
   StyleLookup = 'backgroundstyle'
-  object crm: TChromium
+  object crm: TChromiumFMX
     Align = alBottom
     Position.Point = '(0,24)'
     Width = 700.000000000000000000
@@ -21,6 +21,7 @@ object MainForm: TMainForm
     OnLoadEnd = crmLoadEnd
     OnAddressChange = crmAddressChange
     OnTitleChange = crmTitleChange
+    Options = [coAccelerated2dCanvasDisabled]
   end
   object btPrev: TButton
     Align = alLeft

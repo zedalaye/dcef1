@@ -5,7 +5,7 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, StdCtrls, cef, ceflib, Buttons, ActnList, Menus, ComCtrls;
+  Dialogs, StdCtrls, ceflib, cefvcl, Buttons, ActnList, Menus, ComCtrls;
 
 type
   TMainForm = class(TForm)
@@ -390,7 +390,6 @@ end;
 
 procedure TMainForm.FormCreate(Sender: TObject);
 begin
-  TCefRTTIExtension.Register('test', Self);
   FLoading := False;
 end;
 

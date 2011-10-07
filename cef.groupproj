@@ -3,9 +3,6 @@
 			<ProjectGuid>{19F9F247-BD11-4AFB-9D2C-0BD14F1486A0}</ProjectGuid>
 		</PropertyGroup>
 		<ItemGroup>
-			<Projects Include="src\cefcomponent.dproj">
-				<Dependencies/>
-			</Projects>
 			<Projects Include="demos\cefclient\cefclient.dproj">
 				<Dependencies/>
 			</Projects>
@@ -23,50 +20,41 @@
 				<Default.Personality/>
 			</BorlandProject>
 		</ProjectExtensions>
-		<Target Name="cefcomponent">
-			<MSBuild Projects="src\cefcomponent.dproj"/>
-		</Target>
-		<Target Name="cefcomponent:Clean">
-			<MSBuild Targets="Clean" Projects="src\cefcomponent.dproj"/>
-		</Target>
-		<Target Name="cefcomponent:Make">
-			<MSBuild Targets="Make" Projects="src\cefcomponent.dproj"/>
-		</Target>
 		<Target Name="cefclient">
 			<MSBuild Projects="demos\cefclient\cefclient.dproj"/>
 		</Target>
 		<Target Name="cefclient:Clean">
-			<MSBuild Targets="Clean" Projects="demos\cefclient\cefclient.dproj"/>
+			<MSBuild Projects="demos\cefclient\cefclient.dproj" Targets="Clean"/>
 		</Target>
 		<Target Name="cefclient:Make">
-			<MSBuild Targets="Make" Projects="demos\cefclient\cefclient.dproj"/>
+			<MSBuild Projects="demos\cefclient\cefclient.dproj" Targets="Make"/>
 		</Target>
 		<Target Name="guiclient">
 			<MSBuild Projects="demos\guiclient\guiclient.dproj"/>
 		</Target>
 		<Target Name="guiclient:Clean">
-			<MSBuild Targets="Clean" Projects="demos\guiclient\guiclient.dproj"/>
+			<MSBuild Projects="demos\guiclient\guiclient.dproj" Targets="Clean"/>
 		</Target>
 		<Target Name="guiclient:Make">
-			<MSBuild Targets="Make" Projects="demos\guiclient\guiclient.dproj"/>
+			<MSBuild Projects="demos\guiclient\guiclient.dproj" Targets="Make"/>
 		</Target>
 		<Target Name="offscreen">
 			<MSBuild Projects="demos\offscreen\offscreen.dproj"/>
 		</Target>
 		<Target Name="offscreen:Clean">
-			<MSBuild Targets="Clean" Projects="demos\offscreen\offscreen.dproj"/>
+			<MSBuild Projects="demos\offscreen\offscreen.dproj" Targets="Clean"/>
 		</Target>
 		<Target Name="offscreen:Make">
-			<MSBuild Targets="Make" Projects="demos\offscreen\offscreen.dproj"/>
+			<MSBuild Projects="demos\offscreen\offscreen.dproj" Targets="Make"/>
 		</Target>
 		<Target Name="Build">
-			<CallTarget Targets="cefcomponent;cefclient;guiclient;offscreen"/>
+			<CallTarget Targets="cefclient;guiclient;offscreen"/>
 		</Target>
 		<Target Name="Clean">
-			<CallTarget Targets="cefcomponent:Clean;cefclient:Clean;guiclient:Clean;offscreen:Clean"/>
+			<CallTarget Targets="cefclient:Clean;guiclient:Clean;offscreen:Clean"/>
 		</Target>
 		<Target Name="Make">
-			<CallTarget Targets="cefcomponent:Make;cefclient:Make;guiclient:Make;offscreen:Make"/>
+			<CallTarget Targets="cefclient:Make;guiclient:Make;offscreen:Make"/>
 		</Target>
-		<Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+		<Import Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')" Project="$(BDS)\Bin\CodeGear.Group.Targets"/>
 	</Project>

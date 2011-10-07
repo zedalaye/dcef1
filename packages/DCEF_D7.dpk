@@ -1,4 +1,4 @@
-package cefcomponent;
+package DCEF_D7;
 
 {$R *.res}
 {$ALIGN 8}
@@ -22,21 +22,16 @@ package cefcomponent;
 {$WRITEABLECONST OFF}
 {$MINENUMSIZE 1}
 {$IMAGEBASE $400000}
-{$IMPLICITBUILD ON}
+{$IMPLICITBUILD OFF}
 
 requires
-  rtl
-{$IFDEF FMX}
-  ,fmx
-{$ELSE}
-  ,vcl
-{$ENDIF}
-  ;
+  rtl,
+  vcl;
 
 contains
-  cef in 'cef.pas',
-  ceflib in 'ceflib.pas';
+  cefgui in '..\src\cefgui.pas',
+  ceflib in '..\src\ceflib.pas',
+  cefvcl in '..\src\cefvcl.pas',
+  cefreg in 'cefreg.pas';
 
 end.
-
-
