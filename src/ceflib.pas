@@ -247,6 +247,12 @@ type
     // The graphics implementation that CEF will use for rendering GPU accelerated
     // content like WebGL, accelerated layers and 3D CSS.
     graphics_implementation: TCefGraphicsImplementation;
+
+    // Quota limit for localStorage data across all origins. Default size is 5MB.
+    local_storage_quota: Cardinal;
+
+    // Quota limit for sessionStorage data per namespace. Default size is 5MB.
+    session_storage_quota: Cardinal;
   end;
 
   // Browser initialization settings. Specify NULL or 0 to get the recommended
@@ -457,6 +463,12 @@ type
     has_expires: Boolean;
     expires: TCefTime;
   end;
+
+  // Storage types.
+  TCefStorageType = (
+    ST_LOCALSTORAGE = 0,
+    ST_SESSIONSTORAGE
+  );
 
   // Mouse button types.
 
@@ -689,6 +701,17 @@ type
     WUR_STATE_ERROR = 5,
     WUR_STATE_ABORT = 6
   );
+
+  // Focus sources.
+  TCefHandlerFocusSource = (
+    // The source is explicit navigation via the API (LoadURL(), etc).
+    FOCUS_SOURCE_NAVIGATION = 0,
+    // The source is a system-generated focus event.
+    FOCUS_SOURCE_SYSTEM,
+    // The source is a child widget of the browser window requesting focus.
+    FOCUS_SOURCE_WIDGET
+  );
+
 
   // Key event types.
   TCefHandlerKeyEventType = (
@@ -941,6 +964,7 @@ type
   PCefRenderHandler = ^TCefRenderHandler;
   PCefDragHandler = ^TCefDragHandler;
   PCefDragData = ^TCefDragData;
+  PCefStorageVisitor = ^TCefStorageVisitor;
 
   TCefBase = record
     // Size of the data structure.
@@ -1051,6 +1075,9 @@ type
 
     // Change the zoom level to the specified value.
     set_zoom_level: procedure(self: PCefBrowser; zoomLevel: Double); stdcall;
+
+    // Clear the back/forward browsing history.
+    clear_history: procedure(self: PCefBrowser); stdcall;
 
     // Open developer tools in its own window.
     show_dev_tools: procedure(self: PCefBrowser); stdcall;
@@ -1401,12 +1428,11 @@ type
     on_take_focus: procedure(self: PCefFocusHandler;
         browser: PCefBrowser; next: Integer); stdcall;
 
-    // Called when the browser component is requesting focus. |isWidget| will be
-    // true (1) if the focus is requested for a child widget of the browser
-    // window. Return false (0) to allow the focus to be set or true (1) to cancel
-    // setting the focus.
+    // Called when the browser component is requesting focus. |source| indicates
+    // where the focus request is originating from. Return false (0) to allow the
+    // focus to be set or true (1) to cancel setting the focus.
     on_set_focus: function(self: PCefFocusHandler;
-        browser: PCefBrowser; isWidget: Integer): Integer; stdcall;
+        browser: PCefBrowser; source: TCefHandlerFocusSource): Integer; stdcall;
   end;
 
   // Implement this structure to handle events related to keyboard input. The
@@ -2086,9 +2112,11 @@ type
     // Base structure.
     base: TCefBase;
 
-    // Return a new scheme handler instance to handle the request.
-    // todo
-    create: function(self: PCefSchemeHandlerFactory; const scheme_name: PCefString;
+    // Return a new scheme handler instance to handle the request. |browser| will
+    // be the browser window that initiated the request. If the request was
+    // initiated using the cef_web_urlrequest_t API |browser| will be NULL.
+    create: function(self: PCefSchemeHandlerFactory;
+      browser: PCefBrowser; const scheme_name: PCefString;
       request: PCefRequest): PCefSchemeHandler; stdcall;
   end;
 
@@ -2636,6 +2664,22 @@ type
       count, total: Integer; deleteCookie: PInteger): Integer; stdcall;
   end;
 
+  // Structure to implement for visiting storage. The functions of this structure
+  // will always be called on the UI thread.
+  TCefStorageVisitor = record
+    // Base structure.
+    base: TCefBase;
+
+    // Method that will be called once for each key/value data pair in storage.
+    // |count| is the 0-based index for the current pair. |total| is the total
+    // number of pairs. Set |deleteData| to true (1) to delete the pair currently
+    // being visited. Return false (0) to stop visiting pairs. This function may
+    // never be called if no data is found.
+    visit: function(self: PCefStorageVisitor; type_: TCefStorageType;
+      const origin, key, value: PCefString; count, total: Integer;
+      deleteData: PInteger): Integer; stdcall;
+  end;
+
   // Structure to implement for filtering response content. The functions of this
   // structure will always be called on the UI thread.
   TCefContentFilter = record
@@ -2747,6 +2791,7 @@ type
     procedure StopFinding(ClearSelection: Boolean);
     function GetZoomLevel: Double;
     procedure SetZoomLevel(zoomLevel: Double);
+    procedure ClearHistory;
     procedure ShowDevTools;
     procedure CloseDevTools;
     function IsWindowRenderingDisabled: Boolean;
@@ -2914,7 +2959,8 @@ type
 
   ICefSchemeHandlerFactory = interface(ICefBase)
     ['{4D9B7960-B73B-4EBD-9ABE-6C1C43C245EB}']
-    function New(const scheme: ustring; const request: ICefRequest): ICefSchemeHandler;
+    function New(const scheme: ustring; const browser: ICefBrowser;
+      const request: ICefRequest): ICefSchemeHandler;
   end;
 
   ICefDownloadHandler = interface(ICefBase)
@@ -3181,6 +3227,13 @@ type
       count, total: Integer; out deleteCookie: Boolean): Boolean;
   end;
 
+  ICefStorageVisitor = interface(ICefBase)
+  ['{F6FDF9E2-FEC4-427D-8618-80D96B1E056B}']
+    function visit(StorageType: TCefStorageType;
+      const origin, key, value: ustring; count, total: Integer;
+      out deleteData: Boolean): Boolean;
+  end;
+
   ICefDragData = interface(ICefBase)
   ['{70088159-3D67-496E-89B1-56ACAF627CBF}']
     function IsLink: Boolean;
@@ -3246,6 +3299,7 @@ type
     procedure StopFinding(ClearSelection: Boolean);
     function GetZoomLevel: Double;
     procedure SetZoomLevel(zoomLevel: Double);
+    procedure ClearHistory;
     procedure ShowDevTools;
     procedure CloseDevTools;
     function IsWindowRenderingDisabled: Boolean;
@@ -3542,7 +3596,7 @@ type
   TCefFocusHandlerOwn = class(TCefBaseOwn)
   protected
     procedure OnTakeFocus(const browser: ICefBrowser; next: Boolean); virtual;
-    function OnSetFocus(const browser: ICefBrowser; isWidget: Boolean): Boolean; virtual;
+    function OnSetFocus(const browser: ICefBrowser; source: TCefHandlerFocusSource): Boolean; virtual;
   public
     constructor Create; virtual;
   end;
@@ -3671,6 +3725,7 @@ type
   private
     FCancelled: Boolean;
     FScheme: ustring;
+    FBrowser: ICefBrowser;
     FRequest: ICefRequest;
   protected
     function ProcessRequest(const Request: ICefRequest; var redirectUrl: ustring;
@@ -3680,9 +3735,11 @@ type
       var BytesRead: Integer; const callback: ICefSchemeHandlerCallback): Boolean; virtual;
     procedure Cancel; virtual;
   public
-    constructor Create(SyncMainThread: Boolean; const scheme: ustring; const request: ICefRequest); virtual;
+    constructor Create(SyncMainThread: Boolean; const scheme: ustring;
+     const browser: ICefBrowser; const request: ICefRequest); virtual;
     property Cancelled: Boolean read FCancelled;
     property Scheme: ustring read FScheme;
+    property Browser: ICefBrowser read FBrowser;
     property Request: ICefRequest read FRequest;
   end;
   TCefSchemeHandlerClass = class of TCefSchemeHandlerOwn;
@@ -3701,7 +3758,7 @@ type
     FClass: TCefSchemeHandlerClass;
     FSyncMainThread: Boolean;
   protected
-    function New(const scheme: ustring; const request: ICefRequest): ICefSchemeHandler; virtual;
+    function New(const scheme: ustring; const browser: ICefBrowser; const request: ICefRequest): ICefSchemeHandler; virtual;
   public
     constructor Create(const AClass: TCefSchemeHandlerClass; SyncMainThread: Boolean); virtual;
   end;
@@ -4021,6 +4078,15 @@ type
     constructor Create; virtual;
   end;
 
+  TCefStorageVisitorOwn = class(TCefBaseOwn, ICefStorageVisitor)
+  protected
+    function visit(StorageType: TCefStorageType;
+      const origin, key, value: ustring; count, total: Integer;
+      out deleteData: Boolean): Boolean; virtual;
+  public
+    constructor Create; virtual;
+  end;
+
   TCefCookieVisitorProc = {$IFDEF DELPHI12_UP} reference to {$ENDIF} function(
     const name, value, domain, path: ustring; secure, httponly,
     hasExpires: Boolean; const creation, lastAccess, expires: TDateTime;
@@ -4036,6 +4102,23 @@ type
   public
     constructor Create(const visitor: TCefCookieVisitorProc); reintroduce;
   end;
+
+  TCefStorageVisitorProc = {$IFDEF DELPHI12_UP} reference to {$ENDIF} function(
+    StorageType: TCefStorageType; const origin: ustring;
+    const key: ustring; const value: ustring; count: Integer; total: Integer;
+    out deleteData: Boolean): Boolean;
+
+  TCefFastStorageVisitor = class(TCefStorageVisitorOwn)
+  private
+    FVisitor: TCefStorageVisitorProc;
+  protected
+    function visit(StorageType: TCefStorageType; const origin: ustring;
+      const key: ustring; const value: ustring; count: Integer; total: Integer;
+      out deleteData: Boolean): Boolean; override;
+  public
+    constructor Create(const visitor: TCefStorageVisitorProc); reintroduce;
+  end;
+
 
   TCefDragDataRef = class(TCefBaseRef, ICefDragData)
   protected
@@ -4063,7 +4146,8 @@ procedure CefLoadLib(const Cache: ustring = ''; const UserAgent: ustring = '';
   const ProductVersion: ustring = ''; const Locale: ustring = '';
   const LogFile: ustring = ''; const ExtraPluginPaths: ustring = '';
   LogSeverity: TCefLogSeverity = LOGSEVERITY_DISABLE;
-  GraphicsImplementation: TCefGraphicsImplementation = ANGLE_IN_PROCESS
+  GraphicsImplementation: TCefGraphicsImplementation = ANGLE_IN_PROCESS;
+  LocalStorageQuota: Cardinal = 0; SessionStorageQuota: Cardinal = 0
   );
 function CefGetObject(ptr: Pointer): TObject;
 function CefStringAlloc(const str: ustring): TCefString;
@@ -4113,8 +4197,17 @@ function CefVisitUrlCookies(const url: ustring; includeHttpOnly: Boolean; const 
 
 // must be run on the io thread
 function CefSetCookie(const url: ustring; const name, value, domain, path: ustring; secure, httponly,
-    hasExpires: Boolean; const creation, lastAccess, expires: TDateTime): Boolean;
+  hasExpires: Boolean; const creation, lastAccess, expires: TDateTime): Boolean;
 function CefDeleteCookies(const url, cookieName: ustring): Boolean;
+
+function CefVisitStorage(StorageType: TCefStorageType;
+  const origin, key: ustring; const visitor: ICefStorageVisitor): Boolean; overload;
+function CefVisitStorage(StorageType: TCefStorageType;
+  const origin, key: ustring; const visitor: TCefStorageVisitorProc): Boolean; overload;
+function CefSetStorage(StorageType: TCefStorageType;
+  const origin, key, value: ustring): Boolean;
+function CefDeleteStorage(StorageType: TCefStorageType;
+  const origin, key: ustring): Boolean;
 
 var
   CefLibrary: string = 'libcef.dll';
@@ -4125,8 +4218,9 @@ var
   CefLogFile: ustring = '';
   CefLogSeverity: TCefLogSeverity = LOGSEVERITY_DISABLE;
   CefGraphicsImplementation: TCefGraphicsImplementation = ANGLE_IN_PROCESS;
-
   CefExtraPluginPaths: ustring = '';
+  CefLocalStorageQuota: Cardinal;
+  CefSessionStorageQuota: Cardinal;
 
 implementation
 
@@ -4594,6 +4688,27 @@ var
   // be called on the IO thread.
   cef_delete_cookies: function(const url, cookie_name: PCefString): Integer; cdecl;
 
+  // Visit storage of the specified type. If |origin| is non-NULL only data
+  // matching that origin will be visited. If |key| is non-NULL only data matching
+  // that key will be visited. Otherwise, all data for the storage type will be
+  // visited. Returns false (0) if the storage cannot be accessed. Origin should
+  // be of the form scheme://domain.
+  cef_visit_storage: function(type_: TCefStorageType;
+    const origin, key: PCefString; visitor: PCefStorageVisitor): Integer; cdecl;
+
+  // Sets storage of the specified type, origin, key and value. Returns false (0)
+  // if storage cannot be accessed. This function must be called on the UI thread.
+  cef_set_storage: function(type_: TCefStorageType;
+    const origin, key, value: PCefString): Integer; cdecl;
+
+  // Deletes all storage of the specified type. If |origin| is non-NULL only data
+  // matching that origin will be cleared. If |key| is non-NULL only data matching
+  // that key will be cleared. Otherwise, all data for the storage type will be
+  // cleared. Returns false (0) if storage cannot be accessed. This function must
+  // be called on the UI thread.
+  cef_delete_storage: function(type_: TCefStorageType;
+    const origin, key: PCefString): Integer; cdecl;
+
   // Create a new TCefRequest object.
   cef_request_create: function(): PCefRequest; cdecl;
 
@@ -4773,6 +4888,44 @@ begin
   u := CefString(url);
   c := CefString(cookieName);
   Result := cef_delete_cookies(@u, @c) <> 0;
+end;
+
+function CefVisitStorage(StorageType: TCefStorageType;
+  const origin, key: ustring; const visitor: ICefStorageVisitor): Boolean;
+var
+  o, k: TCefString;
+begin
+  o := CefString(origin);
+  k := CefString(key);
+  Result := cef_visit_storage(StorageType, @o, @k, CefGetData(visitor)) <> 0;
+end;
+
+function CefVisitStorage(StorageType: TCefStorageType;
+  const origin, key: ustring; const visitor: TCefStorageVisitorProc): Boolean;
+begin
+  Result := CefVisitStorage(StorageType, origin, key,
+    TCefFastStorageVisitor.Create(visitor) as ICefStorageVisitor);
+end;
+
+function CefSetStorage(StorageType: TCefStorageType;
+  const origin, key, value: ustring): Boolean;
+var
+  o, k, v: TCefString;
+begin
+  o := CefString(origin);
+  k := CefString(key);
+  v := CefString(value);
+  Result := cef_set_storage(StorageType, @o, @k, @v) <> 0;
+end;
+
+function CefDeleteStorage(StorageType: TCefStorageType;
+  const origin, key: ustring): Boolean;
+var
+  o, k: TCefString;
+begin
+  o := CefString(origin);
+  k := CefString(key);
+  Result := cef_delete_storage(StorageType, @o, @k) <> 0;
 end;
 
 { cef_base }
@@ -5147,10 +5300,10 @@ begin
 end;
 
 function cef_focus_handler_on_set_focus(self: PCefFocusHandler;
-  browser: PCefBrowser; isWidget: Integer): Integer; stdcall;
+  browser: PCefBrowser; source: TCefHandlerFocusSource): Integer; stdcall;
 begin
   with TCefFocusHandlerOwn(CefGetObject(self)) do
-    Result := Ord(OnSetFocus(TCefBrowserRef.UnWrap(browser), isWidget <> 0))
+    Result := Ord(OnSetFocus(TCefBrowserRef.UnWrap(browser), source))
 end;
 
 { cef_keyboard_handler }
@@ -5447,10 +5600,12 @@ end;
 { cef_scheme_handler_factory}
 
 function cef_scheme_handler_factory_create(self: PCefSchemeHandlerFactory;
-  const scheme_name: PCefString; request: PCefRequest): PCefSchemeHandler; stdcall;
+  browser: PCefBrowser; const scheme_name: PCefString;
+  request: PCefRequest): PCefSchemeHandler; stdcall;
 begin
   with TCefSchemeHandlerFactoryOwn(CefGetObject(self)) do
-    Result := CefGetData(New(CefString(scheme_name), TCefRequestRef.UnWrap(request)));
+    Result := CefGetData(New(CefString(scheme_name), TCefBrowserRef.UnWrap(browser),
+      TCefRequestRef.UnWrap(request)));
 end;
 
 { cef_scheme_handler }
@@ -5709,6 +5864,19 @@ begin
   deleteCookie^ := Ord(delete);
 end;
 
+{ cef_storage_visitor }
+
+function cef_storage_visitor_visit(self: PCefStorageVisitor; type_: TCefStorageType;
+  const origin, key, value: PCefString; count, total: Integer; deleteData: PInteger): Integer; stdcall;
+var
+  delete: Boolean;
+begin
+  delete := False;
+  Result := Ord(TCefStorageVisitorOwn(CefGetObject(self)).visit(type_,
+    CefString(origin), CefString(key), CefString(value), count, total, delete));
+  deleteData^ := Ord(delete);
+end;
+
 { TCefBaseOwn }
 
 constructor TCefBaseOwn.CreateData(size: Cardinal);
@@ -5788,6 +5956,11 @@ end;
 function TCefBrowserRef.CanGoForward: Boolean;
 begin
   Result := PCefBrowser(FData)^.can_go_forward(PCefBrowser(FData)) <> 0;
+end;
+
+procedure TCefBrowserRef.ClearHistory;
+begin
+  PCefBrowser(FData)^.clear_history(PCefBrowser(FData));
 end;
 
 procedure TCefBrowserRef.CloseBrowser;
@@ -6626,11 +6799,13 @@ procedure CefLoadLibDefault;
 begin
   if LibHandle = 0 then
     CefLoadLib(CefCache, CefUserAgent, CefProductVersion, CefLocale, CefLogFile,
-      CefExtraPluginPaths, CefLogSeverity, CefGraphicsImplementation);
+      CefExtraPluginPaths, CefLogSeverity, CefGraphicsImplementation,
+      CefLocalStorageQuota, CefSessionStorageQuota);
 end;
 
 procedure CefLoadLib(const Cache, UserAgent, ProductVersion, Locale, LogFile, ExtraPluginPaths: ustring;
-  LogSeverity: TCefLogSeverity; GraphicsImplementation: TCefGraphicsImplementation);
+  LogSeverity: TCefLogSeverity; GraphicsImplementation: TCefGraphicsImplementation; LocalStorageQuota: Cardinal;
+  SessionStorageQuota: Cardinal);
 var
   settings: TCefSettings;
   i: Integer;
@@ -6747,6 +6922,9 @@ begin
     cef_visit_url_cookies := GetProcAddress(LibHandle, 'cef_visit_url_cookies');
     cef_set_cookie := GetProcAddress(LibHandle, 'cef_set_cookie');
     cef_delete_cookies := GetProcAddress(LibHandle, 'cef_delete_cookies');
+    cef_visit_storage := GetProcAddress(LibHandle, 'cef_visit_storage');
+    cef_set_storage := GetProcAddress(LibHandle, 'cef_set_storage');
+    cef_delete_storage := GetProcAddress(LibHandle, 'cef_delete_storage');
     cef_browser_create := GetProcAddress(LibHandle, 'cef_browser_create');
     cef_browser_create_sync := GetProcAddress(LibHandle, 'cef_browser_create_sync');
     cef_request_create := GetProcAddress(LibHandle, 'cef_request_create');
@@ -6830,6 +7008,13 @@ begin
       Assigned(cef_post_delayed_task) and
       Assigned(cef_parse_url) and
       Assigned(cef_create_url) and
+      Assigned(cef_visit_all_cookies) and
+      Assigned(cef_visit_url_cookies) and
+      Assigned(cef_set_cookie) and
+      Assigned(cef_delete_cookies) and
+      Assigned(cef_visit_storage) and
+      Assigned(cef_set_storage) and
+      Assigned(cef_delete_storage) and
       Assigned(cef_browser_create) and
       Assigned(cef_browser_create_sync) and
       Assigned(cef_request_create) and
@@ -6888,6 +7073,8 @@ begin
     settings.log_file := CefString(LogFile);
     settings.log_severity := LogSeverity;
     settings.graphics_implementation := GraphicsImplementation;
+    settings.local_storage_quota := LocalStorageQuota;
+    settings.session_storage_quota := SessionStorageQuota;
     cef_initialize(@settings);
     if settings.extra_plugin_paths <> nil then
       cef_string_list_free(settings.extra_plugin_paths);
@@ -7103,9 +7290,9 @@ begin
 end;
 
 function TCefSchemeHandlerFactoryOwn.New(const scheme: ustring;
-  const request: ICefRequest): ICefSchemeHandler;
+  const browser: ICefBrowser; const request: ICefRequest): ICefSchemeHandler;
 begin
-  Result := FClass.Create(FSyncMainThread, scheme, request) as ICefSchemeHandler;
+  Result := FClass.Create(FSyncMainThread, scheme, browser, request) as ICefSchemeHandler;
 end;
 
 { TCefSchemeHandlerOwn }
@@ -7117,11 +7304,12 @@ begin
 end;
 
 constructor TCefSchemeHandlerOwn.Create(SyncMainThread: Boolean;
-  const scheme: ustring; const request: ICefRequest);
+  const scheme: ustring; const browser: ICefBrowser; const request: ICefRequest);
 begin
   inherited CreateData(SizeOf(TCefSchemeHandler));
   FCancelled := False;
   FScheme := scheme;
+  FBrowser := browser;
   FRequest := request;
   with PCefSchemeHandler(FData)^ do
   begin
@@ -9252,6 +9440,20 @@ begin
   Result := True;
 end;
 
+{ TCefStorageVisitorOwn }
+
+constructor TCefStorageVisitorOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefStorageVisitor));
+  PCefStorageVisitor(FData)^.visit := @cef_storage_visitor_visit;
+end;
+
+function TCefStorageVisitorOwn.visit(StorageType: TCefStorageType; const origin,
+  key, value: ustring; count, total: Integer; out deleteData: Boolean): Boolean;
+begin
+  Result := True;
+end;
+
 { TCefFastCookieVisitor }
 
 constructor TCefFastCookieVisitor.Create(const visitor: TCefCookieVisitorProc);
@@ -9266,6 +9468,22 @@ function TCefFastCookieVisitor.visit(const name, value, domain, path: ustring;
 begin
   Result := FVisitor(name, value, domain, path, secure, httponly, hasExpires,
     creation, lastAccess, expires, count, total, deleteCookie);
+end;
+
+{ TCefFastStorageVisitor }
+
+constructor TCefFastStorageVisitor.Create(
+  const visitor: TCefStorageVisitorProc);
+begin
+  inherited Create;
+  FVisitor := visitor;
+end;
+
+function TCefFastStorageVisitor.visit(StorageType: TCefStorageType;
+  const origin, key, value: ustring; count, total: Integer;
+  out deleteData: Boolean): Boolean;
+begin
+  Result := FVisitor(StorageType, origin, key, value, count, total, deleteData);
 end;
 
 { TCefClientOwn }
@@ -9579,7 +9797,7 @@ begin
 end;
 
 function TCefFocusHandlerOwn.OnSetFocus(const browser: ICefBrowser;
-  isWidget: Boolean): Boolean;
+  source: TCefHandlerFocusSource): Boolean;
 begin
   Result := False;
 end;

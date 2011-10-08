@@ -65,7 +65,7 @@ type
   TOnTooltip = procedure(Sender: TObject; const browser: ICefBrowser; var text: ustring; out Result: Boolean) of object;
 
   TOnTakeFocus = procedure(Sender: TObject; const browser: ICefBrowser; next: Boolean) of object;
-  TOnSetFocus = procedure(Sender: TObject; const browser: ICefBrowser; isWidget: Boolean; out Result: Boolean) of object;
+  TOnSetFocus = procedure(Sender: TObject; const browser: ICefBrowser; source: TCefHandlerFocusSource; out Result: Boolean) of object;
 
   TOnKeyEvent = procedure(Sender: TObject; const browser: ICefBrowser; event: TCefHandlerKeyEventType;
     code, modifiers: Integer; isSystemKey: Boolean; out Result: Boolean) of object;
@@ -198,7 +198,7 @@ type
     function doOnTooltip(const browser: ICefBrowser; var text: ustring): Boolean;
 
     procedure doOnTakeFocus(const browser: ICefBrowser; next: Boolean);
-    function doOnSetFocus(const browser: ICefBrowser; isWidget: Boolean): Boolean;
+    function doOnSetFocus(const browser: ICefBrowser; source: TCefHandlerFocusSource): Boolean;
 
     function doOnKeyEvent(const browser: ICefBrowser; event: TCefHandlerKeyEventType;
       code, modifiers: Integer; isSystemKey: Boolean): Boolean;
@@ -366,7 +366,7 @@ type
     FCrm: IChromiumEvents;
   protected
     procedure OnTakeFocus(const browser: ICefBrowser; next: Boolean); override;
-    function OnSetFocus(const browser: ICefBrowser; isWidget: Boolean): Boolean; override;
+    function OnSetFocus(const browser: ICefBrowser; source: TCefHandlerFocusSource): Boolean; override;
   public
     constructor Create(const crm: IChromiumEvents); reintroduce;
   end;
@@ -586,7 +586,7 @@ type
     function doOnTooltip(const browser: ICefBrowser; var text: ustring): Boolean; virtual;
 
     procedure doOnTakeFocus(const browser: ICefBrowser; next: Boolean); virtual;
-    function doOnSetFocus(const browser: ICefBrowser; isWidget: Boolean): Boolean; virtual;
+    function doOnSetFocus(const browser: ICefBrowser; source: TCefHandlerFocusSource): Boolean; virtual;
 
     function doOnKeyEvent(const browser: ICefBrowser; event: TCefHandlerKeyEventType;
       code, modifiers: Integer; isSystemKey: Boolean): Boolean; virtual;
@@ -1005,9 +1005,9 @@ begin
 end;
 
 function TCustomFocusHandler.OnSetFocus(const browser: ICefBrowser;
-  isWidget: Boolean): Boolean;
+  source: TCefHandlerFocusSource): Boolean;
 begin
-  Result := FCrm.doOnSetFocus(browser, isWidget)
+  Result := FCrm.doOnSetFocus(browser, source)
 end;
 
 procedure TCustomFocusHandler.OnTakeFocus(const browser: ICefBrowser;
@@ -1563,11 +1563,11 @@ begin
 end;
 
 function TCustomChromiumOSR.doOnSetFocus(const browser: ICefBrowser;
-  isWidget: Boolean): Boolean;
+  source: TCefHandlerFocusSource): Boolean;
 begin
   Result := False;
   if Assigned(FOnSetFocus) then
-    FOnSetFocus(Self, browser, isWidget, Result);
+    FOnSetFocus(Self, browser, source, Result);
 end;
 
 function TCustomChromiumOSR.doOnStatusMessage(const browser: ICefBrowser;

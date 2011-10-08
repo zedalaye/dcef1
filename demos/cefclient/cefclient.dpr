@@ -60,7 +60,7 @@ type
       var BytesRead: Integer; const callback: ICefSchemeHandlerCallback): Boolean; override;
   public
     constructor Create(SyncMainThread: Boolean;
-      const scheme: ustring; const request: ICefRequest); override;
+      const scheme: ustring; const browser: ICefBrowser; const request: ICefRequest); override;
     destructor Destroy; override;
   end;
 
@@ -350,7 +350,7 @@ end;
 { TScheme }
 
 constructor TScheme.Create(SyncMainThread: Boolean;
-  const scheme: ustring; const request: ICefRequest);
+  const scheme: ustring; const browser: ICefBrowser; const request: ICefRequest);
 begin
   inherited;
   FResponse := TMemoryStream.Create;

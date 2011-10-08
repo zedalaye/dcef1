@@ -41,7 +41,8 @@ type
       var BytesRead: Integer; const callback: ICefSchemeHandlerCallback): Boolean; override;
     procedure Cancel; override;
   public
-    constructor Create(SyncMainThread: Boolean; const scheme: ustring; const request: ICefRequest); override;
+    constructor Create(SyncMainThread: Boolean; const scheme: ustring;
+      const browser: ICefBrowser; const request: ICefRequest); override;
     destructor Destroy; override;
   end;
 
@@ -232,7 +233,8 @@ begin
 
 end;
 
-constructor TFileScheme.Create(SyncMainThread: Boolean; const scheme: ustring; const request: ICefRequest);
+constructor TFileScheme.Create(SyncMainThread: Boolean; const scheme: ustring;
+  const browser: ICefBrowser; const request: ICefRequest);
 begin
   inherited;
   FDataStream := nil;
