@@ -372,7 +372,30 @@ type
     property UserStyleSheetLocation;
   end;
 
+function CefGetBitmap(const browser: ICefBrowser; typ: TCefPaintElementType; Bitmap: TBitmap): Boolean;
+
 implementation
+
+function CefGetBitmap(const browser: ICefBrowser; typ: TCefPaintElementType; Bitmap: TBitmap): Boolean;
+var
+  w, h, i: Integer;
+  p, s: Pointer;
+begin
+  browser.GetSize(typ, w, h);
+  Bitmap.SetSize(w, h);
+  GetMem(p, h * w * 4);
+  try
+    Result := browser.GetImage(typ, w, h, p);
+    s := p;
+    for i := 0 to h - 1 do
+    begin
+      Move(s^, Bitmap.ScanLine[i]^, w*4);
+      Inc(Integer(s), w*4);
+    end;
+  finally
+    FreeMem(p);
+  end;
+end;
 
 { TCustomChromiumFMX }
 
