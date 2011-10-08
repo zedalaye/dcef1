@@ -134,7 +134,7 @@ type
     function doOnTooltip(const browser: ICefBrowser; var text: ustring): Boolean; virtual;
 
     procedure doOnTakeFocus(const browser: ICefBrowser; next: Boolean); virtual;
-    function doOnSetFocus(const browser: ICefBrowser; isWidget: Boolean): Boolean; virtual;
+    function doOnSetFocus(const browser: ICefBrowser; source: TCefHandlerFocusSource): Boolean; virtual;
 
     function doOnKeyEvent(const browser: ICefBrowser; event: TCefHandlerKeyEventType;
       code, modifiers: Integer; isSystemKey: Boolean): Boolean; virtual;
@@ -779,11 +779,11 @@ begin
 end;
 
 function TCustomChromium.doOnSetFocus(const browser: ICefBrowser;
-  isWidget: Boolean): Boolean;
+  source: TCefHandlerFocusSource): Boolean;
 begin
   Result := False;
   if Assigned(FOnSetFocus) then
-    FOnSetFocus(Self, browser, isWidget, Result);
+    FOnSetFocus(Self, browser, source, Result);
 end;
 
 function TCustomChromium.doOnStatusMessage(const browser: ICefBrowser;

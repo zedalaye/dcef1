@@ -4,7 +4,7 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, vcl.cef, lib.cef, GR32_Image, AppEvnts, gui.cef;
+  Dialogs, cefvcl, ceflib, cefgui, GR32_Image, AppEvnts;
 
 type
   TMainform = class(TForm)
