@@ -32,9 +32,6 @@ uses
 {$ENDIF}
   SysUtils, Classes, Windows
 {$IFNDEF FPC}
-//{$IFNDEF FMX}
-//  ,Graphics
-//{$ENDIF}
 {$ENDIF}
   ;
 
@@ -2801,9 +2798,6 @@ type
     procedure HidePopup;
     procedure Invalidate(dirtyRect: PCefRect);
     function GetImage(typ: TCefPaintElementType; width, height: Integer; buffer: Pointer): Boolean;
-//{$IFNDEF FPC}{$IFNDEF FMX}
-//    function GetBitmap(typ: TCefPaintElementType; Bitmap: TBitmap): Boolean;
-//{$ENDIF}{$ENDIF}
     procedure SendKeyEvent(typ: TCefKeyType; key, modifiers: Integer; sysChar, imeChar: Boolean);
     procedure SendMouseClickEvent(x, y: Integer; typ: TCefMouseButtonType;
       mouseUp: Boolean; clickCount: Integer);
@@ -3309,9 +3303,6 @@ type
     procedure HidePopup;
     procedure Invalidate(dirtyRect: PCefRect);
     function GetImage(typ: TCefPaintElementType; width, height: Integer; buffer: Pointer): Boolean;
-//{$IFNDEF FPC}{$IFNDEF FMX}
-//    function GetBitmap(typ: TCefPaintElementType; Bitmap: TBitmap): Boolean;
-//{$ENDIF}{$ENDIF}
     procedure SendKeyEvent(typ: TCefKeyType; key, modifiers: Integer; sysChar, imeChar: Boolean);
     procedure SendMouseClickEvent(x, y: Integer; typ: TCefMouseButtonType;
       mouseUp: Boolean; clickCount: Integer);
@@ -5982,38 +5973,6 @@ begin
   PCefBrowser(FData)^.find(PCefBrowser(FData), Ord(identifier), @s,
     Ord(forward), Ord(matchCase), Ord(findNext));
 end;
-
-//{$IFNDEF FPC}
-//{$IFNDEF FMX}
-//function TCefBrowserRef.GetBitmap(typ: TCefPaintElementType;
-//  Bitmap: TBitmap): Boolean;
-//var
-//  w, h, i: Integer;
-//  p, s: Pointer;
-//begin
-//  GetSize(typ, w, h);
-//  Bitmap.PixelFormat := pf32bit;
-//{$IFDEF DELPHI12_UP}
-//  Bitmap.SetSize(w, h);
-//{$ELSE}
-//  Bitmap.Width := w;
-//  Bitmap.Height := h;
-//{$ENDIF}
-//  GetMem(p, h * w * 4);
-//  try
-//    Result := GetImage(typ, w, h, p);
-//    s := p;
-//    for i := 0 to h - 1 do
-//    begin
-//      Move(s^, Bitmap.ScanLine[i]^, w*4);
-//      Inc(Integer(s), w*4);
-//    end;
-//  finally
-//    FreeMem(p);
-//  end;
-//end;
-//{$ENDIF}
-//{$ENDIF}
 
 function TCefBrowserRef.GetFocusedFrame: ICefFrame;
 begin

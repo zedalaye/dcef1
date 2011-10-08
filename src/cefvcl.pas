@@ -22,7 +22,11 @@ interface
 uses
   Windows, Messages, Classes,
   cefgui, ceflib,
-  {$ifdef DELPHI16_UP}Vcl.Controls{$else}Controls{$endif};
+{$ifdef DELPHI16_UP}
+  Vcl.Controls, Vcl.Graphics
+{$else}
+  Controls, Graphics
+{$endif};
 
 type
   TCustomChromium = class(TWinControl, IChromiumEvents)
@@ -374,6 +378,8 @@ type
     property UserStyleSheetLocation;
   end;
 
+function CefGetBitmap(const browser: ICefBrowser; typ: TCefPaintElementType; Bitmap: TBitmap): Boolean;
+
 implementation
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   uses
@@ -394,6 +400,33 @@ type
     constructor Create(const crm: IChromiumEvents); override;
     destructor Destroy; override;
   end;
+
+function CefGetBitmap(const browser: ICefBrowser; typ: TCefPaintElementType; Bitmap: TBitmap): Boolean;
+var
+  w, h, i: Integer;
+  p, s: Pointer;
+begin
+  browser.GetSize(typ, w, h);
+  Bitmap.PixelFormat := pf32bit;
+{$IFDEF DELPHI12_UP}
+  Bitmap.SetSize(w, h);
+{$ELSE}
+  Bitmap.Width := w;
+  Bitmap.Height := h;
+{$ENDIF}
+  GetMem(p, h * w * 4);
+  try
+    Result := browser.GetImage(typ, w, h, p);
+    s := p;
+    for i := 0 to h - 1 do
+    begin
+      Move(s^, Bitmap.ScanLine[i]^, w*4);
+      Inc(Integer(s), w*4);
+    end;
+  finally
+    FreeMem(p);
+  end;
+end;
 
 { TVCLClientHandler }
 
