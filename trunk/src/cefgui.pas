@@ -1716,7 +1716,7 @@ end;
 
 procedure TCustomChromiumOSR.GetSettings(var settings: TCefBrowserSettings);
 begin
-  Assert(settings.size = SizeOf(settings));
+  Assert(settings.size >= SizeOf(settings));
   settings.standard_font_family := CefString(FFontOptions.StandardFontFamily);
   settings.fixed_font_family := CefString(FFontOptions.FixedFontFamily);
   settings.serif_font_family := CefString(FFontOptions.SerifFontFamily);
