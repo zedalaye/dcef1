@@ -287,12 +287,12 @@ type
     // Custom flags that will be used when initializing the V8 JavaScript engine.
     // The consequences of using custom flags may not be well tested.
     javascript_flags: TCefString;
-{$ifdef MSWINDOWS}
+{$IFDEF MSWINDOWS}
     // Set to true (1) to use the system proxy resolver on Windows when
     // "Automatically detect settings" is checked. This setting is disabled
     // by default for performance reasons.
     auto_detect_proxy_settings_enabled: Boolean;
-{$endif}
+{$ENDIF}
   end;
 
   // Browser initialization settings. Specify NULL or 0 to get the recommended
@@ -4273,9 +4273,9 @@ procedure CefLoadLib(const Cache: ustring = ''; const UserAgent: ustring = '';
   LogSeverity: TCefLogSeverity = LOGSEVERITY_DISABLE;
   GraphicsImplementation: TCefGraphicsImplementation = {$IFDEF MACOS}DESKTOP_IN_PROCESS{$ELSE}ANGLE_IN_PROCESS{$ENDIF};
   LocalStorageQuota: Cardinal = 0; SessionStorageQuota: Cardinal = 0;
-{$ifdef MSWINDOWS}
+{$IFDEF MSWINDOWS}
   AutoDetectProxySettings: Boolean = False;
-{$endif}
+{$ENDIF}
   JavaScriptFlags: ustring = ''
   );
 function CefGetObject(ptr: Pointer): TObject;
