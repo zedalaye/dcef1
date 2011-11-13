@@ -1,1 +1,1 @@
-fpc /B cefclient.dpr -Fu../../src -Fi../../src -FE../../bin
+fpc /B cefclient.dpr -Fu../../src -Fi../../src -FE../../bin/Win32
