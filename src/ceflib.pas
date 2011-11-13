@@ -1321,8 +1321,10 @@ type
     on_before_close: procedure(self: PCefLifeSpanHandler; browser: PCefBrowser); stdcall;
   end;
 
-  // Implement this structure to handle events related to browser load status. The
-  // functions of this structure will be called on the UI thread.
+
+  // Implement this structure to handle events related to browser load status. The
+
+  // functions of this structure will be called on the UI thread.
   TCefLoadHandler = record
     // Base structure.
     base: TCefBase;
@@ -1356,8 +1358,10 @@ type
         var errorText: TCefString): Integer; stdcall;
   end;
 
-  // Implement this structure to handle events related to browser requests. The
-  // functions of this structure will be called on the thread indicated.
+
+  // Implement this structure to handle events related to browser requests. The
+
+  // functions of this structure will be called on the thread indicated.
   TCefRequestHandler = record
     // Base structure.
     base: TCefBase;
@@ -1426,8 +1430,10 @@ type
         username, password: PCefString): Integer; stdcall;
   end;
 
-  // Implement this structure to handle events related to browser display state.
-  // The functions of this structure will be called on the UI thread.
+
+  // Implement this structure to handle events related to browser display state.
+
+  // The functions of this structure will be called on the UI thread.
   TCefDisplayHandler = record
     // Base structure.
     base: TCefBase;
@@ -2742,8 +2748,10 @@ type
       count, total: Integer; deleteCookie: PInteger): Integer; stdcall;
   end;
 
-  // Structure to implement for visiting storage. The functions of this structure
-  // will always be called on the UI thread.
+
+  // Structure to implement for visiting storage. The functions of this structure
+
+  // will always be called on the UI thread.
   TCefStorageVisitor = record
     // Base structure.
     base: TCefBase;
@@ -2758,8 +2766,10 @@ type
       deleteData: PInteger): Integer; stdcall;
   end;
 
-  // Structure to implement for filtering response content. The functions of this
-  // structure will always be called on the UI thread.
+
+  // Structure to implement for filtering response content. The functions of this
+
+  // structure will always be called on the UI thread.
   TCefContentFilter = record
     // Base structure.
     base: TCefBase;
@@ -2830,7 +2840,8 @@ type
     get_file_names: function(self: PCefDragData; names: TCefStringList): Integer; stdcall;
   end;
 
-  ICefBrowser = interface;
+
+  ICefBrowser = interface;
   ICefFrame = interface;
   ICefRequest = interface;
   ICefv8Value = interface;
@@ -3098,7 +3109,8 @@ type
     function Put(const name: ustring; const obj: ICefv8Value;
       const value: ICefv8Value; const exception: string): Boolean;
   end;
-
+
+
   ICefTask = interface(ICefBase)
     ['{0D965470-4A86-47CE-BD39-A8770021AD7E}']
     procedure Execute(threadId: TCefThreadId);
@@ -3646,8 +3658,10 @@ type
     constructor Create; virtual;
   end;
 
-  TCefContentFilterOwn = class(TCefBaseOwn)
-  protected
+
+  TCefContentFilterOwn = class(TCefBaseOwn)
+
+  protected
     procedure ProcessData(const Data: Pointer; Size: Integer;
         var SubstituteData: ICefStreamReader); virtual;
     procedure Drain(var remainder: ICefStreamReader); virtual;
@@ -3655,8 +3669,10 @@ type
     constructor Create; virtual;
   end;
 
-  TCefRequestHandlerOwn = class(TCefBaseOwn)
-  protected
+
+  TCefRequestHandlerOwn = class(TCefBaseOwn)
+
+  protected
     function OnBeforeBrowse(const browser: ICefBrowser; const frame: ICefFrame;
       const request: ICefRequest; navType: TCefHandlerNavtype;
       isRedirect: Boolean): Boolean; virtual;
@@ -3697,13 +3713,16 @@ type
     constructor Create; virtual;
   end;
 
-  TCefFocusHandlerOwn = class(TCefBaseOwn)
-  protected
+
+  TCefFocusHandlerOwn = class(TCefBaseOwn)
+
+  protected
     procedure OnTakeFocus(const browser: ICefBrowser; next: Boolean); virtual;
     function OnSetFocus(const browser: ICefBrowser; source: TCefHandlerFocusSource): Boolean; virtual;
     procedure OnFocusedNodeChanged(const browser: ICefBrowser; const frame: ICefFrame; const node: ICefDomNode); virtual;
   public
-    constructor Create; virtual;
+
+    constructor Create; virtual;
   end;
 
   TCefKeyboardHandlerOwn = class(TCefBaseOwn)
@@ -4353,8 +4372,10 @@ var
   CefExtraPluginPaths: ustring = '';
   CefLocalStorageQuota: Cardinal = 0;
   CefSessionStorageQuota: Cardinal = 0;
-  CefJavaScriptFlags: ustring = '';
-{$ifdef MSWINDOWS}
+
+  CefJavaScriptFlags: ustring = '';
+
+{$ifdef MSWINDOWS}
   CefAutoDetectProxySettings: Boolean = False;
 {$endif}
 
@@ -5149,9 +5170,12 @@ begin
   Result := cef_delete_storage(StorageType, @o, @k) <> 0;
 end;
 
-function CefSetStoragePath(StorageType: TCefStorageType; const path: ustring): Boolean;
-var
-  p: TCefString;
+
+function CefSetStoragePath(StorageType: TCefStorageType; const path: ustring): Boolean;
+
+var
+
+  p: TCefString;
 begin
   if path <> '' then
   begin
@@ -5161,7 +5185,8 @@ begin
     Result := cef_set_storage_path(StorageType, nil) <> 0;
 end;
 
-{ cef_base }
+
+{ cef_base }
 
 function cef_base_add_ref(self: PCefBase): Integer; stdcall;
 begin
@@ -5303,11 +5328,13 @@ end;
 
 function cef_life_span_handler_do_close(self: PCefLifeSpanHandler; browser: PCefBrowser): Integer; stdcall;
 begin
-  with TCefLifeSpanHandlerOwn(CefGetObject(self)) do
+
+  with TCefLifeSpanHandlerOwn(CefGetObject(self)) do
     Result := Ord(DoClose(TCefBrowserRef.UnWrap(browser)));
 end;
 
-{ cef_load_handler }
+
+{ cef_load_handler }
 
 procedure cef_load_handler_on_load_start(self: PCefLoadHandler;
   browser: PCefBrowser; frame: PCefFrame); stdcall;

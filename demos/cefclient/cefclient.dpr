@@ -53,9 +53,10 @@ type
     FResponse: TMemoryStream;
     procedure Output(const str: ustring);
   protected
-    function ProcessRequest(const Request: ICefRequest; var redirectUrl: ustring;
+    function ProcessRequest(const Request: ICefRequest;
       const callback: ICefSchemeHandlerCallback): Boolean; override;
-    procedure GetResponseHeaders(const response: ICefResponse; var responseLength: Int64); override;
+    procedure GetResponseHeaders(const response: ICefResponse;
+      var responseLength: Int64; var redirectUrl: ustring); override;
     function ReadResponse(DataOut: Pointer; BytesToRead: Integer;
       var BytesRead: Integer; const callback: ICefSchemeHandlerCallback): Boolean; override;
   public
@@ -362,7 +363,7 @@ begin
   inherited;
 end;
 
-function TScheme.ProcessRequest(const Request: ICefRequest; var redirectUrl: ustring;
+function TScheme.ProcessRequest(const Request: ICefRequest;
   const callback: ICefSchemeHandlerCallback): Boolean;
 begin
   OutPut('<html>');
@@ -385,7 +386,7 @@ begin
 end;
 
 procedure TScheme.GetResponseHeaders(const response: ICefResponse;
-  var responseLength: Int64);
+  var responseLength: Int64; var redirectUrl: ustring);
 begin
   response.Status := 200;
   response.StatusText := 'OK';
@@ -442,10 +443,10 @@ begin
     retval := TCefv8ValueRef.CreateObject(nil);
     // Add a string parameter to the new V8 object.
     retval.SetValueByKey('param', TCefv8ValueRef.CreateString(
-        'Retrieving a parameter on a native object succeeded.'));
+        'Retrieving a parameter on a native object succeeded.'), V8_PROPERTY_ATTRIBUTE_NONE);
     // Add a function to the new V8 object.
     retval.SetValueByKey('GetMessage',
-        TCefv8ValueRef.CreateFunction('GetMessage', Self));
+        TCefv8ValueRef.CreateFunction('GetMessage', Self), V8_PROPERTY_ATTRIBUTE_NONE);
     Result := true;
   end
   else if(name = 'GetMessage') then
