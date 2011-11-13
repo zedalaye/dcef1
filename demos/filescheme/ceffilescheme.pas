@@ -34,9 +34,9 @@ type
     FStatusText: string;
     FMimeType: string;
   protected
-    function ProcessRequest(const Request: ICefRequest; var redirectUrl: ustring;
+    function ProcessRequest(const Request: ICefRequest;
       const callback: ICefSchemeHandlerCallback): Boolean; override;
-    procedure GetResponseHeaders(const response: ICefResponse; var responseLength: Int64); override;
+    procedure GetResponseHeaders(const response: ICefResponse; var responseLength: Int64; var redirectUrl: ustring); override;
     function ReadResponse(DataOut: Pointer; BytesToRead: Integer;
       var BytesRead: Integer; const callback: ICefSchemeHandlerCallback): Boolean; override;
     procedure Cancel; override;
@@ -248,7 +248,7 @@ begin
 end;
 
 procedure TFileScheme.GetResponseHeaders(const response: ICefResponse;
-  var responseLength: Int64);
+  var responseLength: Int64; var redirectUrl: ustring);
 begin
   response.Status := FStatus;
   response.StatusText := FStatusText;
@@ -257,7 +257,7 @@ begin
 end;
 
 function TFileScheme.ProcessRequest(const Request: ICefRequest;
-  var redirectUrl: ustring; const callback: ICefSchemeHandlerCallback): Boolean;
+  const callback: ICefSchemeHandlerCallback): Boolean;
 var
   rec: TSearchRec;
   reg: TRegistry;

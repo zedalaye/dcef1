@@ -48,6 +48,7 @@ type
     FOnResourceResponse: TOnResourceResponse;
 
     FOnAddressChange: TOnAddressChange;
+    FOnContentsSizeChange: TOnContentsSizeChange;
     FOnConsoleMessage: TOnConsoleMessage;
     FOnNavStateChange: TOnNavStateChange;
     FOnStatusMessage: TOnStatusMessage;
@@ -56,6 +57,7 @@ type
 
     FOnTakeFocus: TOnTakeFocus;
     FOnSetFocus: TOnSetFocus;
+    FOnFocusedNodeChanged: TOnFocusedNodeChanged;
 
     FOnKeyEvent: TOnKeyEvent;
 
@@ -126,8 +128,10 @@ type
     procedure doOnResourceResponse(const browser: ICefBrowser;
       const url: ustring; const response: ICefResponse; var filter: ICefBase); virtual;
 
-    function doOnAddressChange(const browser: ICefBrowser;
-      const frame: ICefFrame; const url: ustring): Boolean; virtual;
+    procedure doOnAddressChange(const browser: ICefBrowser;
+      const frame: ICefFrame; const url: ustring); virtual;
+    procedure doOnContentsSizeChange(const browser: ICefBrowser;
+      const frame: ICefFrame; width, height: Integer);
     function doOnConsoleMessage(const browser: ICefBrowser; const message,
       source: ustring; line: Integer): Boolean; virtual;
     function doOnNavStateChange(const browser: ICefBrowser; canGoBack,
@@ -140,9 +144,10 @@ type
 
     procedure doOnTakeFocus(const browser: ICefBrowser; next: Boolean); virtual;
     function doOnSetFocus(const browser: ICefBrowser; source: TCefHandlerFocusSource): Boolean; virtual;
+    procedure doOnFocusedNodeChanged(const browser: ICefBrowser; const frame: ICefFrame; const node: ICefDomNode); virtual;
 
     function doOnKeyEvent(const browser: ICefBrowser; event: TCefHandlerKeyEventType;
-      code, modifiers: Integer; isSystemKey: Boolean): Boolean; virtual;
+      code, modifiers: Integer; isSystemKey, isAfterJavaScript: Boolean): Boolean; virtual;
 
     function doOnBeforeMenu(const browser: ICefBrowser;
       const menuInfo: PCefHandlerMenuInfo): Boolean; virtual;
@@ -207,6 +212,7 @@ type
     property OnResourceResponse: TOnResourceResponse read FOnResourceResponse write FOnResourceResponse;
 
     property OnAddressChange: TOnAddressChange read FOnAddressChange write FOnAddressChange;
+    property OnContentsSizeChange: TOnContentsSizeChange read FOnContentsSizeChange write FOnContentsSizeChange;
     property OnConsoleMessage: TOnConsoleMessage read FOnConsoleMessage write FOnConsoleMessage;
     property OnNavStateChange: TOnNavStateChange read FOnNavStateChange write FOnNavStateChange;
     property OnStatusMessage: TOnStatusMessage read FOnStatusMessage write FOnStatusMessage;
@@ -215,6 +221,7 @@ type
 
     property OnTakeFocus: TOnTakeFocus read FOnTakeFocus write FOnTakeFocus;
     property OnSetFocus: TOnSetFocus read FOnSetFocus write FOnSetFocus;
+    property OnFocusedNodeChanged: TOnFocusedNodeChanged read FOnFocusedNodeChanged write FOnFocusedNodeChanged;
 
     property OnKeyEvent: TOnKeyEvent read FOnKeyEvent write FOnKeyEvent;
 
@@ -234,7 +241,7 @@ type
     property OnDragStart: TOnDragEvent read FOnDragStart write FOnDragStart;
     property OnDragEnter: TOnDragEvent read FOnDragEnter write FOnDragEnter;
 
-    property Options: TChromiumOptions read FOptions write FOptions default [];
+    property Options: TChromiumOptions read FOptions write FOptions;
     property FontOptions: TChromiumFontOptions read FFontOptions;
     property DefaultEncoding: ustring read FDefaultEncoding write FDefaultEncoding;
     property UserStyleSheetLocation: ustring read FUserStyleSheetLocation write FUserStyleSheetLocation;
@@ -274,6 +281,7 @@ type
     property OnResourceResponse;
 
     property OnAddressChange;
+    property OnContentsSizeChange;
     property OnConsoleMessage;
     property OnNavStateChange;
     property OnStatusMessage;
@@ -282,6 +290,7 @@ type
 
     property OnTakeFocus;
     property OnSetFocus;
+    property OnFocusedNodeChanged;
 
     property OnKeyEvent;
 
@@ -331,6 +340,7 @@ type
     property OnResourceResponse;
 
     property OnAddressChange;
+    property OnContentsSizeChange;
     property OnConsoleMessage;
     property OnNavStateChange;
     property OnStatusMessage;
@@ -339,6 +349,7 @@ type
 
     property OnTakeFocus;
     property OnSetFocus;
+    property OnFocusedNodeChanged;
 
     property OnKeyEvent;
 
@@ -409,7 +420,7 @@ begin
   FBuffer := nil;
   CanFocus := True;
 
-  FOptions := [];
+  FOptions := TChromiumOptions.Create;
   FFontOptions := TChromiumFontOptions.Create;
 
   FUserStyleSheetLocation := '';
@@ -442,17 +453,17 @@ begin
   FHandler := nil;
   FBrowser := nil;
   FFontOptions.Free;
+  FOptions.Free;
   if FBuffer <> nil then
     FBuffer.Free;
   inherited;
 end;
 
-function TCustomChromiumFMX.doOnAddressChange(const browser: ICefBrowser;
-  const frame: ICefFrame; const url: ustring): Boolean;
+procedure TCustomChromiumFMX.doOnAddressChange(const browser: ICefBrowser;
+  const frame: ICefFrame; const url: ustring);
 begin
-  Result := False;
   if Assigned(FOnAddressChange) then
-    FOnAddressChange(Self, browser, frame, url, Result);
+    FOnAddressChange(Self, browser, frame, url);
 end;
 
 procedure TCustomChromiumFMX.doOnAfterCreated(const browser: ICefBrowser);
@@ -529,6 +540,13 @@ begin
     FOnConsoleMessage(Self, browser, message, source, line, Result);
 end;
 
+procedure TCustomChromiumFMX.doOnContentsSizeChange(const browser: ICefBrowser;
+  const frame: ICefFrame; width, height: Integer);
+begin
+  if Assigned(FOnContentsSizeChange) then
+    FOnContentsSizeChange(Self, browser, frame, width, height);
+end;
+
 function TCustomChromiumFMX.doOnGetDownloadHandler(const browser: ICefBrowser;
   const mimeType, fileName: ustring; contentLength: int64;
   var handler: ICefDownloadHandler): Boolean;
@@ -546,6 +564,13 @@ begin
   if Assigned(FOnFindResult) then
     FOnFindResult(Self, browser, count, selectionRect, identifier,
       activeMatchOrdinal, finalUpdate, Result);
+end;
+
+procedure TCustomChromiumFMX.doOnFocusedNodeChanged(const browser: ICefBrowser;
+  const frame: ICefFrame; const node: ICefDomNode);
+begin
+  if Assigned(FOnFocusedNodeChanged) then
+    FOnFocusedNodeChanged(Self, browser, frame, node);
 end;
 
 function TCustomChromiumFMX.doOnGetMenuLabel(const browser: ICefBrowser;
@@ -610,11 +635,11 @@ end;
 
 function TCustomChromiumFMX.doOnKeyEvent(const browser: ICefBrowser;
   event: TCefHandlerKeyEventType; code, modifiers: Integer;
-  isSystemKey: Boolean): Boolean;
+  isSystemKey, isAfterJavaScript: Boolean): Boolean;
 begin
   Result := False;
   if Assigned(FOnKeyEvent) then
-    FOnKeyEvent(Self, browser, event, code, modifiers, isSystemKey, Result);
+    FOnKeyEvent(Self, browser, event, code, modifiers, isSystemKey, isAfterJavaScript, Result);
 end;
 
 function TCustomChromiumFMX.doOnLoadEnd(const browser: ICefBrowser;
@@ -828,37 +853,39 @@ begin
   settings.default_encoding := CefString(DefaultEncoding);
   settings.user_style_sheet_location := CefString(UserStyleSheetLocation);
 
-  settings.drag_drop_disabled := coDragDropDisabled in FOptions;
-  settings.encoding_detector_enabled := coEncodingDetectorEnabled in FOptions;
-  settings.javascript_disabled := coJavascriptDisabled in FOptions;
-  settings.javascript_open_windows_disallowed := coJavascriptOpenWindowsDisallowed in FOptions;
-  settings.javascript_close_windows_disallowed := coJavascriptCloseWindowsDisallowed in FOptions;
-  settings.javascript_access_clipboard_disallowed := coJavascriptAccessClipboardDisallowed in FOptions;
-  settings.dom_paste_disabled := coDomPasteDisabled in FOptions;
-  settings.caret_browsing_enabled := coCaretBrowsingEnabled in FOptions;
-  settings.java_disabled := coJavaDisabled in FOptions;
-  settings.plugins_disabled := coPluginsDisabled in FOptions;
-  settings.universal_access_from_file_urls_allowed := coUniversalAccessFromFileUrlsAllowed in FOptions;
-  settings.file_access_from_file_urls_allowed := coFileAccessFromFileUrlsAllowed in FOptions;
-  settings.web_security_disabled := coWebSecurityDisabled in FOptions;
-  settings.xss_auditor_enabled := coXssAuditorEnabled in FOptions;
-  settings.image_load_disabled := coImageLoadDisabled in FOptions;
-  settings.shrink_standalone_images_to_fit := coShrinkStandaloneImagesToFit in FOptions;
-  settings.site_specific_quirks_disabled := coSiteSpecificQuirksDisabled in FOptions;
-  settings.text_area_resize_disabled := coTextAreaResizeDisabled in FOptions;
-  settings.page_cache_disabled := coPageCacheDisabled in FOptions;
-  settings.tab_to_links_disabled := coTabToLinksDisabled in FOptions;
-  settings.hyperlink_auditing_disabled := coHyperlinkAuditingDisabled in FOptions;
-  settings.user_style_sheet_enabled := coUserStyleSheetEnabled in FOptions;
-  settings.author_and_user_styles_disabled := coAuthorAndUserStylesDisabled in FOptions;
-  settings.local_storage_disabled := coLocalStorageDisabled in FOptions;
-  settings.databases_disabled := coDatabasesDisabled in FOptions;
-  settings.application_cache_disabled := coApplicationCacheDisabled in FOptions;
-  settings.webgl_disabled := coWebglDisabled in FOptions;
-  settings.accelerated_compositing_enabled := coAcceleratedCompositingEnabled in FOptions;
-  settings.accelerated_layers_disabled := coAcceleratedLayersDisabled in FOptions;
-  settings.accelerated_2d_canvas_disabled := coAccelerated2dCanvasDisabled in FOptions;
-  settings.developer_tools_disabled := coDeveloperToolsDisabled in FOptions;
+  settings.drag_drop_disabled := FOptions.DragDropDisabled;
+  settings.load_drops_disabled := FOptions.LoadDropsDisabled;
+  settings.encoding_detector_enabled := FOptions.EncodingDetectorEnabled;
+  settings.javascript_disabled := FOptions.JavascriptDisabled;
+  settings.javascript_open_windows_disallowed := FOptions.JavascriptOpenWindowsDisallowed;
+  settings.javascript_close_windows_disallowed := FOptions.JavascriptCloseWindowsDisallowed;
+  settings.javascript_access_clipboard_disallowed := FOptions.JavascriptAccessClipboardDisallowed;
+  settings.dom_paste_disabled := FOptions.DomPasteDisabled;
+  settings.caret_browsing_enabled := FOptions.CaretBrowsingEnabled;
+  settings.java_disabled := FOptions.JavaDisabled;
+  settings.plugins_disabled := FOptions.PluginsDisabled;
+  settings.universal_access_from_file_urls_allowed := FOptions.UniversalAccessFromFileUrlsAllowed;
+  settings.file_access_from_file_urls_allowed := FOptions.FileAccessFromFileUrlsAllowed;
+  settings.web_security_disabled := FOptions.WebSecurityDisabled;
+  settings.xss_auditor_enabled := FOptions.XssAuditorEnabled;
+  settings.image_load_disabled := FOptions.ImageLoadDisabled;
+  settings.shrink_standalone_images_to_fit := FOptions.ShrinkStandaloneImagesToFit;
+  settings.site_specific_quirks_disabled := FOptions.SiteSpecificQuirksDisabled;
+  settings.text_area_resize_disabled := FOptions.TextAreaResizeDisabled;
+  settings.page_cache_disabled := FOptions.PageCacheDisabled;
+  settings.tab_to_links_disabled := FOptions.TabToLinksDisabled;
+  settings.hyperlink_auditing_disabled := FOptions.HyperlinkAuditingDisabled;
+  settings.user_style_sheet_enabled := FOptions.UserStyleSheetEnabled;
+  settings.author_and_user_styles_disabled := FOptions.AuthorAndUserStylesDisabled;
+  settings.local_storage_disabled := FOptions.LocalStorageDisabled;
+  settings.databases_disabled := FOptions.DatabasesDisabled;
+  settings.application_cache_disabled := FOptions.ApplicationCacheDisabled;
+  settings.webgl_disabled := FOptions.WebglDisabled;
+  settings.accelerated_compositing_enabled := FOptions.AcceleratedCompositingEnabled;
+  settings.threaded_compositing_enabled := FOptions.ThreadedCompositingEnabled;
+  settings.accelerated_layers_disabled := FOptions.AcceleratedLayersDisabled;
+  settings.accelerated_2d_canvas_disabled := FOptions.Accelerated2dCanvasDisabled;
+  settings.developer_tools_disabled := FOptions.DeveloperToolsDisabled;
 end;
 
 procedure TCustomChromiumFMX.Load(const url: ustring);

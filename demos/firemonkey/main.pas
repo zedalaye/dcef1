@@ -22,7 +22,7 @@ type
     procedure btPrevClick(Sender: TObject);
     procedure btReloadClick(Sender: TObject);
     procedure crmAddressChange(Sender: TObject; const browser: ICefBrowser;
-      const frame: ICefFrame; const url: ustring; out Result: Boolean);
+      const frame: ICefFrame; const url: ustring);
     procedure crmLoadEnd(Sender: TObject; const browser: ICefBrowser;
       const frame: ICefFrame; httpStatusCode: Integer; out Result: Boolean);
     procedure crmLoadStart(Sender: TObject; const browser: ICefBrowser;
@@ -78,7 +78,7 @@ begin
 end;
 
 procedure TMainForm.crmAddressChange(Sender: TObject; const browser: ICefBrowser;
-  const frame: ICefFrame; const url: ustring; out Result: Boolean);
+  const frame: ICefFrame; const url: ustring);
 begin
   if ((frame = nil) or (frame.IsMain)) then
     edAddress.Text := url;
