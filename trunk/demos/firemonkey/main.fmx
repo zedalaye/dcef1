@@ -21,7 +21,6 @@ object MainForm: TMainForm
     OnLoadEnd = crmLoadEnd
     OnAddressChange = crmAddressChange
     OnTitleChange = crmTitleChange
-    Options = [coAccelerated2dCanvasDisabled]
   end
   object btPrev: TButton
     Align = alLeft

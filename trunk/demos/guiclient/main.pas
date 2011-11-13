@@ -74,8 +74,7 @@ type
     procedure actNextUpdate(Sender: TObject);
     procedure actPrevUpdate(Sender: TObject);
     procedure crmAddressChange(Sender: TObject;
-      const browser: ICefBrowser; const frame: ICefFrame; const url: ustring;
-      out Result: Boolean);
+      const browser: ICefBrowser; const frame: ICefFrame; const url: ustring);
     procedure crmGetDownloadHandler(Sender: TObject;
       const browser: ICefBrowser; const mimeType, fileName: ustring;
       contentLength: Int64; var handler: ICefDownloadHandler;
@@ -289,8 +288,7 @@ begin
 end;
 
 procedure TMainForm.crmAddressChange(Sender: TObject;
-  const browser: ICefBrowser; const frame: ICefFrame; const url: ustring;
-  out Result: Boolean);
+  const browser: ICefBrowser; const frame: ICefFrame; const url: ustring);
 begin
   if (browser.GetWindowHandle = crm.BrowserHandle) and ((frame = nil) or (frame.IsMain)) then
     edAddress.Text := url;
