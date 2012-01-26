@@ -750,8 +750,8 @@ procedure TCustomChromiumFMX.doOnPaint(const browser: ICefBrowser;
   kind: TCefPaintElementType; dirtyRectsCount: Cardinal;
   const dirtyRects: PCefRectArray; const buffer: Pointer);
 var
-  src, dst: PByte;
-  offset, i, j, w, c: Integer;
+//  src, dst: PByte;
+//  offset, i, j, w, c: Integer;
   vw, vh: Integer;
 begin
   FBrowser.GetSize(PET_VIEW, vw, vh);
@@ -759,25 +759,30 @@ begin
     FBuffer := TBitmap.Create(vw, vh);
   with FBuffer do
     if (vw = Width) and (vh = Height) then
-    for c := 0 to dirtyRectsCount - 1 do
     begin
-      w := Width * 4;
-      offset := ((dirtyRects[c].y * Width) + dirtyRects[c].x) * 4;
-      src := @PByte(buffer)[offset];
-      dst := @PByte(StartLine)[offset];
-      offset := dirtyRects[c].width * 4;
-      for i := 0 to dirtyRects[c].height - 1 do
-      begin
-        for j := 0 to offset div 4 do
-          PAlphaColorArray(dst)[j] := PAlphaColorArray(src)[j] or $FF000000;
-        //Move(src^, dst^, offset);
-        Inc(dst, w);
-        Inc(src, w);
-      end;
-      //InvalidateRect(ClipRect);
-      InvalidateRect(RectF(dirtyRects[c].x, dirtyRects[c].y,
-        dirtyRects[c].x + dirtyRects[c].width,  dirtyRects[c].y + dirtyRects[c].height));
+      // http://code.google.com/p/chromiumembedded/issues/detail?id=469
+      Move(buffer^, StartLine^, vw * vh * 4);
+      InvalidateRect(ClipRect);
     end;
+//    for c := 0 to dirtyRectsCount - 1 do
+//    begin
+//      w := Width * 4;
+//      offset := ((dirtyRects[c].y * Width) + dirtyRects[c].x) * 4;
+//      src := @PByte(buffer)[offset];
+//      dst := @PByte(StartLine)[offset];
+//      offset := dirtyRects[c].width * 4;
+//      for i := 0 to dirtyRects[c].height - 1 do
+//      begin
+//        for j := 0 to offset div 4 do
+//          PAlphaColorArray(dst)[j] := PAlphaColorArray(src)[j] or $FF000000;
+//        //Move(src^, dst^, offset);
+//        Inc(dst, w);
+//        Inc(src, w);
+//      end;
+//      //InvalidateRect(ClipRect);
+//      InvalidateRect(RectF(dirtyRects[c].x, dirtyRects[c].y,
+//        dirtyRects[c].x + dirtyRects[c].width,  dirtyRects[c].y + dirtyRects[c].height));
+//    end;
 end;
 
 procedure TCustomChromiumFMX.doOnPopupShow(const browser: ICefBrowser;

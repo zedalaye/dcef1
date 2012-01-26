@@ -64,8 +64,8 @@ procedure TMainform.chrmosrPaint(Sender: TObject; const browser: ICefBrowser;
   kind: TCefPaintElementType; dirtyRectsCount: Cardinal;
     const dirtyRects: PCefRectArray; const buffer: Pointer);
 var
-  src, dst: PByte;
-  offset, i, j, w: Integer;
+//  src, dst: PByte;
+//  offset, i, j, w: Integer;
   vw, vh: Integer;
 begin
   chrmosr.Browser.GetSize(PET_VIEW, vw, vh);
@@ -75,22 +75,25 @@ begin
       PaintBox.Canvas.Lock;
       Lock;
       try
-        for j := 0 to dirtyRectsCount - 1 do
-        begin
-          w := Width * 4;
-          offset := ((dirtyRects[j].y * Width) + dirtyRects[j].x) * 4;
-          src := @PByte(buffer)[offset];
-          dst := @PByte(Bits)[offset];
-          offset := dirtyRects[j].width * 4;
-          for i := 0 to dirtyRects[j].height - 1 do
-          begin
-            Move(src^, dst^, offset);
-            Inc(dst, w);
-            Inc(src, w);
-          end;
-          PaintBox.Flush(Rect(dirtyRects[j].x, dirtyRects[j].y,
-            dirtyRects[j].x + dirtyRects[j].width,  dirtyRects[j].y + dirtyRects[j].height));
-        end;
+        // http://code.google.com/p/chromiumembedded/issues/detail?id=469
+        Move(buffer^, Bits^, vw * vh * 4);
+        PaintBox.Invalidate;
+//        for j := 0 to dirtyRectsCount - 1 do
+//        begin
+//          w := Width * 4;
+//          offset := ((dirtyRects[j].y * Width) + dirtyRects[j].x) * 4;
+//          src := @PByte(buffer)[offset];
+//          dst := @PByte(Bits)[offset];
+//          offset := dirtyRects[j].width * 4;
+//          for i := 0 to dirtyRects[j].height - 1 do
+//          begin
+//            Move(src^, dst^, offset);
+//            Inc(dst, w);
+//            Inc(src, w);
+//          end;
+//          PaintBox.Flush(Rect(dirtyRects[j].x, dirtyRects[j].y,
+//            dirtyRects[j].x + dirtyRects[j].width,  dirtyRects[j].y + dirtyRects[j].height));
+//        end;
       finally
         Unlock;
         PaintBox.Canvas.Unlock;
