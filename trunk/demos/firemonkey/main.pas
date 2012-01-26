@@ -131,4 +131,7 @@ begin
   FLoading := False;
 end;
 
+initialization
+  CefCache := 'cache';
+
 end.
