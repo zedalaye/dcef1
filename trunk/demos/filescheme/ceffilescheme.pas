@@ -290,11 +290,16 @@ var
   {$ENDIF}
     FDataStream.Write(rb[1], Length(rb))
   end;
-
+var
+  n: Integer;
 begin
   Result := True;
 
   FPath := ParseFileUrl(Request.Url);
+  n := Pos('?', FPath);
+  if n > 0 then
+    SetLength(FPath, n-1);
+
   if FindFirst(FPath, 0, rec) = 0 then
   begin
     FStatus := 200;
