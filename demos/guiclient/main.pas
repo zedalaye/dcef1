@@ -422,7 +422,7 @@ end;
 
 initialization
   CefCache := 'cache';
-  CefRegisterCustomScheme('file', True, False, False);
-  CefRegisterSchemeHandlerFactory('file', '', True, TFileScheme);
+  //CefRegisterCustomScheme('file', True, False, False);
+  //CefRegisterSchemeHandlerFactory('file', '', True, TFileScheme);
 
 end.

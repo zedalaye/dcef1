@@ -8,9 +8,6 @@
  * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License for
  * the specific language governing rights and limitations under the License.
  *
- * Embarcadero Technologies, Inc is not permitted to use or redistribute
- * this source code without explicit permission.
- *
  * Unit owner : Henri Gourvest <hgourvest@gmail.com>
  * Web site   : http://www.progdigy.com
  * Repository : http://code.google.com/p/delphichromiumembedded/
@@ -53,6 +50,8 @@ type
     loadFlags: Integer; out Result: Boolean) of object;
   TOnProtocolExecution = procedure(Sender: TObject; const browser: ICefBrowser;
     const url: ustring; var AllowOsExecution: Boolean; out Result: Boolean) of object;
+  TOnResourceRedirect = procedure(Sender: TObject; const browser: ICefBrowser;
+    const oldurl: ustring; out newurl: ustring) of object;
   TOnResourceResponse = procedure(Sender: TObject; const browser: ICefBrowser;
     const url: ustring; const response: ICefResponse; var filter: ICefBase) of object;
 
@@ -77,11 +76,11 @@ type
     code, modifiers: Integer; isSystemKey, isAfterJavaScript: Boolean; out Result: Boolean) of object;
 
   TOnBeforeMenu = procedure(Sender: TObject; const browser: ICefBrowser;
-    const menuInfo: PCefHandlerMenuInfo; out Result: Boolean) of object;
+    const menuInfo: PCefMenuInfo; out Result: Boolean) of object;
   TOnGetMenuLabel = procedure(Sender: TObject; const browser: ICefBrowser;
-    menuId: TCefHandlerMenuId; var caption: ustring; out Result: Boolean) of object;
+    menuId: TCefMenuId; var caption: ustring; out Result: Boolean) of object;
   TOnMenuAction = procedure(Sender: TObject; const browser: ICefBrowser;
-    menuId: TCefHandlerMenuId; out Result: Boolean) of object;
+    menuId: TCefMenuId; out Result: Boolean) of object;
 
   TOnPrintHeaderFooter = procedure(Sender: TObject; const browser: ICefBrowser;
     const frame: ICefFrame; printInfo: PCefPrintInfo;
@@ -98,10 +97,14 @@ type
     const message, defaultValue: ustring; var retval: Boolean;
     var return: ustring; out Result: Boolean) of object;
   TOnBeforeClose = procedure(Sender: TObject; const browser: ICefBrowser; out Result: Boolean) of object;
-  TOnJsBinding = procedure(Sender: TObject; const browser: ICefBrowser; const frame: ICefFrame; const obj: ICefv8Value; out Result: Boolean) of object;
+  TOnJsBinding = procedure(Sender: TObject; const browser: ICefBrowser; const frame: ICefFrame;
+    const obj: ICefv8Value; out Result: Boolean) of object;
   TOnFindResult = procedure(Sender: TObject; const browser: ICefBrowser; count: Integer;
     selectionRect: PCefRect; identifier, activeMatchOrdinal,
     finalUpdate: Boolean; out Result: Boolean) of object;
+
+  TOnContextEvent = procedure(Sender: TObject; const browser: ICefBrowser; const frame: ICefFrame;
+    const context: ICefv8Context) of object;
 
   TOnGetViewRect = procedure(Sender: TObject; const browser: ICefBrowser; rect: PCefRect; out Result: Boolean) of object;
   TOnGetScreenRect = procedure(Sender: TObject; const browser: ICefBrowser; rect: PCefRect; out Result: Boolean) of object;
@@ -110,10 +113,11 @@ type
   TOnPopupShow = procedure(Sender: TObject; const browser: ICefBrowser; show: Boolean) of object;
   TOnPopupSize = procedure(Sender: TObject; const browser: ICefBrowser; const rect: PCefRect) of object;
   TOnPaint = procedure(Sender: TObject; const browser: ICefBrowser; kind: TCefPaintElementType;
-        const dirtyRect: PCefRect; const buffer: Pointer) of object;
+        dirtyRectsCount: Cardinal; const dirtyRects: PCefRectArray; const buffer: Pointer) of object;
   TOnCursorChange = procedure(Sender: TObject; const browser: ICefBrowser; cursor: TCefCursorHandle) of object;
 
-  TOnDragEvent = procedure(Sender: TObject; const browser: ICefBrowser; const dragData: ICefDragData; mask: Integer; out Result: Boolean) of object;
+  TOnDragEvent = procedure(Sender: TObject; const browser: ICefBrowser;
+    const dragData: ICefDragData; mask: Integer; out Result: Boolean) of object;
 
   TChromiumOptions = class(TPersistent)
   private
@@ -150,9 +154,12 @@ type
     FAcceleratedLayersDisabled: Boolean;
     FAccelerated2dCanvasDisabled: Boolean;
     FDeveloperToolsDisabled: Boolean;
+    FHistoryDisabled: Boolean;
+    FFullscreenEnabled: Boolean;
   published
     property DragDropDisabled: Boolean read FDragDropDisabled write FDragDropDisabled default False;
     property LoadDropsDisabled: Boolean read FLoadDropsDisabled write FLoadDropsDisabled default False;
+    property HistoryDisabled: Boolean read FHistoryDisabled write FHistoryDisabled default False;
     property EncodingDetectorEnabled: Boolean read FEncodingDetectorEnabled write FEncodingDetectorEnabled default False;
     property JavascriptDisabled: Boolean read FJavascriptDisabled write FJavascriptDisabled default False;
     property JavascriptOpenWindowsDisallowed: Boolean read FJavascriptOpenWindowsDisallowed write FJavascriptOpenWindowsDisallowed default False;
@@ -184,6 +191,7 @@ type
     property AcceleratedLayersDisabled: Boolean read FAcceleratedLayersDisabled write FAcceleratedLayersDisabled default False;
     property Accelerated2dCanvasDisabled: Boolean read FAccelerated2dCanvasDisabled write FAccelerated2dCanvasDisabled default False;
     property DeveloperToolsDisabled: Boolean read FDeveloperToolsDisabled write FDeveloperToolsDisabled default False;
+    property FullscreenEnabled: Boolean read FFullscreenEnabled write FFullscreenEnabled default False;
   end;
 
   TChromiumFontOptions = class(TPersistent)
@@ -247,6 +255,8 @@ type
       loadFlags: Integer): Boolean;
     function doOnProtocolExecution(const browser: ICefBrowser;
       const url: ustring; var AllowOsExecution: Boolean): Boolean;
+    procedure doOnResourceRedirect(const browser: ICefBrowser;
+      const oldurl: ustring; out newurl: ustring);
     procedure doOnResourceResponse(const browser: ICefBrowser;
       const url: ustring; const response: ICefResponse; var filter: ICefBase);
 
@@ -272,11 +282,11 @@ type
       code, modifiers: Integer; isSystemKey, isAfterJavaScript: Boolean): Boolean;
 
     function doOnBeforeMenu(const browser: ICefBrowser;
-      const menuInfo: PCefHandlerMenuInfo): Boolean;
+      const menuInfo: PCefMenuInfo): Boolean;
     function doOnGetMenuLabel(const browser: ICefBrowser;
-      menuId: TCefHandlerMenuId; var caption: ustring): Boolean;
+      menuId: TCefMenuId; var caption: ustring): Boolean;
     function doOnMenuAction(const browser: ICefBrowser;
-      menuId: TCefHandlerMenuId): Boolean;
+      menuId: TCefMenuId): Boolean;
 
     function doOnPrintHeaderFooter(const browser: ICefBrowser;
       const frame: ICefFrame; printInfo: PCefPrintInfo;
@@ -299,6 +309,11 @@ type
       selectionRect: PCefRect; identifier, activeMatchOrdinal,
       finalUpdate: Boolean): Boolean;
 
+    procedure doOnContextCreated(const browser: ICefBrowser; const frame: ICefFrame;
+      const context: ICefv8Context);
+    procedure doOnContextReleased(const browser: ICefBrowser; const frame: ICefFrame;
+      const context: ICefv8Context);
+
     function doOnGetViewRect(const browser: ICefBrowser; rect: PCefRect): Boolean;
     function doOnGetScreenRect(const browser: ICefBrowser; rect: PCefRect): Boolean;
     function doOnGetScreenPoint(const browser: ICefBrowser; viewX, viewY: Integer;
@@ -306,7 +321,7 @@ type
     procedure doOnPopupShow(const browser: ICefBrowser; show: Boolean);
     procedure doOnPopupSize(const browser: ICefBrowser; const rect: PCefRect);
     procedure doOnPaint(const browser: ICefBrowser; kind: TCefPaintElementType;
-        const dirtyRect: PCefRect; const buffer: Pointer);
+      dirtyRectsCount: Cardinal; const dirtyRects: PCefRectArray; const buffer: Pointer);
     procedure doOnCursorChange(const browser: ICefBrowser; cursor: TCefCursorHandle);
 
     function doOnDragStart(const browser: ICefBrowser;
@@ -332,7 +347,7 @@ type
     FPrintHandler: ICefBase;
     FFindHandler: ICefBase;
     FJsdialogHandler: ICefBase;
-    FJsbindingHandler: ICefBase;
+    FV8ContextHandler: ICefBase;
     FRenderHandler: ICefBase;
     FDragHandler: ICefBase;
   protected
@@ -346,13 +361,12 @@ type
     function GetPrintHandler: ICefBase; override;
     function GetFindHandler: ICefBase; override;
     function GetJsdialogHandler: ICefBase; override;
-    function GetJsbindingHandler: ICefBase; override;
+    function GetV8ContextHandler: ICefBase; override;
     function GetRenderHandler: ICefBase; override;
     function GetDragHandler: ICefBase; override;
     procedure Disconnect;
   public
     constructor Create(const crm: IChromiumEvents); reintroduce; virtual;
-    destructor Destroy; override;
   end;
 
   TCustomClientHandlerClass = class of TCustomClientHandler;
@@ -405,6 +419,8 @@ type
     function GetAuthCredentials(const browser: ICefBrowser;
       isProxy: Boolean; Port: Integer; const host, realm, scheme: ustring;
       var username, password: ustring): Boolean; override;
+    procedure OnResourceRedirect(const browser: ICefBrowser;
+      const oldurl: ustring; out newurl: ustring); override;
   public
     constructor Create(const crm: IChromiumEvents); reintroduce;
   end;
@@ -458,11 +474,11 @@ type
     FCrm: IChromiumEvents;
   protected
     function OnBeforeMenu(const browser: ICefBrowser;
-      const menuInfo: PCefHandlerMenuInfo): Boolean; override;
+      const menuInfo: PCefMenuInfo): Boolean; override;
     procedure GetMenuLabel(const browser: ICefBrowser;
-      menuId: TCefHandlerMenuId; var caption: ustring); override;
+      menuId: TCefMenuId; var caption: ustring); override;
     function OnMenuAction(const browser: ICefBrowser;
-      menuId: TCefHandlerMenuId): Boolean; override;
+      menuId: TCefMenuId): Boolean; override;
   public
     constructor Create(const crm: IChromiumEvents); reintroduce;
   end;
@@ -506,12 +522,12 @@ type
     constructor Create(const crm: IChromiumEvents); reintroduce;
   end;
 
-  TCustomJsBindingHandler = class(TCefJsBindingHandlerOwn)
+  TCustomV8ContextHandler = class(TCefV8ContextHandlerOwn)
   private
     FCrm: IChromiumEvents;
   protected
-    procedure OnJsBinding(const browser: ICefBrowser;
-      const frame: ICefFrame; const obj: ICefv8Value); override;
+    procedure OnContextCreated(const browser: ICefBrowser; const frame: ICefFrame; const context: ICefv8Context); override;
+    procedure OnContextReleased(const browser: ICefBrowser; const frame: ICefFrame; const context: ICefv8Context); override;
   public
     constructor Create(const crm: IChromiumEvents); reintroduce;
   end;
@@ -527,7 +543,7 @@ type
     procedure OnPopupShow(const browser: ICefBrowser; show: Boolean); override;
     procedure OnPopupSize(const browser: ICefBrowser; const rect: PCefRect); override;
     procedure OnPaint(const browser: ICefBrowser; kind: TCefPaintElementType;
-        const dirtyRect: PCefRect; const buffer: Pointer); override;
+        dirtyRectsCount: Cardinal; const dirtyRects: PCefRectArray; const buffer: Pointer); override;
     procedure OnCursorChange(const browser: ICefBrowser; cursor: TCefCursorHandle); override;
   public
     constructor Create(const crm: IChromiumEvents); reintroduce;
@@ -566,6 +582,7 @@ type
     FOnBeforeBrowse: TOnBeforeBrowse;
     FOnBeforeResourceLoad: TOnBeforeResourceLoad;
     FOnProtocolExecution: TOnProtocolExecution;
+    FOnResourceRedirect: TOnResourceRedirect;
     FOnResourceResponse: TOnResourceResponse;
 
     FOnAddressChange: TOnAddressChange;
@@ -595,6 +612,9 @@ type
     FOnJsConfirm: TOnJsConfirm;
     FOnJsPrompt: TOnJsPrompt;
     FOnJsBinding: TOnJsBinding;
+
+    FOnContextCreated: TOnContextEvent;
+    FOnContextReleased: TOnContextEvent;
 
     FOnGetViewRect: TOnGetViewRect;
     FOnGetScreenRect: TOnGetScreenRect;
@@ -644,6 +664,8 @@ type
       loadFlags: Integer): Boolean; virtual;
     function doOnProtocolExecution(const browser: ICefBrowser;
       const url: ustring; var AllowOsExecution: Boolean): Boolean; virtual;
+    procedure doOnResourceRedirect(const browser: ICefBrowser;
+      const oldurl: ustring; out newurl: ustring); virtual;
     procedure doOnResourceResponse(const browser: ICefBrowser;
       const url: ustring; const response: ICefResponse; var filter: ICefBase); virtual;
 
@@ -669,11 +691,11 @@ type
       code, modifiers: Integer; isSystemKey, isAfterJavaScript: Boolean): Boolean; virtual;
 
     function doOnBeforeMenu(const browser: ICefBrowser;
-      const menuInfo: PCefHandlerMenuInfo): Boolean; virtual;
+      const menuInfo: PCefMenuInfo): Boolean; virtual;
     function doOnGetMenuLabel(const browser: ICefBrowser;
-      menuId: TCefHandlerMenuId; var caption: ustring): Boolean; virtual;
+      menuId: TCefMenuId; var caption: ustring): Boolean; virtual;
     function doOnMenuAction(const browser: ICefBrowser;
-      menuId: TCefHandlerMenuId): Boolean; virtual;
+      menuId: TCefMenuId): Boolean; virtual;
 
     function doOnPrintHeaderFooter(const browser: ICefBrowser;
       const frame: ICefFrame; printInfo: PCefPrintInfo;
@@ -696,6 +718,11 @@ type
       selectionRect: PCefRect; identifier, activeMatchOrdinal,
       finalUpdate: Boolean): Boolean; virtual;
 
+    procedure doOnContextCreated(const browser: ICefBrowser; const frame: ICefFrame;
+      const context: ICefv8Context); virtual;
+    procedure doOnContextReleased(const browser: ICefBrowser; const frame: ICefFrame;
+      const context: ICefv8Context); virtual;
+
     function doOnGetViewRect(const browser: ICefBrowser; rect: PCefRect): Boolean; virtual;
     function doOnGetScreenRect(const browser: ICefBrowser; rect: PCefRect): Boolean; virtual;
     function doOnGetScreenPoint(const browser: ICefBrowser; viewX, viewY: Integer;
@@ -703,7 +730,7 @@ type
     procedure doOnPopupShow(const browser: ICefBrowser; show: Boolean); virtual;
     procedure doOnPopupSize(const browser: ICefBrowser; const rect: PCefRect); virtual;
     procedure doOnPaint(const browser: ICefBrowser; kind: TCefPaintElementType;
-        const dirtyRect: PCefRect; const buffer: Pointer); virtual;
+        dirtyRectsCount: Cardinal; const dirtyRects: PCefRectArray; const buffer: Pointer); virtual;
     procedure doOnCursorChange(const browser: ICefBrowser; cursor: TCefCursorHandle); virtual;
 
     function doOnDragStart(const browser: ICefBrowser;
@@ -728,6 +755,7 @@ type
     property OnBeforeBrowse: TOnBeforeBrowse read FOnBeforeBrowse write FOnBeforeBrowse;
     property OnBeforeResourceLoad: TOnBeforeResourceLoad read FOnBeforeResourceLoad write FOnBeforeResourceLoad;
     property OnProtocolExecution: TOnProtocolExecution read FOnProtocolExecution write FOnProtocolExecution;
+    property OnResourceRedirect: TOnResourceRedirect read FOnResourceRedirect write FOnResourceRedirect;
     property OnResourceResponse: TOnResourceResponse read FOnResourceResponse write FOnResourceResponse;
 
     property OnAddressChange: TOnAddressChange read FOnAddressChange write FOnAddressChange;
@@ -756,6 +784,9 @@ type
     property OnJsPrompt: TOnJsPrompt read FOnJsPrompt write FOnJsPrompt;
     property OnJsBinding: TOnJsBinding read FOnJsBinding write FOnJsBinding;
     property OnFindResult: TOnFindResult read FOnFindResult write FOnFindResult;
+
+    property OnContextCreated: TOnContextEvent read FOnContextCreated write FOnContextCreated;
+    property OnContextReleased: TOnContextEvent read FOnContextReleased write FOnContextReleased;
 
     property OnGetViewRect: TOnGetViewRect read FOnGetViewRect write FOnGetViewRect;
     property OnGetScreenRect: TOnGetScreenRect read FOnGetScreenRect write FOnGetScreenRect;
@@ -815,24 +846,9 @@ begin
   FPrintHandler := TCustomPrintHandler.Create(crm);
   FFindHandler := TCustomFindHandler.Create(crm);
   FJsdialogHandler := TCustomJsDialogHandler.Create(crm);
-  FJsbindingHandler := TCustomJsBindingHandler.Create(crm);
+  FV8ContextHandler := TCustomV8ContextHandler.Create(crm);
   FRenderHandler := TCustomRenderHandler.Create(crm);
   FDragHandler := TCustomDragHandler.Create(crm);
-//{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-//  if CefInstances = 0 then
-//    CefTimer := SetTimer(0, 0, 10, nil);
-//  InterlockedIncrement(CefInstances);
-//{$ENDIF}
-end;
-
-destructor TCustomClientHandler.Destroy;
-begin
-//{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
-//  InterlockedDecrement(CefInstances);
-//  if CefInstances = 0 then
-//    KillTimer(0, CefTimer);
-//{$ENDIF}
-  inherited;
 end;
 
 procedure TCustomClientHandler.Disconnect;
@@ -847,7 +863,7 @@ begin
   FPrintHandler := nil;
   FFindHandler := nil;
   FJsdialogHandler := nil;
-  FJsbindingHandler := nil;
+  FV8ContextHandler := nil;
   FRenderHandler := nil;
   FDragHandler := nil;
 end;
@@ -872,9 +888,9 @@ begin
   Result := FFocusHandler;
 end;
 
-function TCustomClientHandler.GetJsbindingHandler: ICefBase;
+function TCustomClientHandler.GetV8ContextHandler: ICefBase;
 begin
-  Result := FJsbindingHandler;
+  Result := FV8ContextHandler;
 end;
 
 function TCustomClientHandler.GetJsdialogHandler: ICefBase;
@@ -1025,6 +1041,12 @@ begin
   Result := FCrm.doOnProtocolExecution(browser, url, allowOSExecution);
 end;
 
+procedure TCustomRequestHandler.OnResourceRedirect(const browser: ICefBrowser;
+  const oldurl: ustring; out newurl: ustring);
+begin
+  FCrm.doOnResourceRedirect(browser, oldurl, newurl);
+end;
+
 procedure TCustomRequestHandler.OnResourceResponse(const browser: ICefBrowser;
   const url: ustring; const response: ICefResponse; var filter: ICefBase);
 begin
@@ -1132,19 +1154,19 @@ begin
 end;
 
 procedure TCustomMenuHandler.GetMenuLabel(const browser: ICefBrowser;
-  menuId: TCefHandlerMenuId; var caption: ustring);
+  menuId: TCefMenuId; var caption: ustring);
 begin
   FCrm.doOnGetMenuLabel(browser, menuId, caption);
 end;
 
 function TCustomMenuHandler.OnBeforeMenu(const browser: ICefBrowser;
-  const menuInfo: PCefHandlerMenuInfo): Boolean;
+  const menuInfo: PCefMenuInfo): Boolean;
 begin
   Result := FCrm.doOnBeforeMenu(browser, menuInfo);
 end;
 
 function TCustomMenuHandler.OnMenuAction(const browser: ICefBrowser;
-  menuId: TCefHandlerMenuId): Boolean;
+  menuId: TCefMenuId): Boolean;
 begin
   Result := FCrm.doOnMenuAction(browser, menuId);
 end;
@@ -1214,18 +1236,24 @@ begin
   Result := FCrm.doOnJsPrompt(browser, frame, message, defaultValue, retval, return);
 end;
 
-{ TCustomJsBindingHandler }
+{ TCustomV8ContextHandler }
 
-constructor TCustomJsBindingHandler.Create(const crm: IChromiumEvents);
+constructor TCustomV8ContextHandler.Create(const crm: IChromiumEvents);
 begin
   inherited Create;
   FCrm := crm;
 end;
 
-procedure TCustomJsBindingHandler.OnJsBinding(const browser: ICefBrowser;
-  const frame: ICefFrame; const obj: ICefv8Value);
+procedure TCustomV8ContextHandler.OnContextCreated(const browser: ICefBrowser;
+  const frame: ICefFrame; const context: ICefv8Context);
 begin
-  FCrm.doOnJsBinding(browser, frame, obj)
+  FCrm.doOnContextCreated(browser, frame, context);
+end;
+
+procedure TCustomV8ContextHandler.OnContextReleased(const browser: ICefBrowser;
+  const frame: ICefFrame; const context: ICefv8Context);
+begin
+  FCrm.doOnContextReleased(browser, frame, context);
 end;
 
 { TCustomRenderHandler }
@@ -1261,9 +1289,10 @@ begin
 end;
 
 procedure TCustomRenderHandler.OnPaint(const browser: ICefBrowser;
-  kind: TCefPaintElementType; const dirtyRect: PCefRect; const buffer: Pointer);
+  kind: TCefPaintElementType; dirtyRectsCount: Cardinal;
+  const dirtyRects: PCefRectArray; const buffer: Pointer);
 begin
-  FCrm.doOnPaint(browser, kind, dirtyRect, buffer);
+  FCrm.doOnPaint(browser, kind, dirtyRectsCount, dirtyRects, buffer);
 end;
 
 procedure TCustomRenderHandler.OnPopupShow(const browser: ICefBrowser;
@@ -1389,7 +1418,7 @@ begin
 end;
 
 function TCustomChromiumOSR.doOnBeforeMenu(const browser: ICefBrowser;
-  const menuInfo: PCefHandlerMenuInfo): Boolean;
+  const menuInfo: PCefMenuInfo): Boolean;
 begin
   Result := False;
   if Assigned(FOnBeforeMenu) then
@@ -1439,6 +1468,20 @@ begin
     FOnContentsSizeChange(Self, browser, frame, width, height);
 end;
 
+procedure TCustomChromiumOSR.doOnContextCreated(const browser: ICefBrowser;
+  const frame: ICefFrame; const context: ICefv8Context);
+begin
+  if Assigned(FOnContextCreated) then
+    FOnContextCreated(Self, browser, frame, context);
+end;
+
+procedure TCustomChromiumOSR.doOnContextReleased(const browser: ICefBrowser;
+  const frame: ICefFrame; const context: ICefv8Context);
+begin
+  if Assigned(FOnContextReleased) then
+    FOnContextReleased(Self, browser, frame, context);
+end;
+
 function TCustomChromiumOSR.doOnGetDownloadHandler(const browser: ICefBrowser;
   const mimeType, fileName: ustring; contentLength: int64;
   var handler: ICefDownloadHandler): Boolean;
@@ -1466,7 +1509,7 @@ begin
 end;
 
 function TCustomChromiumOSR.doOnGetMenuLabel(const browser: ICefBrowser;
-  menuId: TCefHandlerMenuId; var caption: ustring): Boolean;
+  menuId: TCefMenuId; var caption: ustring): Boolean;
 begin
   Result := False;
   if Assigned(FOnGetMenuLabel) then
@@ -1565,7 +1608,7 @@ begin
 end;
 
 function TCustomChromiumOSR.doOnMenuAction(const browser: ICefBrowser;
-  menuId: TCefHandlerMenuId): Boolean;
+  menuId: TCefMenuId): Boolean;
 begin
   Result := False;
   if Assigned(FOnMenuAction) then
@@ -1604,10 +1647,11 @@ begin
 end;
 
 procedure TCustomChromiumOSR.doOnPaint(const browser: ICefBrowser;
-  kind: TCefPaintElementType; const dirtyRect: PCefRect; const buffer: Pointer);
+  kind: TCefPaintElementType; dirtyRectsCount: Cardinal;
+  const dirtyRects: PCefRectArray; const buffer: Pointer);
 begin
   if Assigned(FOnPaint) then
-    FOnPaint(Self, browser, kind, dirtyRect, buffer);
+    FOnPaint(Self, browser, kind, dirtyRectsCount, dirtyRects, buffer);
 end;
 
 procedure TCustomChromiumOSR.doOnPopupShow(const browser: ICefBrowser;
@@ -1657,6 +1701,13 @@ begin
   Result := False;
   if Assigned(FOnClose) then
     FOnClose(Self, browser, Result);
+end;
+
+procedure TCustomChromiumOSR.doOnResourceRedirect(const browser: ICefBrowser;
+  const oldurl: ustring; out newurl: ustring);
+begin
+  if Assigned(FOnResourceRedirect) then
+    FOnResourceRedirect(Self, browser, oldurl, newurl);
 end;
 
 procedure TCustomChromiumOSR.doOnResourceResponse(const browser: ICefBrowser;
@@ -1736,6 +1787,7 @@ begin
 
   settings.drag_drop_disabled := FOptions.DragDropDisabled;
   settings.load_drops_disabled := FOptions.LoadDropsDisabled;
+  settings.history_disabled := FOptions.HistoryDisabled;
   settings.encoding_detector_enabled := FOptions.EncodingDetectorEnabled;
   settings.javascript_disabled := FOptions.JavascriptDisabled;
   settings.javascript_open_windows_disallowed := FOptions.JavascriptOpenWindowsDisallowed;
@@ -1767,6 +1819,7 @@ begin
   settings.accelerated_layers_disabled := FOptions.AcceleratedLayersDisabled;
   settings.accelerated_2d_canvas_disabled := FOptions.Accelerated2dCanvasDisabled;
   settings.developer_tools_disabled := FOptions.DeveloperToolsDisabled;
+  settings.fullscreen_enabled := FOptions.FullscreenEnabled;
 end;
 
 procedure TCustomChromiumOSR.Load(const url: ustring);
@@ -1799,6 +1852,5 @@ begin
     Load(url);
   end;
 end;
-
 
 end.

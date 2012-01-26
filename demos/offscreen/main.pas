@@ -12,8 +12,8 @@ type
     chrmosr: TChromiumOSR;
     AppEvents: TApplicationEvents;
     procedure chrmosrPaint(Sender: TObject; const browser: ICefBrowser;
-      kind: TCefPaintElementType; const dirtyRect: PCefRect;
-      const buffer: Pointer);
+      kind: TCefPaintElementType; dirtyRectsCount: Cardinal;
+      const dirtyRects: PCefRectArray; const buffer: Pointer);
     procedure PaintBoxResize(Sender: TObject);
     procedure PaintBoxMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
@@ -61,10 +61,11 @@ begin
 end;
 
 procedure TMainform.chrmosrPaint(Sender: TObject; const browser: ICefBrowser;
-  kind: TCefPaintElementType; const dirtyRect: PCefRect; const buffer: Pointer);
+  kind: TCefPaintElementType; dirtyRectsCount: Cardinal;
+    const dirtyRects: PCefRectArray; const buffer: Pointer);
 var
   src, dst: PByte;
-  offset, i, w: Integer;
+  offset, i, j, w: Integer;
   vw, vh: Integer;
 begin
   chrmosr.Browser.GetSize(PET_VIEW, vw, vh);
@@ -74,19 +75,22 @@ begin
       PaintBox.Canvas.Lock;
       Lock;
       try
-        w := Width * 4;
-        offset := ((dirtyRect.y * Width) + dirtyRect.x) * 4;
-        src := @PByte(buffer)[offset];
-        dst := @PByte(Bits)[offset];
-        offset := dirtyRect.width * 4;
-        for i := 0 to dirtyRect.height - 1 do
+        for j := 0 to dirtyRectsCount - 1 do
         begin
-          Move(src^, dst^, offset);
-          Inc(dst, w);
-          Inc(src, w);
+          w := Width * 4;
+          offset := ((dirtyRects[j].y * Width) + dirtyRects[j].x) * 4;
+          src := @PByte(buffer)[offset];
+          dst := @PByte(Bits)[offset];
+          offset := dirtyRects[j].width * 4;
+          for i := 0 to dirtyRects[j].height - 1 do
+          begin
+            Move(src^, dst^, offset);
+            Inc(dst, w);
+            Inc(src, w);
+          end;
+          PaintBox.Flush(Rect(dirtyRects[j].x, dirtyRects[j].y,
+            dirtyRects[j].x + dirtyRects[j].width,  dirtyRects[j].y + dirtyRects[j].height));
         end;
-        PaintBox.Flush(Rect(dirtyRect.x, dirtyRect.y,
-          dirtyRect.x + dirtyRect.width,  dirtyRect.y + dirtyRect.height));
       finally
         Unlock;
         PaintBox.Canvas.Unlock;
