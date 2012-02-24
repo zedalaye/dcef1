@@ -3523,15 +3523,26 @@ type
     function IsLink: Boolean;
     function IsFragment: Boolean;
     function IsFile: Boolean;
-    function GetLinkUrl: string;
-    function GetLinkTitle: string;
-    function GetLinkMetadata: string;
-    function GetFragmentText: string;
-    function GetFragmentHtml: string;
-    function GetFragmentBaseUrl: string;
-    function GetFileExtension: string;
-    function GetFileName: string;
+    function GetLinkUrl: ustring;
+    function GetLinkTitle: ustring;
+    function GetLinkMetadata: ustring;
+    function GetFragmentText: ustring;
+    function GetFragmentHtml: ustring;
+    function GetFragmentBaseUrl: ustring;
+    function GetFileExtension: ustring;
+    function GetFileName: ustring;
     function GetFileNames(names: TStrings): Boolean;
+  end;
+
+  ICefProxyHandler = interface(ICefBase)
+  ['{2AC50228-7C3E-4317-B533-6B0C8A875AF5}']
+    procedure GetProxyForUrl(const url: ustring;
+      var proxyType: TCefProxyType; var proxyList: ustring);
+  end;
+
+  ICefApp = interface
+    ['{970CA670-9070-4642-B188-7D8A22DAEED4}']
+    function GetProxyHandler: ICefProxyHandler;
   end;
 
   TCefBaseOwn = class(TInterfacedObject, ICefBase)
@@ -4433,20 +4444,19 @@ type
     constructor Create(const visitor: TCefStorageVisitorProc); reintroduce;
   end;
 
-
   TCefDragDataRef = class(TCefBaseRef, ICefDragData)
   protected
     function IsLink: Boolean;
     function IsFragment: Boolean;
     function IsFile: Boolean;
-    function GetLinkUrl: string;
-    function GetLinkTitle: string;
-    function GetLinkMetadata: string;
-    function GetFragmentText: string;
-    function GetFragmentHtml: string;
-    function GetFragmentBaseUrl: string;
-    function GetFileExtension: string;
-    function GetFileName: string;
+    function GetLinkUrl: ustring;
+    function GetLinkTitle: ustring;
+    function GetLinkMetadata: ustring;
+    function GetFragmentText: ustring;
+    function GetFragmentHtml: ustring;
+    function GetFragmentBaseUrl: ustring;
+    function GetFileExtension: ustring;
+    function GetFileName: ustring;
     function GetFileNames(names: TStrings): Boolean;
   public
     class function UnWrap(data: Pointer): ICefDragData;
@@ -4464,6 +4474,34 @@ type
     function GetEndColumn: Integer;
   public
     class function UnWrap(data: Pointer): ICefV8Exception;
+  end;
+
+  TCefProxyHandlerOwn = class(TCefBaseOwn, ICefProxyHandler)
+  protected
+    procedure GetProxyForUrl(const url: ustring; var proxyType: TCefProxyType;
+      var proxyList: ustring); virtual;
+  public
+    constructor Create; virtual;
+  end;
+
+  TGetProxyForUrlProc = {$IFDEF DELPHI12_UP}reference to{$ENDIF} procedure(const url: ustring;
+    var proxyType: TCefProxyType; var proxyList: ustring);
+
+  TCefFastProxyHandler = class(TCefProxyHandlerOwn)
+  private
+    FGetProxyForUrl: TGetProxyForUrlProc;
+  protected
+    procedure GetProxyForUrl(const url: ustring; var proxyType: TCefProxyType;
+      var proxyList: ustring); override;
+  public
+    constructor Create(const handler: TGetProxyForUrlProc); reintroduce;
+  end;
+
+  TCefAppOwn = class(TCefBaseOwn, ICefApp)
+  protected
+    function GetProxyHandler: ICefProxyHandler; virtual;
+  public
+    constructor Create; virtual;
   end;
 
   ECefException = class(Exception)
@@ -4557,8 +4595,8 @@ var
   CefExtraPluginPaths: ustring = '';
   CefLocalStorageQuota: Cardinal = 0;
   CefSessionStorageQuota: Cardinal = 0;
-
   CefJavaScriptFlags: ustring = '';
+  CefGetProxyForUrl: TGetProxyForUrlProc = nil;
 
 {$ifdef MSWINDOWS}
   CefAutoDetectProxySettings: Boolean = False;
@@ -4566,6 +4604,17 @@ var
 
 
 implementation
+
+type
+  TInternalApp = class(TCefAppOwn)
+  protected
+    function GetProxyHandler: ICefProxyHandler; override;
+  end;
+
+  function TInternalApp.GetProxyHandler: ICefProxyHandler;
+  begin
+    Result := TCefFastProxyHandler.Create(CefGetProxyForUrl);
+  end;
 
 {$IFDEF MSWINDOWS}
 function TzSpecificLocalTimeToSystemTime(
@@ -6371,6 +6420,25 @@ begin
   deleteData^ := Ord(delete);
 end;
 
+{ cef_proxy_handler }
+
+procedure cef_proxy_handler_get_proxy_for_url(self: PCefProxyHandler;
+  const url: PCefString; proxy_info: PCefProxyInfo); stdcall;
+var
+  proxyList: ustring;
+begin
+  TCefProxyHandlerOwn(CefGetObject(self)).GetProxyForUrl(CefString(url),
+    proxy_info.proxyType, proxyList);
+  CefStringSet(@proxy_info.proxyList, proxyList);
+end;
+
+{ cef_app }
+
+function cef_app_get_proxy_handler(self: PCefApp): PCefProxyHandler; stdcall;
+begin
+  Result := CefGetData(TCefAppOwn(CefGetObject(self)).GetProxyHandler)
+end;
+
 { TCefBaseOwn }
 
 constructor TCefBaseOwn.CreateData(size: Cardinal);
@@ -7609,7 +7677,8 @@ begin
 {$ifdef MSWINDOWS}
     settings.auto_detect_proxy_settings_enabled := AutoDetectProxySettings;
 {$endif}
-    cef_initialize(@settings, nil);
+
+    cef_initialize(@settings, CefGetData(TInternalApp.Create));
     if settings.extra_plugin_paths <> nil then
       cef_string_list_free(settings.extra_plugin_paths);
   end;
@@ -10683,12 +10752,12 @@ end;
 
 { TCefDragDataRef }
 
-function TCefDragDataRef.GetFileExtension: string;
+function TCefDragDataRef.GetFileExtension: ustring;
 begin
   Result := CefStringFreeAndGet(PCefDragData(FData)^.get_file_extension(FData));
 end;
 
-function TCefDragDataRef.GetFileName: string;
+function TCefDragDataRef.GetFileName: ustring;
 begin
   Result := CefStringFreeAndGet(PCefDragData(FData)^.get_file_name(FData));
 end;
@@ -10712,32 +10781,32 @@ begin
   end;
 end;
 
-function TCefDragDataRef.GetFragmentBaseUrl: string;
+function TCefDragDataRef.GetFragmentBaseUrl: ustring;
 begin
   Result := CefStringFreeAndGet(PCefDragData(FData)^.get_fragment_base_url(FData));
 end;
 
-function TCefDragDataRef.GetFragmentHtml: string;
+function TCefDragDataRef.GetFragmentHtml: ustring;
 begin
   Result := CefStringFreeAndGet(PCefDragData(FData)^.get_fragment_html(FData));
 end;
 
-function TCefDragDataRef.GetFragmentText: string;
+function TCefDragDataRef.GetFragmentText: ustring;
 begin
   Result := CefStringFreeAndGet(PCefDragData(FData)^.get_fragment_text(FData));
 end;
 
-function TCefDragDataRef.GetLinkMetadata: string;
+function TCefDragDataRef.GetLinkMetadata: ustring;
 begin
   Result := CefStringFreeAndGet(PCefDragData(FData)^.get_link_metadata(FData));
 end;
 
-function TCefDragDataRef.GetLinkTitle: string;
+function TCefDragDataRef.GetLinkTitle: ustring;
 begin
   Result := CefStringFreeAndGet(PCefDragData(FData)^.get_link_title(FData));
 end;
 
-function TCefDragDataRef.GetLinkUrl: string;
+function TCefDragDataRef.GetLinkUrl: ustring;
 begin
   Result := CefStringFreeAndGet(PCefDragData(FData)^.get_link_url(FData));
 end;
@@ -10811,6 +10880,48 @@ begin
   if data <> nil then
     Result := Create(data) as ICefV8Exception else
     Result := nil;
+end;
+
+{ TCefProxyHandlerOwn }
+
+constructor TCefProxyHandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefProxyHandler));
+  PCefProxyHandler(FData)^.get_proxy_for_url := @cef_proxy_handler_get_proxy_for_url;
+end;
+
+procedure TCefProxyHandlerOwn.GetProxyForUrl(const url: ustring;
+  var proxyType: TCefProxyType; var proxyList: ustring);
+begin
+
+end;
+
+{ TCefFastProxyHandler }
+
+constructor TCefFastProxyHandler.Create(const handler: TGetProxyForUrlProc);
+begin
+  inherited Create;
+  FGetProxyForUrl := handler;
+end;
+
+procedure TCefFastProxyHandler.GetProxyForUrl(const url: ustring;
+  var proxyType: TCefProxyType; var proxyList: ustring);
+begin
+  if Assigned(FGetProxyForUrl) then
+    FGetProxyForUrl(url, proxyType, proxyList);
+end;
+
+{ TCefAppOwn }
+
+constructor TCefAppOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefApp));
+  PCefApp(FData)^.get_proxy_handler := @cef_app_get_proxy_handler;
+end;
+
+function TCefAppOwn.GetProxyHandler: ICefProxyHandler;
+begin
+  Result := nil;
 end;
 
 initialization
