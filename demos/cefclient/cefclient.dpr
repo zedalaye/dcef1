@@ -7,11 +7,6 @@
 program cefclient;
 
 uses
-  madExcept,
-  madLinkDisAsm,
-  madListHardware,
-  madListProcesses,
-  madListModules,
   Classes,
   Windows,
   Messages,
@@ -36,11 +31,6 @@ type
   TCustomLifeSpan = class(TCefLifeSpanHandlerOwn)
   protected
     procedure OnAfterCreated(const browser: ICefBrowser); override;
-    function OnBeforePopup(const parentBrowser: ICefBrowser;
-      var popupFeatures: TCefPopupFeatures; var windowInfo: TCefWindowInfo;
-      var url: ustring; var client: ICefBase;
-      var settings: TCefBrowserSettings): Boolean; override;
-
   end;
 
   TCustomLoad = class(TCefLoadHandlerOwn)
@@ -63,10 +53,9 @@ type
     FResponse: TMemoryStream;
     procedure Output(const str: ustring);
   protected
-    function ProcessRequest(const Request: ICefRequest;
+    function ProcessRequest(const Request: ICefRequest; var redirectUrl: ustring;
       const callback: ICefSchemeHandlerCallback): Boolean; override;
-    procedure GetResponseHeaders(const response: ICefResponse;
-      var responseLength: Int64; var redirectUrl: ustring); override;
+    procedure GetResponseHeaders(const response: ICefResponse; var responseLength: Int64); override;
     function ReadResponse(DataOut: Pointer; BytesToRead: Integer;
       var BytesRead: Integer; const callback: ICefSchemeHandlerCallback): Boolean; override;
   public
@@ -123,7 +112,6 @@ var
   x: Integer;
   strPtr: array[0..MAX_URL_LENGTH-1] of WideChar;
   strLen, urloffset: Integer;
-  setting: TCefBrowserSettings;
 begin
   if Wnd = editWnd then
     case message of
@@ -203,9 +191,7 @@ begin
           info.y := rect.top;
           info.Width := rect.right - rect.left;
           info.Height := rect.bottom - rect.top;
-          FillChar(setting, sizeof(setting), 0);
-          setting.size := SizeOf(setting);
-          CefBrowserCreate(@info, handl.Wrap, navigateto, @setting);
+          CefBrowserCreate(@info, handl.Wrap, navigateto, nil);
           isLoading := False;
           canGoBack := False;
           canGoForward := False;
@@ -325,15 +311,6 @@ begin
   end;
 end;
 
-function TCustomLifeSpan.OnBeforePopup(const parentBrowser: ICefBrowser;
-  var popupFeatures: TCefPopupFeatures; var windowInfo: TCefWindowInfo;
-  var url: ustring; var client: ICefBase;
-  var settings: TCefBrowserSettings): Boolean;
-begin
-//  windowInfo.WndParent := parentBrowser.GetWindowHandle;
-  Result := Inherited;
-end;
-
 { TCustomLoad }
 
 procedure TCustomLoad.OnLoadEnd(const browser: ICefBrowser;
@@ -385,7 +362,7 @@ begin
   inherited;
 end;
 
-function TScheme.ProcessRequest(const Request: ICefRequest;
+function TScheme.ProcessRequest(const Request: ICefRequest; var redirectUrl: ustring;
   const callback: ICefSchemeHandlerCallback): Boolean;
 begin
   OutPut('<html>');
@@ -408,7 +385,7 @@ begin
 end;
 
 procedure TScheme.GetResponseHeaders(const response: ICefResponse;
-  var responseLength: Int64; var redirectUrl: ustring);
+  var responseLength: Int64);
 begin
   response.Status := 200;
   response.StatusText := 'OK';
@@ -465,10 +442,10 @@ begin
     retval := TCefv8ValueRef.CreateObject(nil);
     // Add a string parameter to the new V8 object.
     retval.SetValueByKey('param', TCefv8ValueRef.CreateString(
-        'Retrieving a parameter on a native object succeeded.'), V8_PROPERTY_ATTRIBUTE_NONE);
+        'Retrieving a parameter on a native object succeeded.'));
     // Add a function to the new V8 object.
     retval.SetValueByKey('GetMessage',
-        TCefv8ValueRef.CreateFunction('GetMessage', Self), V8_PROPERTY_ATTRIBUTE_NONE);
+        TCefv8ValueRef.CreateFunction('GetMessage', Self));
     Result := true;
   end
   else if(name = 'GetMessage') then
@@ -513,10 +490,10 @@ begin
   CefLoadLibDefault;
 
   CefRegisterCustomScheme('client', True, False, False);
-  //CefRegisterCustomScheme('file', True, False, False);
+  CefRegisterCustomScheme('file', True, False, False);
 
   CefRegisterSchemeHandlerFactory('client', 'test', False, TScheme);
-  //CefRegisterSchemeHandlerFactory('file', '', False, TFileScheme);
+  CefRegisterSchemeHandlerFactory('file', '', False, TFileScheme);
 
   CefRegisterExtension('v8/test', code, TExtension.Create as ICefV8Handler);
   //navigateto := 'client://test/';

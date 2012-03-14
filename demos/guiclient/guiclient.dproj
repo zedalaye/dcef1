@@ -65,7 +65,6 @@
 			<DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
 		</PropertyGroup>
 		<PropertyGroup Condition="'$(Cfg_2_Win32)'!=''">
-			<DCC_Define>madExcept;$(DCC_Define)</DCC_Define>
 			<DCC_ExeOutput>..\..\bin\Win32</DCC_ExeOutput>
 		</PropertyGroup>
 		<ItemGroup>

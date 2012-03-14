@@ -34,9 +34,9 @@ type
     FStatusText: string;
     FMimeType: string;
   protected
-    function ProcessRequest(const Request: ICefRequest;
+    function ProcessRequest(const Request: ICefRequest; var redirectUrl: ustring;
       const callback: ICefSchemeHandlerCallback): Boolean; override;
-    procedure GetResponseHeaders(const response: ICefResponse; var responseLength: Int64; var redirectUrl: ustring); override;
+    procedure GetResponseHeaders(const response: ICefResponse; var responseLength: Int64); override;
     function ReadResponse(DataOut: Pointer; BytesToRead: Integer;
       var BytesRead: Integer; const callback: ICefSchemeHandlerCallback): Boolean; override;
     procedure Cancel; override;
@@ -248,7 +248,7 @@ begin
 end;
 
 procedure TFileScheme.GetResponseHeaders(const response: ICefResponse;
-  var responseLength: Int64; var redirectUrl: ustring);
+  var responseLength: Int64);
 begin
   response.Status := FStatus;
   response.StatusText := FStatusText;
@@ -257,7 +257,7 @@ begin
 end;
 
 function TFileScheme.ProcessRequest(const Request: ICefRequest;
-  const callback: ICefSchemeHandlerCallback): Boolean;
+  var redirectUrl: ustring; const callback: ICefSchemeHandlerCallback): Boolean;
 var
   rec: TSearchRec;
   reg: TRegistry;
@@ -290,16 +290,11 @@ var
   {$ENDIF}
     FDataStream.Write(rb[1], Length(rb))
   end;
-var
-  n: Integer;
+
 begin
   Result := True;
 
   FPath := ParseFileUrl(Request.Url);
-  n := Pos('?', FPath);
-  if n > 0 then
-    SetLength(FPath, n-1);
-
   if FindFirst(FPath, 0, rec) = 0 then
   begin
     FStatus := 200;
