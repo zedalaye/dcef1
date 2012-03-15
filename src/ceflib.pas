@@ -4539,6 +4539,7 @@ procedure CefDoMessageLoopWork;
 procedure CefRunMessageLoop;
 procedure CefQuitMessageLoop;
 {$ENDIF}
+procedure CefShutDown;
 
 function CefRegisterSchemeHandlerFactory(const SchemeName, HostName: ustring;
   SyncMainThread: Boolean; const handler: TCefSchemeHandlerClass): Boolean;
@@ -7734,6 +7735,16 @@ end;
 
 {$ENDIF}
 
+procedure CefShutDown;
+begin
+  if LibHandle <> 0 then
+  begin
+    cef_shutdown;
+    FreeLibrary(LibHandle);
+    LibHandle := 0;
+  end;
+end;
+
 function CefString(const str: ustring): TCefString;
 begin
   Result.str := PChar16(PWideChar(str));
@@ -10928,11 +10939,6 @@ initialization
   IsMultiThread := True;
 
 finalization
-  if LibHandle <> 0 then
-  begin
-    cef_shutdown;
-    FreeLibrary(LibHandle);
-  end;
-
+  CefShutDown;
 end.
 
