@@ -103,6 +103,8 @@ type
     procedure MouseWheel(Shift: TShiftState; WheelDelta: Integer; var Handled: Boolean); override;
     procedure KeyDown(var Key: Word; var KeyChar: WideChar; Shift: TShiftState); override;
     procedure KeyUp(var Key: Word; var KeyChar: WideChar; Shift: TShiftState); override;
+    procedure DialogKey(var Key: Word; Shift: TShiftState); override;
+
     procedure Loaded; override;
     procedure Resize; override;
 
@@ -483,6 +485,12 @@ begin
   if FBuffer <> nil then
     FBuffer.Free;
   inherited;
+end;
+
+procedure TCustomChromiumFMX.DialogKey(var Key: Word; Shift: TShiftState);
+begin
+  if Browser <> nil then
+    Browser.SendKeyEvent(KT_KEYDOWN, Key, ShiftStateToInt(Shift), False, False);
 end;
 
 procedure TCustomChromiumFMX.doOnAddressChange(const browser: ICefBrowser;
@@ -992,7 +1000,9 @@ const
 begin
  inherited;
  if FBrowser <> nil then
+ begin
    FBrowser.SendMouseClickEvent(Round(X), Round(Y), BT[Button], False, 1);
+ end;
 end;
 
 procedure TCustomChromiumFMX.MouseMove(Shift: TShiftState; X, Y: Single);
@@ -1034,19 +1044,15 @@ end;
 
 procedure TCustomChromiumFMX.KeyDown(var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
 begin
- if FBrowser <> nil then
-   if (key = 0) then
-   begin
-     if KeyChar = #9 then
-       FBrowser.SendKeyEvent(KT_KEYDOWN, Ord(KeyChar), 0, False, False) else
-       FBrowser.SendKeyEvent(KT_CHAR, Ord(KeyChar), ShiftStateToInt(Shift), False, False);
-   end else
-     FBrowser.SendKeyEvent(KT_KEYDOWN, Key, ShiftStateToInt(Shift), False, False) else
+  if Browser <> nil then
+    if KeyChar <> #0 then
+      Browser.SendKeyEvent(KT_CHAR, Ord(KeyChar), ShiftStateToInt(Shift), False, False) else
+      Browser.SendKeyEvent(KT_KEYDOWN, Key, ShiftStateToInt(Shift), Key in [18, 121], False);
 end;
 
 procedure TCustomChromiumFMX.KeyUp(var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
 begin
- if FBrowser <> nil then
+   if FBrowser <> nil then
    if (key <> 0) then
      FBrowser.SendKeyEvent(KT_KEYUP, Key, ShiftStateToInt(Shift), False, False) else
 end;
