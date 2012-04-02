@@ -1047,7 +1047,7 @@ type
   PCefDragData = ^TCefDragData;
   PCefStorageVisitor = ^TCefStorageVisitor;
   PCefProxyHandler = ^TCefProxyHandler;
-  PCefProxyInfo = TCefProxyInfo;
+  PCefProxyInfo = ^TCefProxyInfo;
   PCefApp = ^TCefApp;
   PCefV8Exception = ^TCefV8Exception;
 
