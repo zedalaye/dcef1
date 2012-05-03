@@ -465,12 +465,31 @@ end;
 
 { TVCLClientHandler }
 
+var
+  looping: Boolean = False;
+
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+procedure TimerProc(hwnd: HWND; uMsg: UINT; idEvent: Pointer; dwTime: DWORD); stdcall;
+begin
+  if looping then Exit;
+  if CefInstances > 0 then
+  begin
+    looping := True;
+    try
+      CefDoMessageLoopWork;
+    finally
+      looping := False;
+    end;
+  end;
+end;
+{$ENDIF}
+
 constructor TVCLClientHandler.Create(const crm: IChromiumEvents);
 begin
   inherited Create(crm);
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
   if CefInstances = 0 then
-    CefTimer := SetTimer(0, 0, 10, nil);
+    CefTimer := SetTimer(0, 0, 10, @TimerProc);
   InterlockedIncrement(CefInstances);
 {$ENDIF}
 end;
@@ -1081,41 +1100,41 @@ begin
 end;
 
 {$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}{$IFNDEF FMX}
-type
-  TCefApplicationEvents = class(TApplicationEvents)
-  public
-    procedure doIdle(Sender: TObject; var Done: Boolean);
-    procedure doMessage(var Msg: TMsg; var Handled: Boolean);
-    constructor Create(AOwner: TComponent); override;
-  end;
-
-constructor TCefApplicationEvents.Create(AOwner: TComponent);
-begin
-  inherited;
-  OnIdle := doIdle;
-  OnMessage := doMessage;
-end;
-
-procedure TCefApplicationEvents.doIdle(Sender: TObject; var Done: Boolean);
-begin
-  if CefInstances > 0 then
-    CefDoMessageLoopWork;
-end;
-
-procedure TCefApplicationEvents.doMessage(var Msg: TMsg; var Handled: Boolean);
-begin
-  if CefInstances > 0 then
-    CefDoMessageLoopWork;
-end;
-
-var
-  AppEvent: TCefApplicationEvents;
+//type
+//  TCefApplicationEvents = class(TApplicationEvents)
+//  public
+//    procedure doIdle(Sender: TObject; var Done: Boolean);
+//    procedure doMessage(var Msg: TMsg; var Handled: Boolean);
+//    constructor Create(AOwner: TComponent); override;
+//  end;
+//
+//constructor TCefApplicationEvents.Create(AOwner: TComponent);
+//begin
+//  inherited;
+//  OnIdle := doIdle;
+//  OnMessage := doMessage;
+//end;
+//
+//procedure TCefApplicationEvents.doIdle(Sender: TObject; var Done: Boolean);
+//begin
+//  if CefInstances > 0 then
+//    CefDoMessageLoopWork;
+//end;
+//
+//procedure TCefApplicationEvents.doMessage(var Msg: TMsg; var Handled: Boolean);
+//begin
+//  if CefInstances > 0 then
+//    CefDoMessageLoopWork;
+//end;
+//
+//var
+//  AppEvent: TCefApplicationEvents;
 
 initialization
-  AppEvent := TCefApplicationEvents.Create(nil);
+//  AppEvent := TCefApplicationEvents.Create(nil);
 
 finalization
-  AppEvent.Free;
+//  AppEvent.Free;
 {$ENDIF}{$ENDIF}
 
 end.
