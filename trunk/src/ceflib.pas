@@ -39,13 +39,13 @@ uses
   ;
 
 const
-  CEF_REVISION = 439;
-  COPYRIGHT_YEAR = 2011;
+  CEF_REVISION = 607;
+  COPYRIGHT_YEAR = 2012;
 
-  CHROME_VERSION_MAJOR = 17;
+  CHROME_VERSION_MAJOR = 18;
   CHROME_VERSION_MINOR = 0;
-  CHROME_VERSION_BUILD = 963;
-  CHROME_VERSION_PATCH = 15;
+  CHROME_VERSION_BUILD = 1025;
+  CHROME_VERSION_PATCH = 166;
 
 type
 {$IFDEF UNICODE}
@@ -267,7 +267,9 @@ type
     product_version: TCefString;
 
     // The locale string that will be passed to WebKit. If empty the default
-    // locale of "en-US" will be used.
+    // locale of "en-US" will be used. This value is ignored on Linux where locale
+    // is determined using environment variable parsing with the precedence order:
+    // LANGUAGE, LC_ALL, LC_MESSAGES and LANG.
     locale: TCefString;
 
     // List of fully qualified paths to plugins (including plugin name) that will
@@ -302,6 +304,29 @@ type
     // by default for performance reasons.
     auto_detect_proxy_settings_enabled: Boolean;
 {$ENDIF}
+    ///
+    // The fully qualified path for the cef.pak file. If this value is empty
+    // the cef.pak file must be located in the module directory. This value is
+    // ignored on Mac OS X where pack files are always loaded from the app bundle
+    // resource directory.
+    ///
+    pack_file_path: TCefString;
+
+    ///
+    // The fully qualified path for the locales directory. If this value is empty
+    // the locales directory must be located in the module directory. This value
+    // is ignored on Mac OS X where pack files are always loaded from the app
+    // bundle resource directory.
+    ///
+    locales_dir_path: TCefString;
+
+    ///
+    // Set to true (1) to disable loading of pack files for resources and locales.
+    // A resource bundle handler must be provided for the browser and renderer
+    // processes via CefApp::GetResourceBundleHandler() if loading of pack files
+    // is disabled.
+    ///
+    pack_loading_disabled: Boolean;
   end;
 
   // Browser initialization settings. Specify NULL or 0 to get the recommended
@@ -440,6 +465,15 @@ type
     // Set to true (1) to disable accelerated 2d canvas.
     accelerated_2d_canvas_disabled: Boolean;
 
+    // Set to true (1) to disable accelerated painting.
+    accelerated_painting_disabled: Boolean;
+
+    // Set to true (1) to disable accelerated filters.
+    accelerated_filters_disabled: Boolean;
+
+    // Set to true (1) to disable accelerated plugins.
+    accelerated_plugins_disabled: Boolean;
+
     // Set to true (1) to disable developer tools (WebKit inspector).
     developer_tools_disabled: Boolean;
 
@@ -481,7 +515,9 @@ type
   TCefTime = record
     year: Integer;          // Four digit year "2007"
     month: Integer;         // 1-based month (values 1 = January, etc.)
+{$IFNDEF MACOS}
     day_of_week: Integer;   // 0-based day of week (0 = Sunday, etc.)
+{$ENDIF}
     day_of_month: Integer;  // 1-based day of month (1-31)
     hour: Integer;          // Hour within the current day (0-23)
     minute: Integer;        // Minute within the current hour (0-59)
@@ -999,7 +1035,6 @@ type
   PPCefV8Value = ^PCefV8ValueArray;
   PCefSchemeHandlerFactory = ^TCefSchemeHandlerFactory;
   PCefSchemeHandlerCallback = ^TCefSchemeHandlerCallback;
-//  PCefHandler = ^TCefHandler;
   PCefFrame = ^TCefFrame;
   PCefRequest = ^TCefRequest;
   PCefStreamReader = ^TCefStreamReader;
@@ -1050,7 +1085,13 @@ type
   PCefProxyInfo = ^TCefProxyInfo;
   PCefApp = ^TCefApp;
   PCefV8Exception = ^TCefV8Exception;
+  PCefResourceBundleHandler = ^TCefResourceBundleHandler;
+  PCefPermissionHandler = ^TCefPermissionHandler;
+  PCefCookieManager = ^TCefCookieManager;
+  PCefWebPluginInfo = ^TCefWebPluginInfo;
 
+  // Structure defining the reference count implementation functions. All
+  // framework structures must include the cef_base_t structure first.
   TCefBase = record
     // Size of the data structure.
     size: Cardinal;
@@ -1276,8 +1317,8 @@ type
     // Load the specified |url|.
     load_url: procedure(self: PCefFrame; const url: PCefString); stdcall;
 
-    // Load the contents of |string| with the optional dummy target |url|.
-    load_string: procedure(self: PCefFrame; const string_, url: PCefString); stdcall;
+    // Load the contents of |stringVal| with the optional dummy target |url|.
+    load_string: procedure(self: PCefFrame; const stringVal, url: PCefString); stdcall;
 
     // Load the contents of |stream| with the optional dummy target |url|.
     load_stream: procedure(self: PCefFrame; stream: PCefStreamReader; const url: PCefString); stdcall;
@@ -1304,16 +1345,14 @@ type
     // The resulting string must be freed by calling cef_string_userfree_free().
     get_name: function(self: PCefFrame): PCefStringUserFree; stdcall;
 
-    // Returns the globally unique identifier for this frame. This function should
-    // only be called on the UI thread.
+    // Returns the globally unique identifier for this frame.
     get_identifier: function(self: PCefFrame): Int64; stdcall;
 
     // Returns the parent of this frame or NULL if this is the main (top-level)
     // frame. This function should only be called on the UI thread.
     get_parent: function(self: PCefFrame): PCefFrame; stdcall;
 
-    // Returns the URL currently loaded in this frame. This function should only
-    // be called on the UI thread.
+    // Returns the URL currently loaded in this frame.
     // The resulting string must be freed by calling cef_string_userfree_free().
     get_url: function(self: PCefFrame): PCefStringUserFree; stdcall;
 
@@ -1340,16 +1379,53 @@ type
         const url: PCefString; proxy_info: PCefProxyInfo); stdcall;
   end;
 
+  // Structure used to implement a custom resource bundle structure. The functions
+  // of this structure may be called on multiple threads.
+  TCefResourceBundleHandler = record
+    // Base structure.
+    base: TCefBase;
 
-  // Implement this structure to provide handler implementations.
+    // Called to retrieve a localized translation for the string specified by
+    // |message_id|. To provide the translation set |string| to the translation
+    // string and return true (1). To use the default translation return false
+    // (0).
+    //
+    // WARNING: Be cautious when implementing this function. ID values are auto-
+    // generated when CEF is built and may change between versions. Existing ID
+    // values can be discovered by searching for *_strings.h in the
+    // "obj/global_intermediate" build output directory.
+    get_localized_string: function(self: PCefResourceBundleHandler;
+      message_id: Integer; string_val: PCefString): Integer; stdcall;
+
+    // Called to retrieve data for the resource specified by |resource_id|. To
+    // provide the resource data set |data| and |data_size| to the data pointer
+    // and size respectively and return true (1). To use the default resource data
+    // return false (0). The resource data will not be copied and must remain
+    // resident in memory.
+    //
+    // WARNING: Be cautious when implementing this function. ID values are auto-
+    // generated when CEF is built and may change between versions. Existing ID
+    // values can be discovered by searching for *_resources.h in the
+    // "obj/global_intermediate" build output directory.
+    get_data_resource: function(self: PCefResourceBundleHandler;
+        resource_id: Integer; var data: Pointer; var data_size: Cardinal): Integer; stdcall;
+  end;
+
+  // Implement this structure to provide handler implementations. Methods will be
+  // called on the thread indicated.
   TCefApp = record
     // Base structure.
     base: TCefBase;
 
-    ///
+    // Return the handler for resource bundle events. If
+    // CefSettings.pack_loading_disabled is true (1) a handler must be returned.
+    // If no handler is returned resources will be loaded from pack files. This
+    // function is called on multiple threads.
+    // TODO
+    get_resource_bundle_handler: function(self: PCefApp): PCefResourceBundleHandler; stdcall;
+
     // Return the handler for proxy events. If not handler is returned the default
-    // system handler will be used.
-    ///
+    // system handler will be used. This function is called on the IO thread.
     get_proxy_handler: function(self: PCefApp): PCefProxyHandler; stdcall;
   end;
 
@@ -1509,6 +1585,14 @@ type
         browser: PCefBrowser; isProxy: Integer; const host: PCefString;
         port: Integer; const realm: PCefString; const scheme: PCefString;
         username, password: PCefString): Integer; stdcall;
+
+    // Called on the IO thread to retrieve the cookie manager. |main_url| is the
+    // URL of the top-level frame. Cookies managers can be unique per browser or
+    // shared across multiple browsers. The global cookie manager will be used if
+    // this function returns NULL.
+    // todo
+    get_cookie_manager: function(self: PCefRequestHandler;
+      browser: PCefBrowser; const main_url: PCefString): PCefCookieManager; stdcall;
   end;
 
 
@@ -1807,6 +1891,18 @@ type
       dragData: PCefDragData; mask: TCefDragOperations): Integer; stdcall;
   end;
 
+  // Implement this structure to handle events related to browser permissions. The
+  // functions of this structure will be called on the UI thread.
+  TCefPermissionHandler = record
+    // Base structure.
+    base: TCefBase;
+
+    // Called on the UI thread before a script extension is loaded. Return false
+    // (0) to let the extension load normally.
+    on_before_script_extension_load: function(self: PCefPermissionHandler;
+      browser: PCefBrowser; frame: PCefFrame; const extensionName: PCefString): Integer; stdcall;
+  end;
+
   // Implement this structure to provide handler implementations.
   TCefClient = record
     // Base structure.
@@ -1832,6 +1928,10 @@ type
 
     // Return the handler for context menu events.
     get_menu_handler: function(self: PCefClient): PCefMenuHandler; stdcall;
+
+    // Return the handler for browser permission events.
+    // todo
+    get_permission_handler: function(self: PCefClient): PCefPermissionHandler; stdcall;
 
     // Return the handler for printing events.
     get_print_handler: function(self: PCefClient): PCefPrintHandler; stdcall;
@@ -2008,12 +2108,12 @@ type
       size, n: Cardinal): Cardinal; stdcall;
 
     // Seek to the specified offset position. |whence| may be any one of SEEK_CUR,
-    // SEEK_END or SEEK_SET.
-    seek: function(self: PCefReadHandler; offset: LongInt;
+    // SEEK_END or SEEK_SET. Return zero on success and non-zero on failure.
+    seek: function(self: PCefReadHandler; offset: Int64;
       whence: Integer): Integer; stdcall;
 
     // Return the current offset position.
-    tell: function(self: PCefReadHandler): LongInt; stdcall;
+    tell: function(self: PCefReadHandler): Int64; stdcall;
 
     // Return non-zero if at end of file.
     eof: function(self: PCefReadHandler): Integer; stdcall;
@@ -2031,11 +2131,11 @@ type
 
     // Seek to the specified offset position. |whence| may be any one of SEEK_CUR,
     // SEEK_END or SEEK_SET. Returns zero on success and non-zero on failure.
-    seek: function(self: PCefStreamReader; offset: LongInt;
+    seek: function(self: PCefStreamReader; offset: Int64;
         whence: Integer): Integer; stdcall;
 
     // Return the current offset position.
-    tell: function(self: PCefStreamReader): LongInt; stdcall;
+    tell: function(self: PCefStreamReader): Int64; stdcall;
 
     // Return non-zero if at end of file.
     eof: function(self: PCefStreamReader): Integer; stdcall;
@@ -2053,11 +2153,11 @@ type
 
     // Seek to the specified offset position. |whence| may be any one of SEEK_CUR,
     // SEEK_END or SEEK_SET.
-    seek: function(self: PCefWriteHandler; offset: LongInt;
+    seek: function(self: PCefWriteHandler; offset: Int64;
         whence: Integer): Integer; stdcall;
 
     // Return the current offset position.
-    tell: function(self: PCefWriteHandler): LongInt; stdcall;
+    tell: function(self: PCefWriteHandler): Int64; stdcall;
 
     // Flush the stream.
     flush: function(self: PCefWriteHandler): Integer; stdcall;
@@ -2075,11 +2175,11 @@ type
 
     // Seek to the specified offset position. |whence| may be any one of SEEK_CUR,
     // SEEK_END or SEEK_SET.
-    seek: function(self: PCefStreamWriter; offset: LongInt;
+    seek: function(self: PCefStreamWriter; offset: Int64;
         whence: Integer): Integer; stdcall;
 
     // Return the current offset position.
-    tell: function(self: PCefStreamWriter): LongInt; stdcall;
+    tell: function(self: PCefStreamWriter): Int64; stdcall;
 
     // Flush the stream.
     flush: function(self: PCefStreamWriter): Integer; stdcall;
@@ -2133,8 +2233,8 @@ type
   end;
 
   // Structure that should be implemented to handle V8 accessor calls. Accessor
-  // identifiers are registered by calling cef_v8value_t::set_value(). The
-  // functions of this structure will always be called on the UI thread.
+  // identifiers are registered by calling cef_v8value_t::set_value_byaccessor().
+  // The functions of this structure will always be called on the UI thread.
   TCefV8Accessor = record
     // Base structure.
     base: TCefBase;
@@ -2287,6 +2387,20 @@ type
     get_user_data: function(
         self: PCefv8Value): PCefBase; stdcall;
 
+    // Returns the amount of externally allocated memory registered for the
+    // object.
+    get_externally_allocated_memory: function(self: PCefv8Value): Integer; stdcall;
+
+    // Adjusts the amount of registered external memory for the object. Used to
+    // give V8 an indication of the amount of externally allocated memory that is
+    // kept alive by JavaScript objects. V8 uses this information to decide when
+    // to perform global garbage collection. Each cef_v8value_t tracks the amount
+    // of external memory associated with it and automatically decreases the
+    // global total by the appropriate amount on its destruction.
+    // |change_in_bytes| specifies the number of bytes to adjust by. This function
+    // returns the number of bytes associated with the object after the
+    // adjustment.
+    adjust_externally_allocated_memory: function(self: PCefv8Value; change_in_bytes: Integer): Integer; stdcall;
 
     // ARRAY METHODS - These functions are only available on arrays.
 
@@ -2340,7 +2454,8 @@ type
 
     // Return a new scheme handler instance to handle the request. |browser| will
     // be the browser window that initiated the request. If the request was
-    // initiated using the cef_web_urlrequest_t API |browser| will be NULL.
+    // initiated using the cef_web_urlrequest_t API |browser| will be NULL. The
+    // |request| object passed to this function will not contain cookie data.
     create: function(self: PCefSchemeHandlerFactory;
       browser: PCefBrowser; const scheme_name: PCefString;
       request: PCefRequest): PCefSchemeHandler; stdcall;
@@ -2633,7 +2748,7 @@ type
     get_file_name: function(Self: PCefZipReader): PCefStringUserFree; stdcall;
 
     // Returns the uncompressed size of the file.
-    get_file_size: function(Self: PCefZipReader): LongInt; stdcall;
+    get_file_size: function(Self: PCefZipReader): Int64; stdcall;
 
     // Returns the last modified timestamp for the file.
     get_file_last_modified: function(Self: PCefZipReader): LongInt; stdcall;
@@ -2650,7 +2765,7 @@ type
     read_file: function(Self: PCefZipReader; buffer: Pointer; bufferSize: Cardinal): Integer; stdcall;
 
     // Returns the current offset in the uncompressed file contents.
-    tell: function(Self: PCefZipReader): LongInt; stdcall;
+    tell: function(Self: PCefZipReader): Int64; stdcall;
 
     // Returns true (1) if at end of the file contents.
     eof: function(Self: PCefZipReader): Integer; stdcall;
@@ -2989,8 +3104,74 @@ type
     get_file_names: function(self: PCefDragData; names: TCefStringList): Integer; stdcall;
   end;
 
+  // Structure used for managing cookies. The functions of this structure may be
+  // called on any thread unless otherwise indicated.
+  TCefCookieManager = record
+    // Base structure.
+    base: TCefBase;
 
-  ICefBrowser = interface;
+    // Set the schemes supported by this manager. By default only "http" and
+    // "https" schemes are supported. Must be called before any cookies are
+    // accessed.
+    set_supported_schemes: procedure(self: PCefCookieManager; schemes: TCefStringList); stdcall;
+
+    // Visit all cookies. The returned cookies are ordered by longest path, then
+    // by earliest creation date. Returns false (0) if cookies cannot be accessed.
+    visit_all_cookies: function(self: PCefCookieManager; visitor: PCefCookieVisitor): Integer; stdcall;
+
+    // Visit a subset of cookies. The results are filtered by the given url
+    // scheme, host, domain and path. If |includeHttpOnly| is true (1) HTTP-only
+    // cookies will also be included in the results. The returned cookies are
+    // ordered by longest path, then by earliest creation date. Returns false (0)
+    // if cookies cannot be accessed.
+    visit_url_cookies: function(self: PCefCookieManager; const url: PCefString;
+      includeHttpOnly: Integer; visitor: PCefCookieVisitor): Integer; stdcall;
+
+    // Sets a cookie given a valid URL and explicit user-provided cookie
+    // attributes. This function expects each attribute to be well-formed. It will
+    // check for disallowed characters (e.g. the ';' character is disallowed
+    // within the cookie value attribute) and will return false (0) without
+    // setting the cookie if such characters are found. This function must be
+    // called on the IO thread.
+    set_cookie: function(self: PCefCookieManager; const url: PCefString;
+      const cookie: PCefCookie): Integer; stdcall;
+
+    // Delete all cookies that match the specified parameters. If both |url| and
+    // values |cookie_name| are specified all host and domain cookies matching
+    // both will be deleted. If only |url| is specified all host cookies (but not
+    // domain cookies) irrespective of path will be deleted. If |url| is NULL all
+    // cookies for all hosts and domains will be deleted. Returns false (0) if a
+    // non- NULL invalid URL is specified or if cookies cannot be accessed. This
+    // function must be called on the IO thread.
+    delete_cookies: function(self: PCefCookieManager;
+        const url, cookie_name: PCefString): Integer; stdcall;
+
+    // Sets the directory path that will be used for storing cookie data. If
+    // |path| is NULL data will be stored in memory only. Returns false (0) if
+    // cookies cannot be accessed.
+    set_storage_path: function(self: PCefCookieManager;
+      const path: PCefString): Integer; stdcall;
+  end;
+
+  // Information about a specific web plugin.
+  TCefWebPluginInfo = record
+    // Base structure.
+    base: TCefBase;
+
+    // Returns the plugin name (i.e. Flash).
+    get_name: function(self: PCefWebPluginInfo): PCefStringUserFree; stdcall;
+
+    // Returns the plugin file path (DLL/bundle/library).
+    get_path: function(self: PCefWebPluginInfo): PCefStringUserFree; stdcall;
+
+    // Returns the version of the plugin (may be OS-specific).
+    get_version: function(self: PCefWebPluginInfo): PCefStringUserFree; stdcall;
+
+    // Returns a description of the plugin from the version information.
+    get_description: function(self: PCefWebPluginInfo): PCefStringUserFree; stdcall;
+  end;
+
+  ICefBrowser = interface;
   ICefFrame = interface;
   ICefRequest = interface;
   ICefv8Value = interface;
@@ -3171,16 +3352,16 @@ type
   ICefCustomStreamReader = interface(ICefBase)
     ['{BBCFF23A-6FE7-4C28-B13E-6D2ACA5C83B7}']
     function Read(ptr: Pointer; size, n: Cardinal): Cardinal;
-    function Seek(offset: LongInt; whence: Integer): Integer;
-    function Tell: LongInt;
+    function Seek(offset: Int64; whence: Integer): Integer;
+    function Tell: Int64;
     function Eof: Boolean;
   end;
 
   ICefStreamReader = interface(ICefBase)
     ['{DD5361CB-E558-49C5-A4BD-D1CE84ADB277}']
     function Read(ptr: Pointer; size, n: Cardinal): Cardinal;
-    function Seek(offset: LongInt; whence: Integer): Integer;
-    function Tell: LongInt;
+    function Seek(offset: Int64; whence: Integer): Integer;
+    function Tell: Int64;
     function Eof: Boolean;
   end;
 
@@ -3318,6 +3499,8 @@ type
       attribute: TCefV8PropertyAttributes): Boolean;
     function GetKeys(const keys: TStrings): Integer;
     function GetUserData: ICefv8Value;
+    function GetExternallyAllocatedMemory: Integer;
+    function AdjustExternallyAllocatedMemory(changeInBytes: Integer): Integer;
     function GetArrayLength: Integer;
     function GetFunctionName: ustring;
     function GetFunctionHandler: ICefv8Handler;
@@ -3369,12 +3552,12 @@ type
     function MoveToFile(const fileName: ustring; caseSensitive: Boolean): Boolean;
     function Close: Boolean;
     function GetFileName: ustring;
-    function GetFileSize: LongInt;
+    function GetFileSize: Int64;
     function GetFileLastModified: LongInt;
     function OpenFile(const password: ustring): Boolean;
     function CloseFile: Boolean;
     function ReadFile(buffer: Pointer; bufferSize: Cardinal): Integer;
-    function Tell: LongInt;
+    function Tell: Int64;
     function Eof: Boolean;
   end;
 
@@ -3540,10 +3723,50 @@ type
       var proxyType: TCefProxyType; var proxyList: ustring);
   end;
 
+  ICefResourceBundleHandler = interface(ICefBase)
+    ['{09C264FD-7E03-41E3-87B3-4234E82B5EA2}']
+    function GetLocalizedString(messageId: Integer; out stringVal: ustring): Boolean;
+    function GetDataResource(resourceId: Integer; out data: Pointer; out dataSize: Cardinal): Boolean;
+  end;
+
   ICefApp = interface
     ['{970CA670-9070-4642-B188-7D8A22DAEED4}']
     function GetProxyHandler: ICefProxyHandler;
   end;
+
+  TCefCookieVisitorProc = {$IFDEF DELPHI12_UP} reference to {$ENDIF} function(
+    const name, value, domain, path: ustring; secure, httponly,
+    hasExpires: Boolean; const creation, lastAccess, expires: TDateTime;
+    count, total: Integer; out deleteCookie: Boolean): Boolean;
+
+  ICefCookieManager = Interface(ICefBase)
+    ['{CC1749E6-9AD3-4283-8430-AF6CBF3E8785}']
+    procedure SetSupportedSchemes(schemes: TStrings);
+    function VisitAllCookies(const visitor: ICefCookieVisitor): Boolean;
+    function VisitAllCookiesProc(const visitor: TCefCookieVisitorProc): Boolean;
+    function VisitUrlCookies(const url: ustring;
+      includeHttpOnly: Boolean; const visitor: ICefCookieVisitor): Boolean;
+    function VisitUrlCookiesProc(const url: ustring;
+      includeHttpOnly: Boolean; const visitor: TCefCookieVisitorProc): Boolean;
+    function SetCookie(const url: ustring; const name, value, domain, path: ustring; secure, httponly,
+      hasExpires: Boolean; const creation, lastAccess, expires: TDateTime): Boolean;
+    function DeleteCookies(const url, cookieName: ustring): Boolean;
+    function SetStoragePath(const path: ustring): Boolean;
+  end;
+
+  ICefWebPluginInfo = interface(ICefBase)
+    ['{AA879E58-F649-44B1-AF9C-655FF5B79A02}']
+    function GetName: ustring;
+    function GetPath: ustring;
+    function GetVersion: ustring;
+    function GetDescription: ustring;
+
+    property Name: ustring read GetName;
+    property Path: ustring read GetPath;
+    property Version: ustring read GetVersion;
+    property Description: ustring read GetDescription;
+  end;
+
 
   TCefBaseOwn = class(TInterfacedObject, ICefBase)
   private
@@ -3698,8 +3921,8 @@ type
   TCefStreamReaderRef = class(TCefBaseRef, ICefStreamReader)
   protected
     function Read(ptr: Pointer; size, n: Cardinal): Cardinal;
-    function Seek(offset: LongInt; whence: Integer): Integer;
-    function Tell: LongInt;
+    function Seek(offset: Int64; whence: Integer): Integer;
+    function Tell: Int64;
     function Eof: Boolean;
   public
     class function UnWrap(data: Pointer): ICefStreamReader;
@@ -3747,6 +3970,8 @@ type
       attribute: TCefV8PropertyAttributes): Boolean;
     function GetKeys(const keys: TStrings): Integer;
     function GetUserData: ICefv8Value;
+    function GetExternallyAllocatedMemory: Integer;
+    function AdjustExternallyAllocatedMemory(changeInBytes: Integer): Integer;
     function GetArrayLength: Integer;
     function GetFunctionName: ustring;
     function GetFunctionHandler: ICefv8Handler;
@@ -3765,7 +3990,7 @@ type
     class function CreateDouble(value: Double): ICefv8Value;
     class function CreateDate(value: TDateTime): ICefv8Value;
     class function CreateString(const str: ustring): ICefv8Value;
-    class function CreateObject(const UserData: ICefv8Value): ICefv8Value;
+    //class function CreateObject(const UserData: ICefv8Value): ICefv8Value;
     class function CreateObjectWithAccessor(const UserData: ICefv8Value; const Accessor: ICefV8Accessor): ICefv8Value;
     class function CreateObjectWithAccessorProc(const UserData: ICefv8Value;
       const getter: TCefFastV8AccessorGetterProc;
@@ -3806,6 +4031,7 @@ type
     function GetFocusHandler: ICefBase; virtual;
     function GetKeyboardHandler: ICefBase; virtual;
     function GetMenuHandler: ICefBase; virtual;
+    function GetPermissionHandler: ICefBase; virtual;
     function GetPrintHandler: ICefBase; virtual;
     function GetFindHandler: ICefBase; virtual;
     function GetJsdialogHandler: ICefBase; virtual;
@@ -3929,6 +4155,14 @@ type
     constructor Create; virtual;
   end;
 
+  TCefPermissionHandlerOwn = class(TCefBaseOwn)
+  protected
+    function OnBeforeScriptExtensionLoad(const browser: ICefBrowser;
+      const frame: ICefFrame; const extensionName: ustring): Boolean; virtual;
+  public
+    constructor Create; virtual;
+  end;
+
   TCefPrintHandlerOwn = class(TCefBaseOwn)
   protected
     function GetPrintOptions(const browser: ICefBrowser;
@@ -4001,8 +4235,8 @@ type
     FOwned: Boolean;
   protected
     function Read(ptr: Pointer; size, n: Cardinal): Cardinal; virtual;
-    function Seek(offset: LongInt; whence: Integer): Integer; virtual;
-    function Tell: LongInt; virtual;
+    function Seek(offset: Int64; whence: Integer): Integer; virtual;
+    function Tell: Int64; virtual;
     function Eof: Boolean; virtual;
   public
     constructor Create(Stream: TStream; Owned: Boolean); overload; virtual;
@@ -4173,12 +4407,12 @@ type
     function MoveToFile(const fileName: ustring; caseSensitive: Boolean): Boolean;
     function Close: Boolean;
     function GetFileName: ustring;
-    function GetFileSize: LongInt;
+    function GetFileSize: Int64;
     function GetFileLastModified: LongInt;
     function OpenFile(const password: ustring): Boolean;
     function CloseFile: Boolean;
     function ReadFile(buffer: Pointer; bufferSize: Cardinal): Integer;
-    function Tell: LongInt;
+    function Tell: Int64;
     function Eof: Boolean;
   public
     class function UnWrap(data: Pointer): ICefZipReader;
@@ -4340,7 +4574,7 @@ type
     procedure Execute(threadId: TCefThreadId); override;
   public
     class procedure Post(threadId: TCefThreadId; const method: TTaskMethod{$IFNDEF DELPHI12_UP}; const Browser: ICefBrowser{$ENDIF});
-    class procedure PostDelayed(threadId: TCefThreadId; Delay: Integer; const method: TTaskMethod{$IFNDEF DELPHI12_UP}; const Browser: ICefBrowser{$ENDIF});
+    class procedure PostDelayed(threadId: TCefThreadId; Delay: Int64; const method: TTaskMethod{$IFNDEF DELPHI12_UP}; const Browser: ICefBrowser{$ENDIF});
     constructor Create(const method: TTaskMethod{$IFNDEF DELPHI12_UP}; const Browser: ICefBrowser{$ENDIF}); reintroduce;
   end;
 
@@ -4412,11 +4646,6 @@ type
     constructor Create; virtual;
   end;
 
-  TCefCookieVisitorProc = {$IFDEF DELPHI12_UP} reference to {$ENDIF} function(
-    const name, value, domain, path: ustring; secure, httponly,
-    hasExpires: Boolean; const creation, lastAccess, expires: TDateTime;
-    count, total: Integer; out deleteCookie: Boolean): Boolean;
-
   TCefFastCookieVisitor = class(TCefCookieVisitorOwn)
   private
     FVisitor: TCefCookieVisitorProc;
@@ -4479,10 +4708,21 @@ type
   TCefProxyHandlerOwn = class(TCefBaseOwn, ICefProxyHandler)
   protected
     procedure GetProxyForUrl(const url: ustring; var proxyType: TCefProxyType;
-      var proxyList: ustring); virtual;
+      var proxyList: ustring); virtual; abstract;
   public
     constructor Create; virtual;
   end;
+
+  TCefResourceBundleHandlerOwn = class(TCefBaseOwn, ICefResourceBundleHandler)
+  protected
+    function GetDataResource(resourceId: Integer; out data: Pointer;
+      out dataSize: Cardinal): Boolean; virtual; abstract;
+    function GetLocalizedString(messageId: Integer;
+      out stringVal: ustring): Boolean; virtual; abstract;
+  public
+    constructor Create; virtual;
+  end;
+
 
   TGetProxyForUrlProc = {$IFDEF DELPHI12_UP}reference to{$ENDIF} procedure(const url: ustring;
     var proxyType: TCefProxyType; var proxyList: ustring);
@@ -4497,11 +4737,61 @@ type
     constructor Create(const handler: TGetProxyForUrlProc); reintroduce;
   end;
 
+ TGetDataResource = {$IFDEF DELPHI12_UP}reference to{$ENDIF}function(
+   resourceId: Integer; out data: Pointer; out dataSize: Cardinal): Boolean;
+
+ TGetLocalizedString = {$IFDEF DELPHI12_UP}reference to{$ENDIF}function(
+   messageId: Integer; out stringVal: ustring): Boolean;
+
+  TCefFastResourceBundle = class(TCefResourceBundleHandlerOwn)
+  private
+    FGetDataResource: TGetDataResource;
+    FGetLocalizedString: TGetLocalizedString;
+  protected
+    function GetDataResource(resourceId: Integer; out data: Pointer;
+      out dataSize: Cardinal): Boolean; override;
+    function GetLocalizedString(messageId: Integer;
+      out stringVal: ustring): Boolean; override;
+  public
+    constructor Create(AGetDataResource: TGetDataResource;
+      AGetLocalizedString: TGetLocalizedString); reintroduce;
+  end;
+
   TCefAppOwn = class(TCefBaseOwn, ICefApp)
   protected
-    function GetProxyHandler: ICefProxyHandler; virtual;
+    function GetProxyHandler: ICefProxyHandler; virtual; abstract;
+    function GetResourceBundleHandler: ICefResourceBundleHandler; virtual; abstract;
   public
     constructor Create; virtual;
+  end;
+
+  TCefCookieManagerRef = class(TCefBaseRef, ICefCookieManager)
+  protected
+    procedure SetSupportedSchemes(schemes: TStrings);
+    function VisitAllCookies(const visitor: ICefCookieVisitor): Boolean;
+    function VisitAllCookiesProc(const visitor: TCefCookieVisitorProc): Boolean;
+    function VisitUrlCookies(const url: ustring;
+      includeHttpOnly: Boolean; const visitor: ICefCookieVisitor): Boolean;
+    function VisitUrlCookiesProc(const url: ustring;
+      includeHttpOnly: Boolean; const visitor: TCefCookieVisitorProc): Boolean;
+    function SetCookie(const url: ustring; const name, value, domain, path: ustring; secure, httponly,
+      hasExpires: Boolean; const creation, lastAccess, expires: TDateTime): Boolean;
+    function DeleteCookies(const url, cookieName: ustring): Boolean;
+    function SetStoragePath(const path: ustring): Boolean;
+  public
+    class function UnWrap(data: Pointer): ICefCookieManager;
+    class function GetGlobalManager: ICefCookieManager;
+    class function CreateManager(const path: ustring): ICefCookieManager;
+  end;
+
+  TCefWebPluginInfoRef = class(TCefBaseRef, ICefWebPluginInfo)
+  protected
+    function GetName: ustring;
+    function GetPath: ustring;
+    function GetVersion: ustring;
+    function GetDescription: ustring;
+  public
+    class function UnWrap(data: Pointer): ICefWebPluginInfo;
   end;
 
   ECefException = class(Exception)
@@ -4517,7 +4807,10 @@ procedure CefLoadLib(const Cache: ustring = ''; const UserAgent: ustring = '';
 {$IFDEF MSWINDOWS}
   AutoDetectProxySettings: Boolean = False;
 {$ENDIF}
-  JavaScriptFlags: ustring = ''
+  JavaScriptFlags: ustring = '';
+  PackFilePath: ustring = '';
+  LocalesDirPath: ustring = '';
+  PackLoadingDisabled: Boolean = False
   );
 function CefGetObject(ptr: Pointer): TObject;
 function CefStringAlloc(const str: ustring): TCefString;
@@ -4558,21 +4851,9 @@ function CefRegisterExtension(const name, code: ustring;
   const Handler: ICefv8Handler): Boolean;
 function CefCurrentlyOn(ThreadId: TCefThreadId): Boolean;
 procedure CefPostTask(ThreadId: TCefThreadId; const task: ICefTask);
-procedure CefPostDelayedTask(ThreadId: TCefThreadId; const task: ICefTask; delayMs: Integer);
+procedure CefPostDelayedTask(ThreadId: TCefThreadId; const task: ICefTask; delayMs: Int64);
 function CefGetData(const i: ICefBase): Pointer;
 function CefParseUrl(const url: ustring; var parts: TCefUrlParts): Boolean;
-
-function CefVisitAllCookies(const visitor: ICefCookieVisitor): Boolean; overload;
-function CefVisitAllCookies(const visitor: TCefCookieVisitorProc): Boolean; overload;
-function CefVisitUrlCookies(const url: ustring; includeHttpOnly: Boolean; const visitor: ICefCookieVisitor): Boolean; overload;
-function CefVisitUrlCookies(const url: ustring; includeHttpOnly: Boolean; const visitor: TCefCookieVisitorProc): Boolean; overload;
-
-// must be run on the io thread
-function CefSetCookie(const url: ustring; const name, value, domain, path: ustring; secure, httponly,
-  hasExpires: Boolean; const creation, lastAccess, expires: TDateTime): Boolean;
-function CefDeleteCookies(const url, cookieName: ustring): Boolean;
-
-function CefSetCookiePath(const path: ustring): Boolean;
 
 function CefVisitStorage(StorageType: TCefStorageType;
   const origin, key: ustring; const visitor: ICefStorageVisitor): Boolean; overload;
@@ -4583,6 +4864,10 @@ function CefSetStorage(StorageType: TCefStorageType;
 function CefDeleteStorage(StorageType: TCefStorageType;
   const origin, key: ustring): Boolean;
 function CefSetStoragePath(StorageType: TCefStorageType; const path: ustring): Boolean;
+
+function CefGetWebPluginCount: Cardinal;
+function CefGetWebPluginInfo(index: Integer): ICefWebPluginInfo;
+function CefGetWebPluginInfoByname(const name: ustring): ICefWebPluginInfo;
 
 var
   CefLibrary: string = {$IFDEF MSWINDOWS}'libcef.dll'{$ELSE}'libcef.dylib'{$ENDIF};
@@ -4597,7 +4882,13 @@ var
   CefLocalStorageQuota: Cardinal = 0;
   CefSessionStorageQuota: Cardinal = 0;
   CefJavaScriptFlags: ustring = '';
+  CefPackFilePath: ustring = '';
+  CefLocalesDirPath: ustring = '';
+  CefPackLoadingDisabled: Boolean = False;
+
   CefGetProxyForUrl: TGetProxyForUrlProc = nil;
+  CefGetDataResource: TGetDataResource = nil;
+  CefGetLocalizedString: TGetLocalizedString = nil;
 
 {$ifdef MSWINDOWS}
   CefAutoDetectProxySettings: Boolean = False;
@@ -4608,13 +4899,31 @@ implementation
 
 type
   TInternalApp = class(TCefAppOwn)
+  private
+    FProxyHandler: ICefProxyHandler;
+    FResourceBundleHandler: ICefResourceBundleHandler;
   protected
     function GetProxyHandler: ICefProxyHandler; override;
+    function GetResourceBundleHandler: ICefResourceBundleHandler; override;
+  public
+    constructor Create; override;
+  end;
+
+  constructor TInternalApp.Create;
+  begin
+    inherited;
+    FProxyHandler := TCefFastProxyHandler.Create(CefGetProxyForUrl);
+    FResourceBundleHandler := TCefFastResourceBundle.Create(CefGetDataResource, CefGetLocalizedString);
   end;
 
   function TInternalApp.GetProxyHandler: ICefProxyHandler;
   begin
-    Result := TCefFastProxyHandler.Create(CefGetProxyForUrl);
+    Result := FProxyHandler;
+  end;
+
+  function TInternalApp.GetResourceBundleHandler: ICefResourceBundleHandler;
+  begin
+    Result := FResourceBundleHandler;
   end;
 
 {$IFDEF MSWINDOWS}
@@ -5067,7 +5376,7 @@ var
   // Post a task for delayed execution on the specified thread. This function may
   // be called on any thread.
   cef_post_delayed_task: function(threadId: TCefThreadId;
-      task: PCefTask; delay_ms: LongInt): Integer; cdecl;
+      task: PCefTask; delay_ms: Int64): Integer; cdecl;
 
   // Parse the specified |url| into its component parts. Returns false (0) if the
   // URL is NULL or invalid.
@@ -5078,39 +5387,39 @@ var
   // if |parts| isn't initialized as described.
   cef_create_url: function(parts: PCefUrlParts; url: PCefString): Integer; cdecl;
 
-  // Visit all cookies. The returned cookies are ordered by longest path, then by
-  // earliest creation date. Returns false (0) if cookies cannot be accessed.
-  cef_visit_all_cookies: function(visitor: PCefCookieVisitor): Integer; cdecl;
-
-  // Visit a subset of cookies. The results are filtered by the given url scheme,
-  // host, domain and path. If |includeHttpOnly| is true (1) HTTP-only cookies
-  // will also be included in the results. The returned cookies are ordered by
-  // longest path, then by earliest creation date. Returns false (0) if cookies
-  // cannot be accessed.
-  cef_visit_url_cookies: function(const url: PCefString; includeHttpOnly: Integer;
-    visitor: PCefCookieVisitor): Integer; cdecl;
-
-  // Sets a cookie given a valid URL and explicit user-provided cookie attributes.
-  // This function expects each attribute to be well-formed. It will check for
-  // disallowed characters (e.g. the ';' character is disallowed within the cookie
-  // value attribute) and will return false (0) without setting the cookie if such
-  // characters are found. This function must be called on the IO thread.
-  cef_set_cookie: function(const url: PCefString; cookie: PCefCookie): Integer; cdecl;
-
-  // Delete all cookies that match the specified parameters. If both |url| and
-  // |cookie_name| are specified all host and domain cookies matching both values
-  // will be deleted. If only |url| is specified all host cookies (but not domain
-  // cookies) irrespective of path will be deleted. If |url| is NULL all cookies
-  // for all hosts and domains will be deleted. Returns false (0) if a non-NULL
-  // invalid URL is specified or if cookies cannot be accessed. This function must
-  // be called on the IO thread.
-  cef_delete_cookies: function(const url, cookie_name: PCefString): Integer; cdecl;
-
-
-  // Sets the directory path that will be used for storing cookie data. If |path|
-  // is NULL data will be stored in memory only. By default the cookie path is the
-  // same as the cache path. Returns false (0) if cookies cannot be accessed.
-  cef_set_cookie_path: function(const path: PCefString): Integer; cdecl;
+//  // Visit all cookies. The returned cookies are ordered by longest path, then by
+//  // earliest creation date. Returns false (0) if cookies cannot be accessed.
+//  cef_visit_all_cookies: function(visitor: PCefCookieVisitor): Integer; cdecl;
+//
+//  // Visit a subset of cookies. The results are filtered by the given url scheme,
+//  // host, domain and path. If |includeHttpOnly| is true (1) HTTP-only cookies
+//  // will also be included in the results. The returned cookies are ordered by
+//  // longest path, then by earliest creation date. Returns false (0) if cookies
+//  // cannot be accessed.
+//  cef_visit_url_cookies: function(const url: PCefString; includeHttpOnly: Integer;
+//    visitor: PCefCookieVisitor): Integer; cdecl;
+//
+//  // Sets a cookie given a valid URL and explicit user-provided cookie attributes.
+//  // This function expects each attribute to be well-formed. It will check for
+//  // disallowed characters (e.g. the ';' character is disallowed within the cookie
+//  // value attribute) and will return false (0) without setting the cookie if such
+//  // characters are found. This function must be called on the IO thread.
+//  cef_set_cookie: function(const url: PCefString; cookie: PCefCookie): Integer; cdecl;
+//
+//  // Delete all cookies that match the specified parameters. If both |url| and
+//  // |cookie_name| are specified all host and domain cookies matching both values
+//  // will be deleted. If only |url| is specified all host cookies (but not domain
+//  // cookies) irrespective of path will be deleted. If |url| is NULL all cookies
+//  // for all hosts and domains will be deleted. Returns false (0) if a non-NULL
+//  // invalid URL is specified or if cookies cannot be accessed. This function must
+//  // be called on the IO thread.
+//  cef_delete_cookies: function(const url, cookie_name: PCefString): Integer; cdecl;
+//
+//
+//  // Sets the directory path that will be used for storing cookie data. If |path|
+//  // is NULL data will be stored in memory only. By default the cookie path is the
+//  // same as the cache path. Returns false (0) if cookies cannot be accessed.
+//  cef_set_cookie_path: function(const path: PCefString): Integer; cdecl;
 
   // Visit storage of the specified type. If |origin| is non-NULL only data
   // matching that origin will be visited. If |key| is non-NULL only data matching
@@ -5186,8 +5495,13 @@ var
   // Create a new cef_v8value_t object of type string.
   cef_v8value_create_string: function(const value: PCefString): PCefv8Value; cdecl;
   // Create a new cef_v8value_t object of type object.
-  cef_v8value_create_object: function(user_data: PCefBase): PCefv8Value; cdecl;
-  // Create a new cef_v8value_t object of type object with accessors.
+//  cef_v8value_create_object: function(user_data: PCefBase): PCefv8Value; cdecl;
+
+  // Create a new cef_v8value_t object of type object with optional user data and
+  // accessor. This function should only be called from within the scope of a
+  // cef_v8context_tHandler, cef_v8handler_t or cef_v8accessor_t callback, or in
+  // combination with calling enter() and exit() on a stored cef_v8context_t
+  // reference.
   cef_v8value_create_object_with_accessor: function(user_data: PCefBase;
     accessor: PCefV8Accessor): PCefv8Value; cdecl;
   // Create a new cef_v8value_t object of type array.
@@ -5236,6 +5550,27 @@ var
   cef_string_multimap_free: procedure(map: TCefStringMultimap); cdecl;
 
   cef_build_revision: function: Integer; cdecl;
+
+  // Returns the global cookie manager. By default data will be stored at
+  // CefSettings.cache_path if specified or in memory otherwise.
+  cef_cookie_manager_get_global_manager: function(): PCefCookieManager; cdecl;
+
+  // Creates a new cookie manager. If |path| is NULL data will be stored in memory
+  // only. Returns NULL if creation fails.
+  cef_cookie_manager_create_manager: function(const path: PCefString): PCefCookieManager; cdecl;
+
+
+  // Returns the number of installed web plugins. This function must be called on
+  // the UI thread.
+  cef_get_web_plugin_count: function(): Cardinal; cdecl;
+
+  // Returns information for web plugin at the specified zero-based index. This
+  // function must be called on the UI thread.
+  cef_get_web_plugin_info: function(index: Integer): PCefWebPluginInfo; cdecl;
+
+  // Returns information for web plugin with the specified name. This function
+  // must be called on the UI thread.
+  cef_get_web_plugin_info_byname: function(const name: PCefString): PCefWebPluginInfo; cdecl;
 
 
 function CefGetData(const i: ICefBase): Pointer; {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF}
@@ -5329,71 +5664,71 @@ end;
 
 {$ENDIF}
 
-function CefVisitAllCookies(const visitor: ICefCookieVisitor): Boolean;
-begin
-  Result := cef_visit_all_cookies(CefGetData(visitor)) <> 0;
-end;
+//function CefVisitAllCookies(const visitor: ICefCookieVisitor): Boolean;
+//begin
+//  Result := cef_visit_all_cookies(CefGetData(visitor)) <> 0;
+//end;
 
-function CefVisitAllCookies(const visitor: TCefCookieVisitorProc): Boolean;
-begin
-  Result := CefVisitAllCookies(TCefFastCookieVisitor.Create(visitor) as ICefCookieVisitor)
-end;
+//function CefVisitAllCookies(const visitor: TCefCookieVisitorProc): Boolean;
+//begin
+//  Result := CefVisitAllCookies(TCefFastCookieVisitor.Create(visitor) as ICefCookieVisitor)
+//end;
 
-function CefVisitUrlCookies(const url: ustring; includeHttpOnly: Boolean; const visitor: ICefCookieVisitor): Boolean;
-var
-  str: TCefString;
-begin
-  str := CefString(url);
-  Result := cef_visit_url_cookies(@str, Ord(includeHttpOnly), CefGetData(visitor)) <> 0;
-end;
+//function CefVisitUrlCookies(const url: ustring; includeHttpOnly: Boolean; const visitor: ICefCookieVisitor): Boolean;
+//var
+//  str: TCefString;
+//begin
+//  str := CefString(url);
+//  Result := cef_visit_url_cookies(@str, Ord(includeHttpOnly), CefGetData(visitor)) <> 0;
+//end;
 
-function CefVisitUrlCookies(const url: ustring; includeHttpOnly: Boolean; const visitor: TCefCookieVisitorProc): Boolean;
-begin
-  Result := CefVisitUrlCookies(url, includeHttpOnly, TCefFastCookieVisitor.Create(visitor) as ICefCookieVisitor);
-end;
+//function CefVisitUrlCookies(const url: ustring; includeHttpOnly: Boolean; const visitor: TCefCookieVisitorProc): Boolean;
+//begin
+//  Result := CefVisitUrlCookies(url, includeHttpOnly, TCefFastCookieVisitor.Create(visitor) as ICefCookieVisitor);
+//end;
 
-function CefSetCookie(const url: ustring; const name, value, domain, path: ustring; secure, httponly,
-  hasExpires: Boolean; const creation, lastAccess, expires: TDateTime): Boolean;
-var
-  str: TCefString;
-  cook: TCefCookie;
-begin
-  str := CefString(url);
-  cook.name := CefString(name);
-  cook.value := CefString(value);
-  cook.domain := CefString(domain);
-  cook.path := CefString(path);
-  cook.secure := secure;
-  cook.httponly := httponly;
-  cook.creation := DateTimeToCefTime(creation);
-  cook.last_access := DateTimeToCefTime(lastAccess);
-  cook.has_expires := hasExpires;
-  if hasExpires then
-    cook.expires := DateTimeToCefTime(expires) else
-    FillChar(cook.expires, SizeOf(TCefTime), 0);
-  Result := cef_set_cookie(@str, @cook) <> 0;
-end;
+//function CefSetCookie(const url: ustring; const name, value, domain, path: ustring; secure, httponly,
+//  hasExpires: Boolean; const creation, lastAccess, expires: TDateTime): Boolean;
+//var
+//  str: TCefString;
+//  cook: TCefCookie;
+//begin
+//  str := CefString(url);
+//  cook.name := CefString(name);
+//  cook.value := CefString(value);
+//  cook.domain := CefString(domain);
+//  cook.path := CefString(path);
+//  cook.secure := secure;
+//  cook.httponly := httponly;
+//  cook.creation := DateTimeToCefTime(creation);
+//  cook.last_access := DateTimeToCefTime(lastAccess);
+//  cook.has_expires := hasExpires;
+//  if hasExpires then
+//    cook.expires := DateTimeToCefTime(expires) else
+//    FillChar(cook.expires, SizeOf(TCefTime), 0);
+//  Result := cef_set_cookie(@str, @cook) <> 0;
+//end;
 
-function CefDeleteCookies(const url, cookieName: ustring): Boolean;
-var
-  u, c: TCefString;
-begin
-  u := CefString(url);
-  c := CefString(cookieName);
-  Result := cef_delete_cookies(@u, @c) <> 0;
-end;
+//function CefDeleteCookies(const url, cookieName: ustring): Boolean;
+//var
+//  u, c: TCefString;
+//begin
+//  u := CefString(url);
+//  c := CefString(cookieName);
+//  Result := cef_delete_cookies(@u, @c) <> 0;
+//end;
 
-function CefSetCookiePath(const path: ustring): Boolean;
-var
-  p: TCefString;
-begin
-  if path <> '' then
-  begin
-    p := CefString(path);
-    Result := cef_set_cookie_path(@p) <> 0;
-  end else
-    Result := cef_set_cookie_path(nil) <> 0;
-end;
+//function CefSetCookiePath(const path: ustring): Boolean;
+//var
+//  p: TCefString;
+//begin
+//  if path <> '' then
+//  begin
+//    p := CefString(path);
+//    Result := cef_set_cookie_path(@p) <> 0;
+//  end else
+//    Result := cef_set_cookie_path(nil) <> 0;
+//end;
 
 function CefVisitStorage(StorageType: TCefStorageType;
   const origin, key: ustring; const visitor: ICefStorageVisitor): Boolean;
@@ -5433,11 +5768,8 @@ begin
   Result := cef_delete_storage(StorageType, @o, @k) <> 0;
 end;
 
-
 function CefSetStoragePath(StorageType: TCefStorageType; const path: ustring): Boolean;
-
 var
-
   p: TCefString;
 begin
   if path <> '' then
@@ -5448,6 +5780,24 @@ begin
     Result := cef_set_storage_path(StorageType, nil) <> 0;
 end;
 
+
+function CefGetWebPluginCount: Cardinal;
+begin
+  Result := cef_get_web_plugin_count();
+end;
+
+function CefGetWebPluginInfo(index: Integer): ICefWebPluginInfo;
+begin
+  Result := TCefWebPluginInfoRef.UnWrap(cef_get_web_plugin_info(index));
+end;
+
+function CefGetWebPluginInfoByname(const name: ustring): ICefWebPluginInfo;
+var
+  v: TCefString;
+begin
+  v := CefString(name);
+  Result := TCefWebPluginInfoRef.UnWrap(cef_get_web_plugin_info_byname(@v));
+end;
 
 { cef_base }
 
@@ -5508,6 +5858,12 @@ function cef_client_get_menu_handler(self: PCefClient): PCefMenuHandler; stdcall
 begin
   with TCefClientOwn(CefGetObject(self)) do
     Result := CefGetData(GetMenuHandler);
+end;
+
+function cef_client_get_permission_handler(self: PCefClient): PCefPermissionHandler; stdcall;
+begin
+  with TCefClientOwn(CefGetObject(self)) do
+    Result := CefGetData(GetPermissionHandler);
 end;
 
 function cef_client_get_print_handler(self: PCefClient): PCefPrintHandler; stdcall;
@@ -5905,6 +6261,16 @@ begin
     Result := Ord(OnMenuAction(TCefBrowserRef.UnWrap(browser), menuId));
 end;
 
+{ cef_permission_handler }
+
+function cef_permission_handler_on_before_script_extension_load(self: PCefPermissionHandler;
+  browser: PCefBrowser; frame: PCefFrame; const extensionName: PCefString): Integer; stdcall;
+begin
+  with TCefPermissionHandlerOwn(CefGetObject(self)) do
+    Result := Ord(OnBeforeScriptExtensionLoad(TCefBrowserRef.UnWrap(browser),
+      TCefFrameRef.UnWrap(frame), CefString(extensionName)));
+end;
+
 { cef_print_handler }
 
 function cef_print_handler_get_print_options(self: PCefPrintHandler;
@@ -6099,13 +6465,13 @@ begin
     Result := Read(ptr, size, n);
 end;
 
-function cef_read_handler_seek(self: PCefReadHandler; offset: LongInt; whence: Integer): Integer; stdcall;
+function cef_read_handler_seek(self: PCefReadHandler; offset: Int64; whence: Integer): Integer; stdcall;
 begin
   with TCefCustomStreamReader(CefGetObject(self)) do
     Result := Seek(offset, whence);
 end;
 
-function cef_read_handler_tell(self: PCefReadHandler): LongInt; stdcall;
+function cef_read_handler_tell(self: PCefReadHandler): Int64; stdcall;
 begin
   with TCefCustomStreamReader(CefGetObject(self)) do
     Result := Tell;
@@ -6433,11 +6799,36 @@ begin
   CefStringSet(@proxy_info.proxyList, proxyList);
 end;
 
+{ cef_resource_bundle_handler }
+
+function cef_resource_bundle_handler_get_localized_string(self: PCefResourceBundleHandler;
+  message_id: Integer; string_val: PCefString): Integer; stdcall;
+var
+  str: ustring;
+begin
+  Result := Ord(TCefResourceBundleHandlerOwn(CefGetObject(self)).
+    GetLocalizedString(message_id, str));
+  if Result <> 0 then
+    string_val^ := CefString(str);
+end;
+
+function cef_resource_bundle_handler_get_data_resource(self: PCefResourceBundleHandler;
+  resource_id: Integer; var data: Pointer; var data_size: Cardinal): Integer; stdcall;
+begin
+  Result := Ord(TCefResourceBundleHandlerOwn(CefGetObject(self)).
+    GetDataResource(resource_id, data, data_size));
+end;
+
 { cef_app }
 
 function cef_app_get_proxy_handler(self: PCefApp): PCefProxyHandler; stdcall;
 begin
-  Result := CefGetData(TCefAppOwn(CefGetObject(self)).GetProxyHandler)
+  Result := CefGetData(TCefAppOwn(CefGetObject(self)).GetProxyHandler())
+end;
+
+function cef_app_get_resource_bundle_handler(self: PCefApp): PCefResourceBundleHandler; stdcall;
+begin
+  Result := CefGetData(TCefAppOwn(CefGetObject(self)).GetResourceBundleHandler())
 end;
 
 { TCefBaseOwn }
@@ -6961,7 +7352,7 @@ begin
   end;
 end;
 
-function TCefCustomStreamReader.Seek(offset, whence: Integer): Integer;
+function TCefCustomStreamReader.Seek(offset: Int64; whence: Integer): Integer;
 begin
   Lock;
   try
@@ -6971,7 +7362,7 @@ begin
   end;
 end;
 
-function TCefCustomStreamReader.Tell: LongInt;
+function TCefCustomStreamReader.Tell: Int64;
 begin
   Lock;
   try
@@ -7340,12 +7731,12 @@ begin
   Result := PCefStreamReader(FData)^.read(PCefStreamReader(FData), ptr, size, n);
 end;
 
-function TCefStreamReaderRef.Seek(offset, whence: Integer): Integer;
+function TCefStreamReaderRef.Seek(offset: Int64; whence: Integer): Integer;
 begin
   Result := PCefStreamReader(FData)^.seek(PCefStreamReader(FData), offset, whence);
 end;
 
-function TCefStreamReaderRef.Tell: LongInt;
+function TCefStreamReaderRef.Tell: Int64;
 begin
   Result := PCefStreamReader(FData)^.tell(PCefStreamReader(FData));
 end;
@@ -7367,12 +7758,14 @@ begin
   if LibHandle = 0 then
     CefLoadLib(CefCache, CefUserAgent, CefProductVersion, CefLocale, CefLogFile,
       CefExtraPluginPaths, CefLogSeverity, CefGraphicsImplementation,
-      CefLocalStorageQuota, CefSessionStorageQuota);
+      CefLocalStorageQuota, CefSessionStorageQuota, CefAutoDetectProxySettings,
+      CefJavaScriptFlags, CefPackFilePath, CefLocalesDirPath, CefPackLoadingDisabled);
 end;
 
 procedure CefLoadLib(const Cache, UserAgent, ProductVersion, Locale, LogFile, ExtraPluginPaths: ustring;
   LogSeverity: TCefLogSeverity; GraphicsImplementation: TCefGraphicsImplementation; LocalStorageQuota: Cardinal;
-  SessionStorageQuota: Cardinal; {$ifdef MSWINDOWS}AutoDetectProxySettings: Boolean;{$endif} JavaScriptFlags: ustring);
+  SessionStorageQuota: Cardinal; {$ifdef MSWINDOWS}AutoDetectProxySettings: Boolean;{$endif} JavaScriptFlags,
+  PackFilePath, LocalesDirPath: ustring; PackLoadingDisabled: Boolean);
 var
   settings: TCefSettings;
   i: Integer;
@@ -7486,11 +7879,11 @@ begin
     cef_post_delayed_task := GetProcAddress(LibHandle, 'cef_post_delayed_task');
     cef_parse_url := GetProcAddress(LibHandle, 'cef_parse_url');
     cef_create_url := GetProcAddress(LibHandle, 'cef_create_url');
-    cef_visit_all_cookies := GetProcAddress(LibHandle, 'cef_visit_all_cookies');
-    cef_visit_url_cookies := GetProcAddress(LibHandle, 'cef_visit_url_cookies');
-    cef_set_cookie := GetProcAddress(LibHandle, 'cef_set_cookie');
-    cef_delete_cookies := GetProcAddress(LibHandle, 'cef_delete_cookies');
-    cef_set_cookie_path := GetProcAddress(LibHandle, 'cef_set_cookie_path');
+//    cef_visit_all_cookies := GetProcAddress(LibHandle, 'cef_visit_all_cookies');
+//    cef_visit_url_cookies := GetProcAddress(LibHandle, 'cef_visit_url_cookies');
+//    cef_set_cookie := GetProcAddress(LibHandle, 'cef_set_cookie');
+//    cef_delete_cookies := GetProcAddress(LibHandle, 'cef_delete_cookies');
+//    cef_set_cookie_path := GetProcAddress(LibHandle, 'cef_set_cookie_path');
     cef_visit_storage := GetProcAddress(LibHandle, 'cef_visit_storage');
     cef_set_storage := GetProcAddress(LibHandle, 'cef_set_storage');
     cef_delete_storage := GetProcAddress(LibHandle, 'cef_delete_storage');
@@ -7515,7 +7908,7 @@ begin
     cef_v8value_create_double := GetProcAddress(LibHandle, 'cef_v8value_create_double');
     cef_v8value_create_date := GetProcAddress(LibHandle, 'cef_v8value_create_date');
     cef_v8value_create_string := GetProcAddress(LibHandle, 'cef_v8value_create_string');
-    cef_v8value_create_object := GetProcAddress(LibHandle, 'cef_v8value_create_object');
+//    cef_v8value_create_object := GetProcAddress(LibHandle, 'cef_v8value_create_object');
     cef_v8value_create_object_with_accessor := GetProcAddress(LibHandle, 'cef_v8value_create_object_with_accessor');
     cef_v8value_create_array := GetProcAddress(LibHandle, 'cef_v8value_create_array');
     cef_v8value_create_function := GetProcAddress(LibHandle, 'cef_v8value_create_function');
@@ -7534,7 +7927,14 @@ begin
     cef_string_multimap_free := GetProcAddress(LibHandle, 'cef_string_multimap_free');
     cef_build_revision := GetProcAddress(LibHandle, 'cef_build_revision');
 
-    if not (
+    cef_cookie_manager_get_global_manager := GetProcAddress(LibHandle, 'cef_cookie_manager_get_global_manager');
+    cef_cookie_manager_create_manager := GetProcAddress(LibHandle, 'cef_cookie_manager_create_manager');
+
+    cef_get_web_plugin_count := GetProcAddress(LibHandle, 'cef_get_web_plugin_count');
+    cef_get_web_plugin_info := GetProcAddress(LibHandle, 'cef_get_web_plugin_info');
+    cef_get_web_plugin_info_byname := GetProcAddress(LibHandle, 'cef_get_web_plugin_info_byname');
+
+    if not (
       Assigned(cef_string_wide_set) and
       Assigned(cef_string_utf8_set) and
       Assigned(cef_string_utf16_set) and
@@ -7591,11 +7991,11 @@ begin
       Assigned(cef_post_delayed_task) and
       Assigned(cef_parse_url) and
       Assigned(cef_create_url) and
-      Assigned(cef_visit_all_cookies) and
-      Assigned(cef_visit_url_cookies) and
-      Assigned(cef_set_cookie) and
-      Assigned(cef_delete_cookies) and
-      Assigned(cef_set_cookie_path) and
+//      Assigned(cef_visit_all_cookies) and
+//      Assigned(cef_visit_url_cookies) and
+//      Assigned(cef_set_cookie) and
+//      Assigned(cef_delete_cookies) and
+//      Assigned(cef_set_cookie_path) and
       Assigned(cef_visit_storage) and
       Assigned(cef_set_storage) and
       Assigned(cef_delete_storage) and
@@ -7620,7 +8020,7 @@ begin
       Assigned(cef_v8value_create_double) and
       Assigned(cef_v8value_create_date) and
       Assigned(cef_v8value_create_string) and
-      Assigned(cef_v8value_create_object) and
+//      Assigned(cef_v8value_create_object) and
       Assigned(cef_v8value_create_object_with_accessor) and
       Assigned(cef_v8value_create_array) and
       Assigned(cef_v8value_create_function) and
@@ -7637,8 +8037,14 @@ begin
       Assigned(cef_string_multimap_append) and
       Assigned(cef_string_multimap_clear) and
       Assigned(cef_string_multimap_free) and
-      Assigned(cef_build_revision)
+      Assigned(cef_build_revision) and
 
+      Assigned(cef_cookie_manager_get_global_manager) and
+      Assigned(cef_cookie_manager_create_manager) and
+
+      Assigned(cef_get_web_plugin_count) and
+      Assigned(cef_get_web_plugin_info) and
+      Assigned(cef_get_web_plugin_info_byname)
 
     ) then raise ECefException.Create('Invalid CEF Library version');
 
@@ -7678,6 +8084,9 @@ begin
 {$ifdef MSWINDOWS}
     settings.auto_detect_proxy_settings_enabled := AutoDetectProxySettings;
 {$endif}
+    settings.pack_file_path := CefString(PackFilePath);
+    settings.locales_dir_path := CefString(LocalesDirPath);
+    settings.pack_loading_disabled := PackLoadingDisabled;
 
     cef_initialize(@settings, CefGetData(TInternalApp.Create));
     if settings.extra_plugin_paths <> nil then
@@ -7892,7 +8301,7 @@ begin
   cef_post_task(ThreadId, CefGetData(task));
 end;
 
-procedure CefPostDelayedTask(ThreadId: TCefThreadId; const task: ICefTask; delayMs: Integer);
+procedure CefPostDelayedTask(ThreadId: TCefThreadId; const task: ICefTask; delayMs: Int64);
 begin
   cef_post_delayed_task(ThreadId, CefGetData(task), delayMs);
 end;
@@ -7967,6 +8376,12 @@ end;
 
 { TCefv8ValueRef }
 
+function TCefv8ValueRef.AdjustExternallyAllocatedMemory(
+  changeInBytes: Integer): Integer;
+begin
+  Result := PCefV8Value(FData)^.adjust_externally_allocated_memory(PCefV8Value(FData), changeInBytes);
+end;
+
 class function TCefv8ValueRef.CreateArray: ICefv8Value;
 begin
   Result := UnWrap(cef_v8value_create_array);
@@ -8009,10 +8424,10 @@ begin
   Result := UnWrap(cef_v8value_create_null);
 end;
 
-class function TCefv8ValueRef.CreateObject(const UserData: ICefv8Value): ICefv8Value;
-begin
-  Result := UnWrap(cef_v8value_create_object(CefGetData(UserData)));
-end;
+//class function TCefv8ValueRef.CreateObject(const UserData: ICefv8Value): ICefv8Value;
+//begin
+//  Result := UnWrap(cef_v8value_create_object(CefGetData(UserData)));
+//end;
 
 class function TCefv8ValueRef.CreateObjectWithAccessor(
   const UserData: ICefv8Value; const Accessor: ICefV8Accessor): ICefv8Value;
@@ -8120,6 +8535,11 @@ end;
 function TCefv8ValueRef.GetDoubleValue: Double;
 begin
   Result := PCefV8Value(FData)^.get_double_value(PCefV8Value(FData));
+end;
+
+function TCefv8ValueRef.GetExternallyAllocatedMemory: Integer;
+begin
+  Result := PCefV8Value(FData)^.get_externally_allocated_memory(PCefV8Value(FData));
 end;
 
 function TCefv8ValueRef.GetFunctionHandler: ICefv8Handler;
@@ -8704,7 +9124,7 @@ begin
   Result := CefStringFreeAndGet(PCefZipReader(FData).get_file_name(FData));
 end;
 
-function TCefZipReaderRef.GetFileSize: LongInt;
+function TCefZipReaderRef.GetFileSize: Int64;
 begin
   Result := PCefZipReader(FData).get_file_size(FData);
 end;
@@ -8742,7 +9162,7 @@ begin
     Result := PCefZipReader(FData).read_file(FData, buffer, buffersize);
 end;
 
-function TCefZipReaderRef.Tell: LongInt;
+function TCefZipReaderRef.Tell: Int64;
 begin
   Result := PCefZipReader(FData).tell(FData);
 end;
@@ -8792,7 +9212,7 @@ begin
 end;
 
 class procedure TCefFastTask.PostDelayed(threadId: TCefThreadId;
-  Delay: Integer; const method: TTaskMethod
+  Delay: Int64; const method: TTaskMethod
 {$IFNDEF DELPHI12_UP}
     ; const Browser: ICefBrowser
 {$ENDIF}
@@ -9654,7 +10074,7 @@ function TCefRTTIExtension.SetValue(const v: TValue; var ret: ICefv8Value): Bool
     ud := TCefv8ValueRef.CreateArray;
     rt := FCtx.GetType(v.TypeInfo);
     ud.SetValueByIndex(0, TCefv8ValueRef.CreateInt(Integer(rt)));
-    ret := TCefv8ValueRef.CreateObject(ud);
+    ret := TCefv8ValueRef.CreateObjectWithAccessor(ud, nil); // todo
 
 {$IFDEF DELPHI15_UP}
     rec := TValueData(v).FValueData.GetReferenceToRawData;
@@ -9706,7 +10126,7 @@ function TCefRTTIExtension.SetValue(const v: TValue; var ret: ICefv8Value): Bool
     ud := TCefv8ValueRef.CreateArray;
     ud.SetValueByIndex(0, TCefv8ValueRef.CreateInt(Integer(rt)));
     ud.SetValueByIndex(1, TCefv8ValueRef.CreateInt(Integer(v.AsObject)));
-    ret := TCefv8ValueRef.CreateObject(ud);
+    ret := TCefv8ValueRef.CreateObjectWithAccessor(ud, nil); // todo
     //proto := ret.GetValueByKey('__proto__');
 
     for m in rt.GetMethods do
@@ -9766,7 +10186,7 @@ function TCefRTTIExtension.SetValue(const v: TValue; var ret: ICefv8Value): Bool
     ud := TCefv8ValueRef.CreateArray;
     ud.SetValueByIndex(0, TCefv8ValueRef.CreateInt(Integer(rt)));
     ud.SetValueByIndex(1, TCefv8ValueRef.CreateInt(Integer(c)));
-    ret := TCefv8ValueRef.CreateObject(ud);
+    ret := TCefv8ValueRef.CreateObjectWithAccessor(ud, nil); // todo
     if c <> nil then
     begin
       //proto := ret.GetValueByKey('__proto__');
@@ -9819,7 +10239,7 @@ function TCefRTTIExtension.SetValue(const v: TValue; var ret: ICefv8Value): Bool
     ud := TCefv8ValueRef.CreateArray;
     ud.SetValueByIndex(0, TCefv8ValueRef.CreateInt(Integer(rt)));
     ud.SetValueByIndex(1, TCefv8ValueRef.CreateInt(Integer(v.AsInterface)));
-    ret := TCefv8ValueRef.CreateObject(ud);
+    ret := TCefv8ValueRef.CreateObjectWithAccessor(ud, nil); // todo
     //proto := ret.GetValueByKey('__proto__');
 
 
@@ -10236,6 +10656,11 @@ begin
   Result := nil;
 end;
 
+function TCefClientOwn.GetPermissionHandler: ICefBase;
+begin
+  Result := nil;
+end;
+
 function TCefClientOwn.GetPrintHandler: ICefBase;
 begin
   Result := nil;
@@ -10549,6 +10974,23 @@ end;
 
 function TCefMenuHandlerOwn.OnMenuAction(const browser: ICefBrowser;
   menuId: TCefMenuId): Boolean;
+begin
+  Result := False;
+end;
+
+{ TCefPermissionHandlerOwn }
+
+constructor TCefPermissionHandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefPermissionHandler));
+  with PCefPermissionHandler(FData)^ do
+    on_before_script_extension_load :=
+      @cef_permission_handler_on_before_script_extension_load;
+end;
+
+function TCefPermissionHandlerOwn.OnBeforeScriptExtensionLoad(
+  const browser: ICefBrowser; const frame: ICefFrame;
+  const extensionName: ustring): Boolean;
 begin
   Result := False;
 end;
@@ -10901,10 +11343,16 @@ begin
   PCefProxyHandler(FData)^.get_proxy_for_url := @cef_proxy_handler_get_proxy_for_url;
 end;
 
-procedure TCefProxyHandlerOwn.GetProxyForUrl(const url: ustring;
-  var proxyType: TCefProxyType; var proxyList: ustring);
-begin
+{ TCefResourceBundleHandlerOwn }
 
+constructor TCefResourceBundleHandlerOwn.Create;
+begin
+  inherited CreateData(SizeOf(TCefResourceBundleHandler));
+  with PCefResourceBundleHandler(FData)^ do
+  begin
+    get_localized_string := @cef_resource_bundle_handler_get_localized_string;
+    get_data_resource := @cef_resource_bundle_handler_get_data_resource;
+  end;
 end;
 
 { TCefFastProxyHandler }
@@ -10922,17 +11370,188 @@ begin
     FGetProxyForUrl(url, proxyType, proxyList);
 end;
 
+{ TCefFastResourceBundle }
+
+constructor TCefFastResourceBundle.Create(AGetDataResource: TGetDataResource;
+  AGetLocalizedString: TGetLocalizedString);
+begin
+  inherited Create;
+  FGetDataResource := AGetDataResource;
+  FGetLocalizedString := AGetLocalizedString;
+end;
+
+function TCefFastResourceBundle.GetDataResource(resourceId: Integer;
+  out data: Pointer; out dataSize: Cardinal): Boolean;
+begin
+  if Assigned(FGetDataResource) then
+    Result := FGetDataResource(resourceId, data, dataSize) else
+    Result := False;
+end;
+
+function TCefFastResourceBundle.GetLocalizedString(messageId: Integer;
+  out stringVal: ustring): Boolean;
+begin
+  if Assigned(FGetLocalizedString) then
+    Result := FGetLocalizedString(messageId, stringVal) else
+    Result := False;
+end;
+
 { TCefAppOwn }
 
 constructor TCefAppOwn.Create;
 begin
   inherited CreateData(SizeOf(TCefApp));
-  PCefApp(FData)^.get_proxy_handler := @cef_app_get_proxy_handler;
+  with PCefApp(FData)^ do
+  begin
+    get_proxy_handler := @cef_app_get_proxy_handler;
+    get_resource_bundle_handler := @cef_app_get_resource_bundle_handler;
+  end;
 end;
 
-function TCefAppOwn.GetProxyHandler: ICefProxyHandler;
+{ TCefCookieManagerRef }
+
+class function TCefCookieManagerRef.CreateManager(const path: ustring): ICefCookieManager;
+var
+  pth: TCefString;
 begin
-  Result := nil;
+  pth := CefString(path);
+  Result := UnWrap(cef_cookie_manager_create_manager(@pth));
+end;
+
+function TCefCookieManagerRef.DeleteCookies(const url,
+  cookieName: ustring): Boolean;
+var
+  u, n: TCefString;
+begin
+  u := CefString(url);
+  n := CefString(cookieName);
+  Result := PCefCookieManager(FData)^.delete_cookies(
+    PCefCookieManager(FData), @u, @n) <> 0;
+end;
+
+class function TCefCookieManagerRef.GetGlobalManager: ICefCookieManager;
+begin
+  Result := UnWrap(cef_cookie_manager_get_global_manager());
+end;
+
+function TCefCookieManagerRef.SetCookie(const url, name, value, domain,
+  path: ustring; secure, httponly, hasExpires: Boolean; const creation,
+  lastAccess, expires: TDateTime): Boolean;
+var
+  str: TCefString;
+  cook: TCefCookie;
+begin
+  str := CefString(url);
+  cook.name := CefString(name);
+  cook.value := CefString(value);
+  cook.domain := CefString(domain);
+  cook.path := CefString(path);
+  cook.secure := secure;
+  cook.httponly := httponly;
+  cook.creation := DateTimeToCefTime(creation);
+  cook.last_access := DateTimeToCefTime(lastAccess);
+  cook.has_expires := hasExpires;
+  if hasExpires then
+    cook.expires := DateTimeToCefTime(expires) else
+    FillChar(cook.expires, SizeOf(TCefTime), 0);
+  Result := PCefCookieManager(FData).set_cookie(
+    PCefCookieManager(FData), @str, @cook) <> 0;
+end;
+
+function TCefCookieManagerRef.SetStoragePath(const path: ustring): Boolean;
+var
+  p: TCefString;
+begin
+  p := CefString(path);
+  Result := PCefCookieManager(FData)^.set_storage_path(
+    PCefCookieManager(FData), @p) <> 0;
+end;
+
+procedure TCefCookieManagerRef.SetSupportedSchemes(schemes: TStrings);
+var
+  list: TCefStringList;
+  i: Integer;
+  item: TCefString;
+begin
+  list := cef_string_list_alloc();
+  try
+    if (schemes <> nil) then
+      for i := 0 to schemes.Count - 1 do
+      begin
+        item := CefString(schemes[i]);
+        cef_string_list_append(list, @item);
+      end;
+    PCefCookieManager(FData).set_supported_schemes(
+      PCefCookieManager(FData), list);
+  finally
+    cef_string_list_free(list);
+  end;
+end;
+
+class function TCefCookieManagerRef.UnWrap(data: Pointer): ICefCookieManager;
+begin
+  if data <> nil then
+    Result := Create(data) as ICefCookieManager else
+    Result := nil;
+end;
+
+function TCefCookieManagerRef.VisitAllCookies(
+  const visitor: ICefCookieVisitor): Boolean;
+begin
+  Result := PCefCookieManager(FData).visit_all_cookies(
+    PCefCookieManager(FData), CefGetData(visitor)) <> 0;
+end;
+
+function TCefCookieManagerRef.VisitAllCookiesProc(
+  const visitor: TCefCookieVisitorProc): Boolean;
+begin
+  Result := VisitAllCookies(
+    TCefFastCookieVisitor.Create(visitor) as ICefCookieVisitor);
+end;
+
+function TCefCookieManagerRef.VisitUrlCookies(const url: ustring;
+  includeHttpOnly: Boolean; const visitor: ICefCookieVisitor): Boolean;
+var
+  str: TCefString;
+begin
+  str := CefString(url);
+  Result := PCefCookieManager(FData).visit_url_cookies(PCefCookieManager(FData), @str, Ord(includeHttpOnly), CefGetData(visitor)) <> 0;
+end;
+
+function TCefCookieManagerRef.VisitUrlCookiesProc(const url: ustring;
+  includeHttpOnly: Boolean; const visitor: TCefCookieVisitorProc): Boolean;
+begin
+  Result := VisitUrlCookies(url, includeHttpOnly,
+    TCefFastCookieVisitor.Create(visitor) as ICefCookieVisitor);
+end;
+
+{ TCefWebPluginInfoRef }
+
+function TCefWebPluginInfoRef.GetDescription: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefWebPluginInfo(FData)^.get_description(PCefWebPluginInfo(FData)));
+end;
+
+function TCefWebPluginInfoRef.GetName: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefWebPluginInfo(FData)^.get_name(PCefWebPluginInfo(FData)));
+end;
+
+function TCefWebPluginInfoRef.GetPath: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefWebPluginInfo(FData)^.get_path(PCefWebPluginInfo(FData)));
+end;
+
+function TCefWebPluginInfoRef.GetVersion: ustring;
+begin
+  Result := CefStringFreeAndGet(PCefWebPluginInfo(FData)^.get_version(PCefWebPluginInfo(FData)));
+end;
+
+class function TCefWebPluginInfoRef.UnWrap(data: Pointer): ICefWebPluginInfo;
+begin
+  if data <> nil then
+    Result := Create(data) as ICefWebPluginInfo else
+    Result := nil;
 end;
 
 initialization

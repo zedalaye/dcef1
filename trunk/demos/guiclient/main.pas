@@ -167,7 +167,7 @@ end;
 procedure TMainForm.actFileSchemeExecute(Sender: TObject);
 begin
   if crm.Browser <> nil then
-    crm.Browser.MainFrame.LoadUrl('file://c:');
+    crm.Browser.MainFrame.LoadUrl('dcef://c/');
 end;
 
 procedure TMainForm.actGetSourceExecute(Sender: TObject);
@@ -422,7 +422,7 @@ end;
 
 initialization
   CefCache := 'cache';
-  //CefRegisterCustomScheme('file', True, False, False);
-  //CefRegisterSchemeHandlerFactory('file', '', True, TFileScheme);
+  CefRegisterCustomScheme('dcef', True, False, False);
+  CefRegisterSchemeHandlerFactory('dcef', '', True, TFileScheme);
 
 end.

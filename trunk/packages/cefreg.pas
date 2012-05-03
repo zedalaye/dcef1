@@ -1,7 +1,7 @@
 unit cefreg;
 
 {$I ..\src\cef.inc}
-
+{$R chromium.dcr}
 interface
 
 procedure Register;

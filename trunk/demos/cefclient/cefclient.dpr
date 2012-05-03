@@ -7,11 +7,6 @@
 program cefclient;
 
 uses
-  madExcept,
-  madLinkDisAsm,
-  madListHardware,
-  madListProcesses,
-  madListModules,
   Classes,
   Windows,
   Messages,
@@ -330,8 +325,8 @@ function TCustomLifeSpan.OnBeforePopup(const parentBrowser: ICefBrowser;
   var url: ustring; var client: ICefBase;
   var settings: TCefBrowserSettings): Boolean;
 begin
-//  windowInfo.WndParent := parentBrowser.GetWindowHandle;
-  Result := Inherited;
+  Result := True;
+  brows.MainFrame.LoadUrl(url);
 end;
 
 { TCustomLoad }
@@ -462,7 +457,7 @@ begin
   begin
     // Handle the GetTestObject native function by creating and returning a
     // new V8 object.
-    retval := TCefv8ValueRef.CreateObject(nil);
+    retval := TCefv8ValueRef.CreateObjectWithAccessor(nil, nil);
     // Add a string parameter to the new V8 object.
     retval.SetValueByKey('param', TCefv8ValueRef.CreateString(
         'Retrieving a parameter on a native object succeeded.'), V8_PROPERTY_ATTRIBUTE_NONE);

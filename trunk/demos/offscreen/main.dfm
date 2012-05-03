@@ -31,6 +31,9 @@ object Mainform: TMainform
     DefaultUrl = 'http://www.google.com'
     OnPaint = chrmosrPaint
     OnCursorChange = chrmosrCursorChange
+    Options.AcceleratedPaintingDisabled = False
+    Options.AcceleratedFiltersDisabled = False
+    Options.AcceleratedPluginsDisabled = False
     Left = 16
     Top = 8
   end
