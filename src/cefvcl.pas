@@ -72,6 +72,8 @@ type
     FOnGetMenuLabel: TOnGetMenuLabel;
     FOnMenuAction: TOnMenuAction;
 
+    FOnBeforeScriptExtensionLoad: TOnBeforeScriptExtensionLoad;
+
     FOnPrintHeaderFooter: TOnPrintHeaderFooter;
     FOnPrintOptions: TOnPrintOptions;
 
@@ -161,6 +163,9 @@ type
     function doOnMenuAction(const browser: ICefBrowser;
       menuId: TCefMenuId): Boolean; virtual;
 
+    function doOnBeforeScriptExtensionLoad(const browser: ICefBrowser;
+      const frame: ICefFrame;const extensionName: ustring): Boolean;
+
     function doOnPrintHeaderFooter(const browser: ICefBrowser;
       const frame: ICefFrame; printInfo: PCefPrintInfo;
       const url, title: ustring; currentPage, maxPages: Integer;
@@ -239,6 +244,8 @@ type
     property OnBeforeMenu: TOnBeforeMenu read FOnBeforeMenu write FOnBeforeMenu;
     property OnGetMenuLabel: TOnGetMenuLabel read FOnGetMenuLabel write FOnGetMenuLabel;
     property OnMenuAction: TOnMenuAction read FOnMenuAction write FOnMenuAction;
+
+    property OnBeforeScriptExtensionLoad: TOnBeforeScriptExtensionLoad read FOnBeforeScriptExtensionLoad write FOnBeforeScriptExtensionLoad;
 
     property OnPrintHeaderFooter: TOnPrintHeaderFooter read FOnPrintHeaderFooter write FOnPrintHeaderFooter;
     property OnPrintOptions: TOnPrintOptions read FOnPrintOptions write FOnPrintOptions;
@@ -610,6 +617,15 @@ begin
       response, loadFlags, Result);
 end;
 
+function TCustomChromium.doOnBeforeScriptExtensionLoad(
+  const browser: ICefBrowser; const frame: ICefFrame;
+  const extensionName: ustring): Boolean;
+begin
+  Result := False;
+  if Assigned(FOnBeforeScriptExtensionLoad) then
+    FOnBeforeScriptExtensionLoad(Self, browser, frame, extensionName, Result);
+end;
+
 function TCustomChromium.doOnBeforeClose(
   const browser: ICefBrowser): Boolean;
 begin
@@ -970,6 +986,9 @@ begin
   settings.accelerated_2d_canvas_disabled := FOptions.Accelerated2dCanvasDisabled;
   settings.developer_tools_disabled := FOptions.DeveloperToolsDisabled;
   settings.fullscreen_enabled := FOptions.FullscreenEnabled;
+  settings.accelerated_painting_disabled := FOptions.AcceleratedPaintingDisabled;
+  settings.accelerated_filters_disabled := FOptions.AcceleratedFiltersDisabled;
+  settings.accelerated_plugins_disabled := FOptions.AcceleratedPluginsDisabled;
 end;
 
 procedure TCustomChromium.Load(const url: ustring);

@@ -6,6 +6,8 @@ object MainForm: TMainForm
   ClientHeight = 439
   ClientWidth = 730
   Color = clBtnFace
+  TransparentColor = True
+  TransparentColorValue = clFuchsia
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
   Font.Height = -11
@@ -62,6 +64,7 @@ object MainForm: TMainForm
     Top = 24
     Width = 730
     Height = 396
+    Color = clWhite
     Align = alBottom
     Anchors = [akLeft, akTop, akRight, akBottom]
     DefaultUrl = 'http://www.google.com'
@@ -73,6 +76,9 @@ object MainForm: TMainForm
     OnAddressChange = crmAddressChange
     OnStatusMessage = crmStatusMessage
     OnTitleChange = crmTitleChange
+    Options.AcceleratedPaintingDisabled = False
+    Options.AcceleratedFiltersDisabled = False
+    Options.AcceleratedPluginsDisabled = False
   end
   object edAddress: TEdit
     Left = 95

@@ -70,6 +70,8 @@ type
     FOnGetMenuLabel: TOnGetMenuLabel;
     FOnMenuAction: TOnMenuAction;
 
+    FOnBeforeScriptExtensionLoad: TOnBeforeScriptExtensionLoad;
+
     FOnPrintHeaderFooter: TOnPrintHeaderFooter;
     FOnPrintOptions: TOnPrintOptions;
 
@@ -168,6 +170,9 @@ type
     function doOnMenuAction(const browser: ICefBrowser;
       menuId: TCefMenuId): Boolean; virtual;
 
+    function doOnBeforeScriptExtensionLoad(const browser: ICefBrowser;
+      const frame: ICefFrame;const extensionName: ustring): Boolean;
+
     function doOnPrintHeaderFooter(const browser: ICefBrowser;
       const frame: ICefFrame; printInfo: PCefPrintInfo;
       const url, title: ustring; currentPage, maxPages: Integer;
@@ -246,6 +251,8 @@ type
     property OnBeforeMenu: TOnBeforeMenu read FOnBeforeMenu write FOnBeforeMenu;
     property OnGetMenuLabel: TOnGetMenuLabel read FOnGetMenuLabel write FOnGetMenuLabel;
     property OnMenuAction: TOnMenuAction read FOnMenuAction write FOnMenuAction;
+
+    property OnBeforeScriptExtensionLoad: TOnBeforeScriptExtensionLoad read FOnBeforeScriptExtensionLoad write FOnBeforeScriptExtensionLoad;
 
     property OnPrintHeaderFooter: TOnPrintHeaderFooter read FOnPrintHeaderFooter write FOnPrintHeaderFooter;
     property OnPrintOptions: TOnPrintOptions read FOnPrintOptions write FOnPrintOptions;
@@ -558,6 +565,15 @@ begin
       response, loadFlags, Result);
 end;
 
+function TCustomChromiumFMX.doOnBeforeScriptExtensionLoad(
+  const browser: ICefBrowser; const frame: ICefFrame;
+  const extensionName: ustring): Boolean;
+begin
+  Result := False;
+  if Assigned(FOnBeforeScriptExtensionLoad) then
+    FOnBeforeScriptExtensionLoad(Self, browser, frame, extensionName, Result);
+end;
+
 function TCustomChromiumFMX.doOnBeforeClose(
   const browser: ICefBrowser): Boolean;
 begin
@@ -758,8 +774,8 @@ procedure TCustomChromiumFMX.doOnPaint(const browser: ICefBrowser;
   kind: TCefPaintElementType; dirtyRectsCount: Cardinal;
   const dirtyRects: PCefRectArray; const buffer: Pointer);
 var
-//  src, dst: PByte;
-//  offset, i, j, w, c: Integer;
+  src, dst: PByte;
+  offset, i, {j,} w, c: Integer;
   vw, vh: Integer;
 begin
   FBrowser.GetSize(PET_VIEW, vw, vh);
@@ -767,30 +783,29 @@ begin
     FBuffer := TBitmap.Create(vw, vh);
   with FBuffer do
     if (vw = Width) and (vh = Height) then
-    begin
-      // http://code.google.com/p/chromiumembedded/issues/detail?id=469
-      Move(buffer^, StartLine^, vw * vh * 4);
-      InvalidateRect(ClipRect);
-    end;
-//    for c := 0 to dirtyRectsCount - 1 do
 //    begin
-//      w := Width * 4;
-//      offset := ((dirtyRects[c].y * Width) + dirtyRects[c].x) * 4;
-//      src := @PByte(buffer)[offset];
-//      dst := @PByte(StartLine)[offset];
-//      offset := dirtyRects[c].width * 4;
-//      for i := 0 to dirtyRects[c].height - 1 do
-//      begin
+//      Move(buffer^, StartLine^, vw * vh * 4);
+//      InvalidateRect(ClipRect);
+//    end;
+    for c := 0 to dirtyRectsCount - 1 do
+    begin
+      w := Width * 4;
+      offset := ((dirtyRects[c].y * Width) + dirtyRects[c].x) * 4;
+      src := @PByte(buffer)[offset];
+      dst := @PByte(StartLine)[offset];
+      offset := dirtyRects[c].width * 4;
+      for i := 0 to dirtyRects[c].height - 1 do
+      begin
 //        for j := 0 to offset div 4 do
 //          PAlphaColorArray(dst)[j] := PAlphaColorArray(src)[j] or $FF000000;
-//        //Move(src^, dst^, offset);
-//        Inc(dst, w);
-//        Inc(src, w);
-//      end;
-//      //InvalidateRect(ClipRect);
-//      InvalidateRect(RectF(dirtyRects[c].x, dirtyRects[c].y,
-//        dirtyRects[c].x + dirtyRects[c].width,  dirtyRects[c].y + dirtyRects[c].height));
-//    end;
+        Move(src^, dst^, offset);
+        Inc(dst, w);
+        Inc(src, w);
+      end;
+      //InvalidateRect(ClipRect);
+      InvalidateRect(RectF(dirtyRects[c].x, dirtyRects[c].y,
+        dirtyRects[c].x + dirtyRects[c].width,  dirtyRects[c].y + dirtyRects[c].height));
+    end;
 end;
 
 procedure TCustomChromiumFMX.doOnPopupShow(const browser: ICefBrowser;
@@ -952,6 +967,9 @@ begin
   settings.accelerated_2d_canvas_disabled := FOptions.Accelerated2dCanvasDisabled;
   settings.developer_tools_disabled := FOptions.DeveloperToolsDisabled;
   settings.fullscreen_enabled := FOptions.FullscreenEnabled;
+  settings.accelerated_painting_disabled := FOptions.AcceleratedPaintingDisabled;
+  settings.accelerated_filters_disabled := FOptions.AcceleratedFiltersDisabled;
+  settings.accelerated_plugins_disabled := FOptions.AcceleratedPluginsDisabled;
 end;
 
 procedure TCustomChromiumFMX.Load(const url: ustring);

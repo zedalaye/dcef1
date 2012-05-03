@@ -82,6 +82,9 @@ type
   TOnMenuAction = procedure(Sender: TObject; const browser: ICefBrowser;
     menuId: TCefMenuId; out Result: Boolean) of object;
 
+  TOnBeforeScriptExtensionLoad = procedure(Sender: TObject; const browser: ICefBrowser;
+    const frame: ICefFrame; const extensionName: ustring; out Result: Boolean);
+
   TOnPrintHeaderFooter = procedure(Sender: TObject; const browser: ICefBrowser;
     const frame: ICefFrame; printInfo: PCefPrintInfo;
     const url, title: ustring; currentPage, maxPages: Integer;
@@ -156,6 +159,9 @@ type
     FDeveloperToolsDisabled: Boolean;
     FHistoryDisabled: Boolean;
     FFullscreenEnabled: Boolean;
+    FAcceleratedPaintingDisabled: Boolean;
+    FAcceleratedFiltersDisabled: Boolean;
+    FAcceleratedPluginsDisabled: Boolean;
   published
     property DragDropDisabled: Boolean read FDragDropDisabled write FDragDropDisabled default False;
     property LoadDropsDisabled: Boolean read FLoadDropsDisabled write FLoadDropsDisabled default False;
@@ -192,6 +198,9 @@ type
     property Accelerated2dCanvasDisabled: Boolean read FAccelerated2dCanvasDisabled write FAccelerated2dCanvasDisabled default False;
     property DeveloperToolsDisabled: Boolean read FDeveloperToolsDisabled write FDeveloperToolsDisabled default False;
     property FullscreenEnabled: Boolean read FFullscreenEnabled write FFullscreenEnabled default False;
+    property AcceleratedPaintingDisabled: Boolean read FAcceleratedPaintingDisabled write FAcceleratedPaintingDisabled;
+    property AcceleratedFiltersDisabled: Boolean read FAcceleratedFiltersDisabled write FAcceleratedFiltersDisabled;
+    property AcceleratedPluginsDisabled: Boolean read FAcceleratedPluginsDisabled write FAcceleratedPluginsDisabled;
   end;
 
   TChromiumFontOptions = class(TPersistent)
@@ -288,6 +297,9 @@ type
     function doOnMenuAction(const browser: ICefBrowser;
       menuId: TCefMenuId): Boolean;
 
+    function doOnBeforeScriptExtensionLoad(const browser: ICefBrowser;
+      const frame: ICefFrame;const extensionName: ustring): Boolean;
+
     function doOnPrintHeaderFooter(const browser: ICefBrowser;
       const frame: ICefFrame; printInfo: PCefPrintInfo;
       const url, title: ustring; currentPage, maxPages: Integer;
@@ -344,6 +356,7 @@ type
     FFocusHandler: ICefBase;
     FKeyboardHandler: ICefBase;
     FMenuHandler: ICefBase;
+    FPermissionHandler: ICefBase;
     FPrintHandler: ICefBase;
     FFindHandler: ICefBase;
     FJsdialogHandler: ICefBase;
@@ -358,6 +371,7 @@ type
     function GetFocusHandler: ICefBase; override;
     function GetKeyboardHandler: ICefBase; override;
     function GetMenuHandler: ICefBase; override;
+    function GetPermissionHandler: ICefBase; override;
     function GetPrintHandler: ICefBase; override;
     function GetFindHandler: ICefBase; override;
     function GetJsdialogHandler: ICefBase; override;
@@ -483,6 +497,16 @@ type
     constructor Create(const crm: IChromiumEvents); reintroduce;
   end;
 
+  TCustomPermissionHandler = class(TCefPermissionHandlerOwn)
+  private
+    FCrm: IChromiumEvents;
+  protected
+    function OnBeforeScriptExtensionLoad(const browser: ICefBrowser;
+      const frame: ICefFrame; const extensionName: ustring): Boolean; override;
+  public
+    constructor Create(const crm: IChromiumEvents); reintroduce;
+  end;
+
   TCustomPrintHandler = class(TCefPrintHandlerOwn)
   private
     FCrm: IChromiumEvents;
@@ -603,6 +627,8 @@ type
     FOnGetMenuLabel: TOnGetMenuLabel;
     FOnMenuAction: TOnMenuAction;
 
+    FOnBeforeScriptExtensionLoad: TOnBeforeScriptExtensionLoad;
+
     FOnPrintHeaderFooter: TOnPrintHeaderFooter;
     FOnPrintOptions: TOnPrintOptions;
 
@@ -697,6 +723,9 @@ type
     function doOnMenuAction(const browser: ICefBrowser;
       menuId: TCefMenuId): Boolean; virtual;
 
+    function doOnBeforeScriptExtensionLoad(const browser: ICefBrowser;
+      const frame: ICefFrame;const extensionName: ustring): Boolean;
+
     function doOnPrintHeaderFooter(const browser: ICefBrowser;
       const frame: ICefFrame; printInfo: PCefPrintInfo;
       const url, title: ustring; currentPage, maxPages: Integer;
@@ -776,6 +805,8 @@ type
     property OnGetMenuLabel: TOnGetMenuLabel read FOnGetMenuLabel write FOnGetMenuLabel;
     property OnMenuAction: TOnMenuAction read FOnMenuAction write FOnMenuAction;
 
+    property OnBeforeScriptExtensionLoad: TOnBeforeScriptExtensionLoad read FOnBeforeScriptExtensionLoad write FOnBeforeScriptExtensionLoad;
+
     property OnPrintHeaderFooter: TOnPrintHeaderFooter read FOnPrintHeaderFooter write FOnPrintHeaderFooter;
     property OnPrintOptions: TOnPrintOptions read FOnPrintOptions write FOnPrintOptions;
 
@@ -843,6 +874,7 @@ begin
   FFocusHandler := TCustomFocusHandler.Create(crm);
   FKeyboardHandler := TCustomKeyboardHandler.Create(crm);
   FMenuHandler := TCustomMenuHandler.Create(crm);
+  FPermissionHandler := TCustomPermissionHandler.Create(crm);
   FPrintHandler := TCustomPrintHandler.Create(crm);
   FFindHandler := TCustomFindHandler.Create(crm);
   FJsdialogHandler := TCustomJsDialogHandler.Create(crm);
@@ -860,6 +892,7 @@ begin
   FFocusHandler := nil;
   FKeyboardHandler := nil;
   FMenuHandler := nil;
+  FPermissionHandler := nil;
   FPrintHandler := nil;
   FFindHandler := nil;
   FJsdialogHandler := nil;
@@ -916,6 +949,11 @@ end;
 function TCustomClientHandler.GetMenuHandler: ICefBase;
 begin
   Result := FMenuHandler;
+end;
+
+function TCustomClientHandler.GetPermissionHandler: ICefBase;
+begin
+  Result := FPermissionHandler;
 end;
 
 function TCustomClientHandler.GetPrintHandler: ICefBase;
@@ -1169,6 +1207,21 @@ function TCustomMenuHandler.OnMenuAction(const browser: ICefBrowser;
   menuId: TCefMenuId): Boolean;
 begin
   Result := FCrm.doOnMenuAction(browser, menuId);
+end;
+
+{ TCustomPermissionHandler }
+
+constructor TCustomPermissionHandler.Create(const crm: IChromiumEvents);
+begin
+  inherited Create;
+  FCrm := crm;
+end;
+
+function TCustomPermissionHandler.OnBeforeScriptExtensionLoad(
+  const browser: ICefBrowser; const frame: ICefFrame;
+  const extensionName: ustring): Boolean;
+begin
+  Result := FCrm.doOnBeforeScriptExtensionLoad(browser, frame, extensionName);
 end;
 
 { TCustomPrintHandler }
@@ -1443,6 +1496,15 @@ begin
   if Assigned(FOnBeforeResourceLoad) then
     FOnBeforeResourceLoad(Self, browser, request, redirectUrl, resourceStream,
       response, loadFlags, Result);
+end;
+
+function TCustomChromiumOSR.doOnBeforeScriptExtensionLoad(
+  const browser: ICefBrowser; const frame: ICefFrame;
+  const extensionName: ustring): Boolean;
+begin
+  Result := False;
+  if Assigned(FOnBeforeScriptExtensionLoad) then
+    FOnBeforeScriptExtensionLoad(Self, browser, frame, extensionName, Result);
 end;
 
 function TCustomChromiumOSR.doOnBeforeClose(
@@ -1820,6 +1882,9 @@ begin
   settings.accelerated_2d_canvas_disabled := FOptions.Accelerated2dCanvasDisabled;
   settings.developer_tools_disabled := FOptions.DeveloperToolsDisabled;
   settings.fullscreen_enabled := FOptions.FullscreenEnabled;
+  settings.accelerated_painting_disabled := FOptions.AcceleratedPaintingDisabled;
+  settings.accelerated_filters_disabled := FOptions.AcceleratedFiltersDisabled;
+  settings.accelerated_plugins_disabled := FOptions.AcceleratedPluginsDisabled;
 end;
 
 procedure TCustomChromiumOSR.Load(const url: ustring);

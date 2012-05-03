@@ -183,43 +183,57 @@ function ParseFileUrl(const url: ustring): ustring;
 label
   error;
 var
-  pos: Integer;
-  p: PWideChar;
+  p, s: PWideChar;
+  state: Integer;
 begin
-  pos := 0;
   p := PWideChar(url);
+  s := nil;
+  state := 0;
   while True do
   begin
-    case pos of
-      0: if p^ <> 'f' then goto error;
-      1: if p^ <> 'i' then goto error;
-      2: if p^ <> 'l' then goto error;
-      3: if p^ <> 'e' then goto error;
-      4: if p^ <> ':' then goto error;
-      5: if p^ <> '/' then goto error;
-      6: if p^ <> '/' then goto error;
-      7: if p^ = '/' then
-           begin
-             Inc(p);
-             {$IFDEF UNICODE}
-               Exit(StringReplace(UTF8ToString(HTTPDecode(p)), '/', '\', [rfReplaceAll]));
-             {$ELSE}
-               Result := StringReplace(UTF8Decode(HTTPDecode(p)), '/', '\', [rfReplaceAll]);
-               Exit;
-             {$ENDIF}
-           end else
-             {$IFDEF UNICODE}
-               Exit('\\' + StringReplace(UTF8ToString(HTTPDecode(p)), '/', '\', [rfReplaceAll]));
-             {$ELSE}
-               begin
-                 Result := '\\' + StringReplace(UTF8Decode(HTTPDecode(p)), '/', '\', [rfReplaceAll]);
-                 Exit;
-               end;
-             {$ENDIF}
-
+    case state of
+      0: case p^ of
+           ':': state := 1;
+           #0: goto error;
+         end;
+      1: if p^ = '/' then
+           state := 2 else
+           goto error;
+      2: if p^ = '/' then
+         begin
+           state := 3;
+           s := p;
+         end else
+           goto error;
+      3: case p^ of
+           '/':
+             begin
+               p[-1] := ':';
+               p^ := '\';
+               state := 4;
+             end;
+           #0:
+             goto error;
+         else
+           p[-1] := p^;
+         end;
+      4:
+        begin
+          case p^ of
+            '/': p^ := '\';
+            #0:
+{$IFDEF UNICODE}
+              Exit(HTTPDecode(string(UTF8String(s))));
+{$ELSE}
+              begin
+                Result := UTF8Decode(HTTPDecode(s));
+                Exit;
+              end;
+{$ENDIF}
+          end;
+        end;
     end;
     Inc(p);
-    Inc(pos);
   end;
 error:
   Result := '';
