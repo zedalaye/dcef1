@@ -465,10 +465,10 @@ end;
 
 { TVCLClientHandler }
 
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 var
   looping: Boolean = False;
 
-{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
 procedure TimerProc(hwnd: HWND; uMsg: UINT; idEvent: Pointer; dwTime: DWORD); stdcall;
 begin
   if looping then Exit;

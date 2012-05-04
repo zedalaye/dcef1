@@ -4,7 +4,7 @@ interface
 
 uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
-  FMX.Types, FMX.Controls, FMX.Forms, ceflib, FMX.Edit, ceffmx;
+  FMX.Types, FMX.Controls, FMX.Forms, ceflib, FMX.Edit, ceffmx, cefvcl;
 
 type
   TMainForm = class(TForm)
@@ -33,7 +33,6 @@ type
       var KeyChar: Char; Shift: TShiftState);
   private
     FLoading: Boolean;
-    procedure doOnIdleEvent(Sender: TObject; var Done: Boolean);
   public
 
   end;
@@ -110,11 +109,6 @@ begin
   Caption := title;
 end;
 
-procedure TMainForm.doOnIdleEvent(Sender: TObject; var Done: Boolean);
-begin
-  CefDoMessageLoopWork;
-end;
-
 procedure TMainForm.edAddressKeyDown(Sender: TObject; var Key: Word;
   var KeyChar: Char; Shift: TShiftState);
 begin
@@ -127,7 +121,6 @@ end;
 
 procedure TMainForm.FormCreate(Sender: TObject);
 begin
-  Application.OnIdle := doOnIdleEvent;
   FLoading := False;
 end;
 
