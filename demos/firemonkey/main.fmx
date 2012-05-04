@@ -19,6 +19,9 @@ object MainForm: TMainForm
     OnLoadEnd = crmLoadEnd
     OnAddressChange = crmAddressChange
     OnTitleChange = crmTitleChange
+    Options.AcceleratedPaintingDisabled = False
+    Options.AcceleratedFiltersDisabled = False
+    Options.AcceleratedPluginsDisabled = False
   end
   object btPrev: TButton
     Align = alLeft

@@ -416,6 +416,13 @@ type
 function CefGetBitmap(const browser: ICefBrowser; typ: TCefPaintElementType; Bitmap: TBitmap): Boolean;
 
 implementation
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+
+var
+  CefInstances: Integer = 0;
+  CefTimer: UINT = 0;
+{$ENDIF}
+
 
 function CefGetBitmap(const browser: ICefBrowser; typ: TCefPaintElementType; Bitmap: TBitmap): Boolean;
 var
@@ -438,6 +445,13 @@ begin
   end;
 end;
 
+type
+  TFMXClientHandler = class(TCustomClientHandler)
+  public
+    constructor Create(const crm: IChromiumEvents); override;
+    destructor Destroy; override;
+  end;
+
 { TCustomChromiumFMX }
 
 constructor TCustomChromiumFMX.Create(AOwner: TComponent);
@@ -445,7 +459,7 @@ begin
   inherited;
 
   if not (csDesigning in ComponentState) then
-    FHandler := TCustomClientHandler.Create(Self) as ICefBase;
+    FHandler := TFMXClientHandler.Create(Self) as ICefBase;
 
   FBuffer := nil;
   CanFocus := True;
@@ -1102,6 +1116,47 @@ begin
       FBuffer := TBitmap.Create(Trunc(Width), Trunc(Height));
     end;
   end;
+end;
+
+{ TFMXClientHandler }
+
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+var
+  looping: Boolean = False;
+
+procedure TimerProc(hwnd: HWND; uMsg: UINT; idEvent: Pointer; dwTime: DWORD); stdcall;
+begin
+  if looping then Exit;
+  if CefInstances > 0 then
+  begin
+    looping := True;
+    try
+      CefDoMessageLoopWork;
+    finally
+      looping := False;
+    end;
+  end;
+end;
+{$ENDIF}
+
+constructor TFMXClientHandler.Create(const crm: IChromiumEvents);
+begin
+  inherited;
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+  if CefInstances = 0 then
+    CefTimer := SetTimer(0, 0, 10, @TimerProc);
+  InterlockedIncrement(CefInstances);
+{$ENDIF}
+end;
+
+destructor TFMXClientHandler.Destroy;
+begin
+{$IFNDEF CEF_MULTI_THREADED_MESSAGE_LOOP}
+  InterlockedDecrement(CefInstances);
+  if CefInstances = 0 then
+    KillTimer(0, CefTimer);
+{$ENDIF}
+  inherited;
 end;
 
 end.
