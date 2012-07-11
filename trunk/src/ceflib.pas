@@ -7392,6 +7392,7 @@ var
 begin
   Result := TInterfaceList.Create;
   GetMem(items, SizeOf(PCefPostDataElement) * Count);
+  FillChar(items^, SizeOf(PCefPostDataElement) * Count, 0);
   try
     PCefPostData(FData)^.get_elements(PCefPostData(FData), @Count, items);
     for i := 0 to Count - 1 do
