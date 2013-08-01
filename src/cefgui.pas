@@ -12,6 +12,10 @@
  * Web site   : http://www.progdigy.com
  * Repository : http://code.google.com/p/delphichromiumembedded/
  * Group      : http://groups.google.com/group/delphichromiumembedded
+ *
+ * Embarcadero Technologies, Inc is not permitted to use or redistribute
+ * this source code without explicit permission.
+ *
  *)
 
 unit cefgui;
@@ -67,6 +71,7 @@ type
   TOnTitleChange = procedure(Sender: TObject; const browser: ICefBrowser;
     const title: ustring; out Result: Boolean) of object;
   TOnTooltip = procedure(Sender: TObject; const browser: ICefBrowser; var text: ustring; out Result: Boolean) of object;
+  TOnFaviconUrlChange = procedure(Sender: TObject; const browser: ICefBrowser; list: TStrings) of object;
 
   TOnTakeFocus = procedure(Sender: TObject; const browser: ICefBrowser; next: Boolean) of object;
   TOnSetFocus = procedure(Sender: TObject; const browser: ICefBrowser; source: TCefHandlerFocusSource; out Result: Boolean) of object;
@@ -122,6 +127,16 @@ type
   TOnDragEvent = procedure(Sender: TObject; const browser: ICefBrowser;
     const dragData: ICefDragData; mask: Integer; out Result: Boolean) of object;
 
+  TOnRequestGeolocationPermission = procedure(Sender: TObject; const browser: ICefBrowser;
+    const requestingUrl: ustring; requestId: Integer; const callback: ICefGeolocationCallback) of object;
+  TOnCancelGeolocationPermission = procedure(Sender: TObject; const browser: ICefBrowser;
+    const requestingUrl: ustring; requestId: Integer) of object;
+
+  TOnGetZoomLevel = procedure(Sender: TObject; const browser: ICefBrowser;
+    const url: ustring; out zoomLevel: Double; out Result: Boolean) of object;
+  TOnSetZoomLevel = procedure(Sender: TObject; const browser: ICefBrowser;
+    const url: ustring; zoomLevel: Double; out Result: Boolean) of object;
+
   TChromiumOptions = class(TPersistent)
   private
     FDragDropDisabled: Boolean;
@@ -153,11 +168,11 @@ type
     FApplicationCacheDisabled: Boolean;
     FWebglDisabled: Boolean;
     FAcceleratedCompositingEnabled: Boolean;
-    FThreadedCompositingEnabled: Boolean;
     FAcceleratedLayersDisabled: Boolean;
     FAccelerated2dCanvasDisabled: Boolean;
     FDeveloperToolsDisabled: Boolean;
     FHistoryDisabled: Boolean;
+    FAnimationFrameRate: Integer;
     FFullscreenEnabled: Boolean;
     FAcceleratedPaintingDisabled: Boolean;
     FAcceleratedFiltersDisabled: Boolean;
@@ -166,6 +181,7 @@ type
     property DragDropDisabled: Boolean read FDragDropDisabled write FDragDropDisabled default False;
     property LoadDropsDisabled: Boolean read FLoadDropsDisabled write FLoadDropsDisabled default False;
     property HistoryDisabled: Boolean read FHistoryDisabled write FHistoryDisabled default False;
+    property AnimationFrameRate: Integer read FAnimationFrameRate write FAnimationFrameRate default 0;
     property EncodingDetectorEnabled: Boolean read FEncodingDetectorEnabled write FEncodingDetectorEnabled default False;
     property JavascriptDisabled: Boolean read FJavascriptDisabled write FJavascriptDisabled default False;
     property JavascriptOpenWindowsDisallowed: Boolean read FJavascriptOpenWindowsDisallowed write FJavascriptOpenWindowsDisallowed default False;
@@ -193,7 +209,6 @@ type
     property ApplicationCacheDisabled: Boolean read FApplicationCacheDisabled write FApplicationCacheDisabled default False;
     property WebglDisabled: Boolean read FWebglDisabled write FWebglDisabled default False;
     property AcceleratedCompositingEnabled: Boolean read FAcceleratedCompositingEnabled write FAcceleratedCompositingEnabled default False;
-    property ThreadedCompositingEnabled: Boolean read FThreadedCompositingEnabled write FThreadedCompositingEnabled default False;
     property AcceleratedLayersDisabled: Boolean read FAcceleratedLayersDisabled write FAcceleratedLayersDisabled default False;
     property Accelerated2dCanvasDisabled: Boolean read FAccelerated2dCanvasDisabled write FAccelerated2dCanvasDisabled default False;
     property DeveloperToolsDisabled: Boolean read FDeveloperToolsDisabled write FDeveloperToolsDisabled default False;
@@ -282,6 +297,7 @@ type
     function doOnTitleChange(const browser: ICefBrowser;
       const title: ustring): Boolean;
     function doOnTooltip(const browser: ICefBrowser; var text: ustring): Boolean;
+    procedure doOnFaviconUrlChange(const browser: ICefBrowser; list: TStrings);
 
     procedure doOnTakeFocus(const browser: ICefBrowser; next: Boolean);
     function doOnSetFocus(const browser: ICefBrowser; source: TCefHandlerFocusSource): Boolean;
@@ -340,6 +356,16 @@ type
       const dragData: ICefDragData; mask: Integer): Boolean;
     function doOnDragEnter(const browser: ICefBrowser;
       const dragData: ICefDragData; mask: Integer): Boolean;
+
+    procedure doOnRequestGeolocationPermission(const browser: ICefBrowser;
+      const requestingUrl: ustring; requestId: Integer; const callback: ICefGeolocationCallback);
+    procedure doOnCancelGeolocationPermission(const browser: ICefBrowser;
+      const requestingUrl: ustring; requestId: Integer);
+
+    function doOnGetZoomLevel(const browser: ICefBrowser;
+      const url: ustring; out zoomLevel: Double): Boolean;
+    function doOnSetZoomLevel(const browser: ICefBrowser;
+      const url: ustring; zoomLevel: Double): Boolean;
   end;
 
   ICefClientHandler = interface
@@ -363,6 +389,8 @@ type
     FV8ContextHandler: ICefBase;
     FRenderHandler: ICefBase;
     FDragHandler: ICefBase;
+    FGeolocationHandler: ICefBase;
+    FZoomHandler: ICefBase;
   protected
     function GetLifeSpanHandler: ICefBase; override;
     function GetLoadHandler: ICefBase; override;
@@ -378,6 +406,8 @@ type
     function GetV8ContextHandler: ICefBase; override;
     function GetRenderHandler: ICefBase; override;
     function GetDragHandler: ICefBase; override;
+    function GetGeolocationHandler: ICefBase; override;
+    function GetZoomHandler: ICefBase; override;
     procedure Disconnect;
   public
     constructor Create(const crm: IChromiumEvents); reintroduce; virtual;
@@ -451,6 +481,7 @@ type
       const frame: ICefFrame; width: Integer; height: Integer); override;
     procedure OnTitleChange(const browser: ICefBrowser;
       const title: ustring); override;
+    procedure OnFaviconUrlChange(const browser: ICefBrowser; list: TStrings); override;
     function OnTooltip(const browser: ICefBrowser;
       var text: ustring): Boolean; override;
     procedure OnStatusMessage(const browser: ICefBrowser; const value: ustring;
@@ -585,6 +616,30 @@ type
     constructor Create(const crm: IChromiumEvents); reintroduce;
   end;
 
+  TCustomGeolocationHandler = class(TCefGeolocationHandlerOwn)
+  private
+    FEvent: IChromiumEvents;
+  protected
+    procedure OnRequestGeolocationPermission(const browser: ICefBrowser;
+      const requestingUrl: ustring; requestId: Integer; const callback: ICefGeolocationCallback); override;
+    procedure OnCancelGeolocationPermission(const browser: ICefBrowser;
+      const requestingUrl: ustring; requestId: Integer); override;
+  public
+    constructor Create(const events: IChromiumEvents); reintroduce; virtual;
+  end;
+
+  TCustomZoomHandler = class(TCefZoomHandlerOwn)
+  private
+    FEvent: IChromiumEvents;
+  protected
+    function OnGetZoomLevel(const browser: ICefBrowser;
+      const url: ustring; out zoomLevel: Double): Boolean; override;
+    function OnSetZoomLevel(const browser: ICefBrowser;
+      const url: ustring; zoomLevel: Double): Boolean; override;
+  public
+    constructor Create(const events: IChromiumEvents); reintroduce; virtual;
+  end;
+
   TCustomChromiumOSR = class(TComponent, IChromiumEvents)
   private
     FHandler: ICefBase;
@@ -616,6 +671,7 @@ type
     FOnStatusMessage: TOnStatusMessage;
     FOnTitleChange: TOnTitleChange;
     FOnTooltip: TOnTooltip;
+    FOnFaviconUrlChange: TOnFaviconUrlChange;
 
     FOnTakeFocus: TOnTakeFocus;
     FOnSetFocus: TOnSetFocus;
@@ -652,6 +708,12 @@ type
 
     FOnDragStart: TOnDragEvent;
     FOnDragEnter: TOnDragEvent;
+
+    FOnRequestGeolocationPermission: TOnRequestGeolocationPermission;
+    FOnCancelGeolocationPermission: TOnCancelGeolocationPermission;
+
+    FOnGetZoomLevel: TOnGetZoomLevel;
+    FOnSetZoomLevel: TOnSetZoomLevel;
 
     FOptions: TChromiumOptions;
     FUserStyleSheetLocation: ustring;
@@ -708,6 +770,7 @@ type
     function doOnTitleChange(const browser: ICefBrowser;
       const title: ustring): Boolean; virtual;
     function doOnTooltip(const browser: ICefBrowser; var text: ustring): Boolean; virtual;
+    procedure doOnFaviconUrlChange(const browser: ICefBrowser; list: TStrings); virtual;
 
     procedure doOnTakeFocus(const browser: ICefBrowser; next: Boolean); virtual;
     function doOnSetFocus(const browser: ICefBrowser; source: TCefHandlerFocusSource): Boolean; virtual;
@@ -767,6 +830,14 @@ type
     function doOnDragEnter(const browser: ICefBrowser;
       const dragData: ICefDragData; mask: Integer): Boolean;
 
+    procedure doOnRequestGeolocationPermission(const browser: ICefBrowser;
+      const requestingUrl: ustring; requestId: Integer; const callback: ICefGeolocationCallback);
+    procedure doOnCancelGeolocationPermission(const browser: ICefBrowser;
+      const requestingUrl: ustring; requestId: Integer);
+
+    function doOnGetZoomLevel(const browser: ICefBrowser; const url: ustring; out zoomLevel: Double): Boolean;
+    function doOnSetZoomLevel(const browser: ICefBrowser; const url: ustring; zoomLevel: Double): Boolean;
+
     property DefaultUrl: ustring read FDefaultUrl write FDefaultUrl;
 
     property OnBeforePopup: TOnBeforePopup read FOnBeforePopup write FOnBeforePopup;
@@ -794,6 +865,7 @@ type
     property OnStatusMessage: TOnStatusMessage read FOnStatusMessage write FOnStatusMessage;
     property OnTitleChange: TOnTitleChange read FOnTitleChange write FOnTitleChange;
     property OnTooltip: TOnTooltip read FOnTooltip write FOnTooltip;
+    property OnFaviconUrlChange: TOnFaviconUrlChange read FOnFaviconUrlChange write FOnFaviconUrlChange;
 
     property OnTakeFocus: TOnTakeFocus read FOnTakeFocus write FOnTakeFocus;
     property OnSetFocus: TOnSetFocus read FOnSetFocus write FOnSetFocus;
@@ -829,6 +901,12 @@ type
 
     property OnDragStart: TOnDragEvent read FOnDragStart write FOnDragStart;
     property OnDragEnter: TOnDragEvent read FOnDragEnter write FOnDragEnter;
+
+    property OnRequestGeolocationPermission: TOnRequestGeolocationPermission read FOnRequestGeolocationPermission write FOnRequestGeolocationPermission;
+    property OnCancelGeolocationPermission: TOnCancelGeolocationPermission read FOnCancelGeolocationPermission write FOnCancelGeolocationPermission;
+
+    property OnGetZoomLevel: TOnGetZoomLevel read FOnGetZoomLevel write FOnGetZoomLevel;
+    property OnSetZoomLevel: TOnSetZoomLevel read FOnSetZoomLevel write FOnSetZoomLevel;
 
     property Options: TChromiumOptions read FOptions write FOptions;
     property FontOptions: TChromiumFontOptions read FFontOptions;
@@ -881,6 +959,8 @@ begin
   FV8ContextHandler := TCustomV8ContextHandler.Create(crm);
   FRenderHandler := TCustomRenderHandler.Create(crm);
   FDragHandler := TCustomDragHandler.Create(crm);
+  FGeolocationHandler := TCustomGeolocationHandler.Create(crm);
+  FZoomHandler := TCustomZoomHandler.Create(crm);
 end;
 
 procedure TCustomClientHandler.Disconnect;
@@ -899,6 +979,8 @@ begin
   FV8ContextHandler := nil;
   FRenderHandler := nil;
   FDragHandler := nil;
+  FGeolocationHandler := nil;
+  FZoomHandler := nil;
 end;
 
 function TCustomClientHandler.GetDisplayHandler: ICefBase;
@@ -921,9 +1003,19 @@ begin
   Result := FFocusHandler;
 end;
 
+function TCustomClientHandler.GetGeolocationHandler: ICefBase;
+begin
+  Result := FGeolocationHandler;
+end;
+
 function TCustomClientHandler.GetV8ContextHandler: ICefBase;
 begin
   Result := FV8ContextHandler;
+end;
+
+function TCustomClientHandler.GetZoomHandler: ICefBase;
+begin
+  Result := FZoomHandler;
 end;
 
 function TCustomClientHandler.GetJsdialogHandler: ICefBase;
@@ -1115,6 +1207,12 @@ procedure TCustomDisplayHandler.OnContentsSizeChange(const browser: ICefBrowser;
   const frame: ICefFrame; width, height: Integer);
 begin
   FCrm.doOnContentsSizeChange(browser, frame, width, height);
+end;
+
+procedure TCustomDisplayHandler.OnFaviconUrlChange(const browser: ICefBrowser;
+  list: TStrings);
+begin
+  FCrm.doOnFaviconUrlChange(browser, list);
 end;
 
 procedure TCustomDisplayHandler.OnNavStateChange(const browser: ICefBrowser;
@@ -1553,6 +1651,13 @@ begin
     FOnGetDownloadHandler(Self, browser, mimeType, fileName, contentLength, handler, Result);
 end;
 
+procedure TCustomChromiumOSR.doOnFaviconUrlChange(const browser: ICefBrowser;
+  list: TStrings);
+begin
+  if Assigned(FOnFaviconUrlChange) then
+    FOnFaviconUrlChange(Self, browser, list);
+end;
+
 function TCustomChromiumOSR.doOnFindResult(const browser: ICefBrowser;
   count: Integer; selectionRect: PCefRect; identifier, activeMatchOrdinal,
   finalUpdate: Boolean): Boolean;
@@ -1600,6 +1705,14 @@ begin
   Result := False;
   if Assigned(FOnGetViewRect) then
     FOnGetViewRect(Self, browser, rect, Result);
+end;
+
+function TCustomChromiumOSR.doOnGetZoomLevel(const browser: ICefBrowser;
+  const url: ustring; out zoomLevel: Double): Boolean;
+begin
+  Result := False;
+  if Assigned(FOnGetZoomLevel) then
+    FOnGetZoomLevel(Self, browser, url, zoomLevel, Result);
 end;
 
 function TCustomChromiumOSR.doOnJsAlert(const browser: ICefBrowser;
@@ -1758,11 +1871,26 @@ begin
     FOnProtocolExecution(Self, browser, url, AllowOsExecution, Result);
 end;
 
+procedure TCustomChromiumOSR.doOnCancelGeolocationPermission(
+  const browser: ICefBrowser; const requestingUrl: ustring; requestId: Integer);
+begin
+  if Assigned(FOnCancelGeolocationPermission) then
+    FOnCancelGeolocationPermission(Self, browser, requestingUrl, requestId);
+end;
+
 function TCustomChromiumOSR.doOnClose(const browser: ICefBrowser): Boolean;
 begin
   Result := False;
   if Assigned(FOnClose) then
     FOnClose(Self, browser, Result);
+end;
+
+procedure TCustomChromiumOSR.doOnRequestGeolocationPermission(
+  const browser: ICefBrowser; const requestingUrl: ustring; requestId: Integer;
+  const callback: ICefGeolocationCallback);
+begin
+  if Assigned(FOnRequestGeolocationPermission) then
+    FOnRequestGeolocationPermission(Self, browser, requestingUrl, requestId, callback);
 end;
 
 procedure TCustomChromiumOSR.doOnResourceRedirect(const browser: ICefBrowser;
@@ -1792,6 +1920,14 @@ begin
   Result := False;
   if Assigned(FOnSetFocus) then
     FOnSetFocus(Self, browser, source, Result);
+end;
+
+function TCustomChromiumOSR.doOnSetZoomLevel(const browser: ICefBrowser;
+  const url: ustring; zoomLevel: Double): Boolean;
+begin
+  Result := False;
+  if Assigned(FOnSetZoomLevel) then
+    FOnSetZoomLevel(Self, browser, url, zoomLevel, Result);
 end;
 
 function TCustomChromiumOSR.doOnStatusMessage(const browser: ICefBrowser;
@@ -1850,6 +1986,7 @@ begin
   settings.drag_drop_disabled := FOptions.DragDropDisabled;
   settings.load_drops_disabled := FOptions.LoadDropsDisabled;
   settings.history_disabled := FOptions.HistoryDisabled;
+  settings.animation_frame_rate := FOptions.AnimationFrameRate;
   settings.encoding_detector_enabled := FOptions.EncodingDetectorEnabled;
   settings.javascript_disabled := FOptions.JavascriptDisabled;
   settings.javascript_open_windows_disallowed := FOptions.JavascriptOpenWindowsDisallowed;
@@ -1877,7 +2014,6 @@ begin
   settings.application_cache_disabled := FOptions.ApplicationCacheDisabled;
   settings.webgl_disabled := FOptions.WebglDisabled;
   settings.accelerated_compositing_enabled := FOptions.AcceleratedCompositingEnabled;
-  settings.threaded_compositing_enabled := FOptions.ThreadedCompositingEnabled;
   settings.accelerated_layers_disabled := FOptions.AcceleratedLayersDisabled;
   settings.accelerated_2d_canvas_disabled := FOptions.Accelerated2dCanvasDisabled;
   settings.developer_tools_disabled := FOptions.DeveloperToolsDisabled;
@@ -1916,6 +2052,47 @@ begin
     CreateBrowser;
     Load(url);
   end;
+end;
+
+{ TCustomGeolocationHandler }
+
+constructor TCustomGeolocationHandler.Create(const events: IChromiumEvents);
+begin
+  inherited Create;
+  FEvent := events;
+end;
+
+procedure TCustomGeolocationHandler.OnCancelGeolocationPermission(
+  const browser: ICefBrowser; const requestingUrl: ustring; requestId: Integer);
+begin
+  FEvent.doOnCancelGeolocationPermission(browser, requestingUrl, requestId);
+end;
+
+procedure TCustomGeolocationHandler.OnRequestGeolocationPermission(
+  const browser: ICefBrowser; const requestingUrl: ustring; requestId: Integer;
+  const callback: ICefGeolocationCallback);
+begin
+  FEvent.doOnRequestGeolocationPermission(browser, requestingUrl, requestId, callback);
+end;
+
+{ TCustomZoomHandler }
+
+constructor TCustomZoomHandler.Create(const events: IChromiumEvents);
+begin
+  inherited Create;
+  FEvent := events;
+end;
+
+function TCustomZoomHandler.OnGetZoomLevel(const browser: ICefBrowser;
+  const url: ustring; out zoomLevel: Double): Boolean;
+begin
+  Result := FEvent.doOnGetZoomLevel(browser, url, zoomLevel)
+end;
+
+function TCustomZoomHandler.OnSetZoomLevel(const browser: ICefBrowser;
+  const url: ustring; zoomLevel: Double): Boolean;
+begin
+  Result := FEvent.doOnSetZoomLevel(browser, url, zoomLevel);
 end;
 
 end.

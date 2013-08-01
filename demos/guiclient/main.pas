@@ -419,10 +419,14 @@ begin
   MainForm.StatusBar.SimpleText := 'Downloading ... ' + IntToStr(FStream.Position div 1000) + ' Kb';
 end;
 
+procedure CefOnRegisterCustomSchemes(const registrar: ICefSchemeRegistrar);
+begin
+  registrar.AddCustomScheme('dcef', True, False, False);
+end;
 
 initialization
   CefCache := 'cache';
-  CefRegisterCustomScheme('dcef', True, False, False);
+  CefRegisterCustomSchemes := CefOnRegisterCustomSchemes;
   CefRegisterSchemeHandlerFactory('dcef', '', True, TFileScheme);
 
 end.

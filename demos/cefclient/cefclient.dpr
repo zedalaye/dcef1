@@ -457,7 +457,7 @@ begin
   begin
     // Handle the GetTestObject native function by creating and returning a
     // new V8 object.
-    retval := TCefv8ValueRef.CreateObjectWithAccessor(nil, nil);
+    retval := TCefv8ValueRef.CreateObject(nil);
     // Add a string parameter to the new V8 object.
     retval.SetValueByKey('param', TCefv8ValueRef.CreateString(
         'Retrieving a parameter on a native object succeeded.'), V8_PROPERTY_ATTRIBUTE_NONE);
@@ -474,6 +474,11 @@ begin
     Result := true;
   end else
     Result := false;
+end;
+
+procedure CefOnRegisterCustomSchemes(const registrar: ICefSchemeRegistrar);
+begin
+  registrar.AddCustomScheme('client', True, False, False);
 end;
 
 const
@@ -506,13 +511,8 @@ var
 begin
   CefCache := 'cache';
   CefLoadLibDefault;
-
-  CefRegisterCustomScheme('client', True, False, False);
-  //CefRegisterCustomScheme('file', True, False, False);
-
+  CefRegisterCustomSchemes := CefOnRegisterCustomSchemes;
   CefRegisterSchemeHandlerFactory('client', 'test', False, TScheme);
-  //CefRegisterSchemeHandlerFactory('file', '', False, TFileScheme);
-
   CefRegisterExtension('v8/test', code, TExtension.Create as ICefV8Handler);
   //navigateto := 'client://test/';
   //navigateto := 'file://c:\';

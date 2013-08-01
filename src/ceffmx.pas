@@ -12,6 +12,10 @@
  * Web site   : http://www.progdigy.com
  * Repository : http://code.google.com/p/delphichromiumembedded/
  * Group      : http://groups.google.com/group/delphichromiumembedded
+ *
+ * Embarcadero Technologies, Inc is not permitted to use or redistribute
+ * this source code without explicit permission.
+ *
  *)
 
 unit ceffmx;
@@ -59,6 +63,7 @@ type
     FOnStatusMessage: TOnStatusMessage;
     FOnTitleChange: TOnTitleChange;
     FOnTooltip: TOnTooltip;
+    FOnFaviconUrlChange: TOnFaviconUrlChange;
 
     FOnTakeFocus: TOnTakeFocus;
     FOnSetFocus: TOnSetFocus;
@@ -87,6 +92,12 @@ type
 
     FOnDragStart: TOnDragEvent;
     FOnDragEnter: TOnDragEvent;
+
+    FOnRequestGeolocationPermission: TOnRequestGeolocationPermission;
+    FOnCancelGeolocationPermission: TOnCancelGeolocationPermission;
+
+    FOnGetZoomLevel: TOnGetZoomLevel;
+    FOnSetZoomLevel: TOnSetZoomLevel;
 
     FOptions: TChromiumOptions;
     FUserStyleSheetLocation: ustring;
@@ -155,6 +166,7 @@ type
     function doOnTitleChange(const browser: ICefBrowser;
       const title: ustring): Boolean; virtual;
     function doOnTooltip(const browser: ICefBrowser; var text: ustring): Boolean; virtual;
+    procedure doOnFaviconUrlChange(const browser: ICefBrowser; list: TStrings); virtual;
 
     procedure doOnTakeFocus(const browser: ICefBrowser; next: Boolean); virtual;
     function doOnSetFocus(const browser: ICefBrowser; source: TCefHandlerFocusSource): Boolean; virtual;
@@ -214,6 +226,14 @@ type
     function doOnDragEnter(const browser: ICefBrowser;
       const dragData: ICefDragData; mask: Integer): Boolean;
 
+    procedure doOnRequestGeolocationPermission(const browser: ICefBrowser;
+      const requestingUrl: ustring; requestId: Integer; const callback: ICefGeolocationCallback);
+    procedure doOnCancelGeolocationPermission(const browser: ICefBrowser;
+      const requestingUrl: ustring; requestId: Integer);
+
+    function doOnGetZoomLevel(const browser: ICefBrowser; const url: ustring; out zoomLevel: Double): Boolean;
+    function doOnSetZoomLevel(const browser: ICefBrowser; const url: ustring; zoomLevel: Double): Boolean;
+
     property DefaultUrl: ustring read FDefaultUrl write FDefaultUrl;
 
     property OnBeforePopup: TOnBeforePopup read FOnBeforePopup write FOnBeforePopup;
@@ -241,6 +261,7 @@ type
     property OnStatusMessage: TOnStatusMessage read FOnStatusMessage write FOnStatusMessage;
     property OnTitleChange: TOnTitleChange read FOnTitleChange write FOnTitleChange;
     property OnTooltip: TOnTooltip read FOnTooltip write FOnTooltip;
+    property OnFaviconUrlChange: TOnFaviconUrlChange read FOnFaviconUrlChange write FOnFaviconUrlChange;
 
     property OnTakeFocus: TOnTakeFocus read FOnTakeFocus write FOnTakeFocus;
     property OnSetFocus: TOnSetFocus read FOnSetFocus write FOnSetFocus;
@@ -268,6 +289,12 @@ type
 
     property OnDragStart: TOnDragEvent read FOnDragStart write FOnDragStart;
     property OnDragEnter: TOnDragEvent read FOnDragEnter write FOnDragEnter;
+
+    property OnRequestGeolocationPermission: TOnRequestGeolocationPermission read FOnRequestGeolocationPermission write FOnRequestGeolocationPermission;
+    property OnCancelGeolocationPermission: TOnCancelGeolocationPermission read FOnCancelGeolocationPermission write FOnCancelGeolocationPermission;
+
+    property OnGetZoomLevel: TOnGetZoomLevel read FOnGetZoomLevel write FOnGetZoomLevel;
+    property OnSetZoomLevel: TOnSetZoomLevel read FOnSetZoomLevel write FOnSetZoomLevel;
 
     property Options: TChromiumOptions read FOptions write FOptions;
     property FontOptions: TChromiumFontOptions read FFontOptions;
@@ -316,6 +343,7 @@ type
     property OnStatusMessage;
     property OnTitleChange;
     property OnTooltip;
+    property OnFaviconUrlChange;
 
     property OnTakeFocus;
     property OnSetFocus;
@@ -338,6 +366,12 @@ type
 
     property OnDragStart;
     property OnDragEnter;
+
+    property OnRequestGeolocationPermission;
+    property OnCancelGeolocationPermission;
+
+    property OnGetZoomLevel;
+    property OnSetZoomLevel;
 
     property Options;
     property FontOptions;
@@ -376,6 +410,7 @@ type
     property OnStatusMessage;
     property OnTitleChange;
     property OnTooltip;
+    property OnFaviconUrlChange;
 
     property OnTakeFocus;
     property OnSetFocus;
@@ -406,6 +441,12 @@ type
 
     property OnDragStart;
     property OnDragEnter;
+
+    property OnRequestGeolocationPermission;
+    property OnCancelGeolocationPermission;
+
+    property OnGetZoomLevel;
+    property OnSetZoomLevel;
 
     property Options;
     property FontOptions;
@@ -509,9 +550,14 @@ begin
 end;
 
 procedure TCustomChromiumFMX.DialogKey(var Key: Word; Shift: TShiftState);
+var
+  keyInfo: TCefKeyInfo;
 begin
+  keyInfo.key := Key;
+  keyInfo.sysChar := False;
+  keyInfo.imeChar := False;
   if Browser <> nil then
-    Browser.SendKeyEvent(KT_KEYDOWN, Key, ShiftStateToInt(Shift), False, False);
+    Browser.SendKeyEvent(KT_KEYDOWN, keyInfo, ShiftStateToInt(Shift));
 end;
 
 procedure TCustomChromiumFMX.doOnAddressChange(const browser: ICefBrowser;
@@ -634,6 +680,13 @@ begin
     FOnGetDownloadHandler(Self, browser, mimeType, fileName, contentLength, handler, Result);
 end;
 
+procedure TCustomChromiumFMX.doOnFaviconUrlChange(const browser: ICefBrowser;
+  list: TStrings);
+begin
+  if Assigned(FOnFaviconUrlChange) then
+    FOnFaviconUrlChange(Self, browser, list);
+end;
+
 function TCustomChromiumFMX.doOnFindResult(const browser: ICefBrowser;
   count: Integer; selectionRect: PCefRect; identifier, activeMatchOrdinal,
   finalUpdate: Boolean): Boolean;
@@ -675,6 +728,14 @@ function TCustomChromiumFMX.doOnGetViewRect(const browser: ICefBrowser;
   rect: PCefRect): Boolean;
 begin
   Result := False;
+end;
+
+function TCustomChromiumFMX.doOnGetZoomLevel(const browser: ICefBrowser;
+  const url: ustring; out zoomLevel: Double): Boolean;
+begin
+  Result := False;
+  if Assigned(FOnGetZoomLevel) then
+    FOnGetZoomLevel(Self, browser, url, zoomLevel, Result);
 end;
 
 function TCustomChromiumFMX.doOnJsAlert(const browser: ICefBrowser;
@@ -862,11 +923,26 @@ begin
     FOnProtocolExecution(Self, browser, url, AllowOsExecution, Result);
 end;
 
+procedure TCustomChromiumFMX.doOnCancelGeolocationPermission(
+  const browser: ICefBrowser; const requestingUrl: ustring; requestId: Integer);
+begin
+  if Assigned(FOnCancelGeolocationPermission) then
+    FOnCancelGeolocationPermission(Self, browser, requestingUrl, requestId);
+end;
+
 function TCustomChromiumFMX.doOnClose(const browser: ICefBrowser): Boolean;
 begin
   Result := False;
   if Assigned(FOnClose) then
     FOnClose(Self, browser, Result);
+end;
+
+procedure TCustomChromiumFMX.doOnRequestGeolocationPermission(
+  const browser: ICefBrowser; const requestingUrl: ustring; requestId: Integer;
+  const callback: ICefGeolocationCallback);
+begin
+  if Assigned(FOnRequestGeolocationPermission) then
+    FOnRequestGeolocationPermission(Self, browser, requestingUrl, requestId, callback);
 end;
 
 procedure TCustomChromiumFMX.doOnResourceRedirect(const browser: ICefBrowser;
@@ -896,6 +972,14 @@ begin
   Result := False;
   if Assigned(FOnSetFocus) then
     FOnSetFocus(Self, browser, source, Result);
+end;
+
+function TCustomChromiumFMX.doOnSetZoomLevel(const browser: ICefBrowser;
+  const url: ustring; zoomLevel: Double): Boolean;
+begin
+  Result := False;
+  if Assigned(FOnSetZoomLevel) then
+    FOnSetZoomLevel(Self, browser, url, zoomLevel, Result);
 end;
 
 function TCustomChromiumFMX.doOnStatusMessage(const browser: ICefBrowser;
@@ -949,6 +1033,7 @@ begin
   settings.drag_drop_disabled := FOptions.DragDropDisabled;
   settings.load_drops_disabled := FOptions.LoadDropsDisabled;
   settings.history_disabled := FOptions.HistoryDisabled;
+  settings.animation_frame_rate := FOptions.AnimationFrameRate;
   settings.encoding_detector_enabled := FOptions.EncodingDetectorEnabled;
   settings.javascript_disabled := FOptions.JavascriptDisabled;
   settings.javascript_open_windows_disallowed := FOptions.JavascriptOpenWindowsDisallowed;
@@ -976,7 +1061,6 @@ begin
   settings.application_cache_disabled := FOptions.ApplicationCacheDisabled;
   settings.webgl_disabled := FOptions.WebglDisabled;
   settings.accelerated_compositing_enabled := FOptions.AcceleratedCompositingEnabled;
-  settings.threaded_compositing_enabled := FOptions.ThreadedCompositingEnabled;
   settings.accelerated_layers_disabled := FOptions.AcceleratedLayersDisabled;
   settings.accelerated_2d_canvas_disabled := FOptions.Accelerated2dCanvasDisabled;
   settings.developer_tools_disabled := FOptions.DeveloperToolsDisabled;
@@ -1058,7 +1142,9 @@ begin
   inherited;
   if FBrowser <> nil then
     with AbsoluteToLocal(Platform.GetMousePos) do
-      FBrowser.SendMouseWheelEvent(Trunc(x), Trunc(y), WheelDelta);
+      if ssShift in Shift then
+        FBrowser.SendMouseWheelEvent(Trunc(x), Trunc(y), 0, WheelDelta) else
+        FBrowser.SendMouseWheelEvent(Trunc(x), Trunc(y), WheelDelta, 0);
 end;
 
 class function TCustomChromiumFMX.ShiftStateToInt(Shift: TShiftState): Integer;
@@ -1075,18 +1161,36 @@ begin
 end;
 
 procedure TCustomChromiumFMX.KeyDown(var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
+var
+  keyInfo: TCefKeyInfo;
 begin
   if Browser <> nil then
     if KeyChar <> #0 then
-      Browser.SendKeyEvent(KT_CHAR, Ord(KeyChar), ShiftStateToInt(Shift), False, False) else
-      Browser.SendKeyEvent(KT_KEYDOWN, Key, ShiftStateToInt(Shift), Key in [18, 121], False);
+    begin
+      keyInfo.key := Ord(KeyChar);
+      keyInfo.sysChar := False;
+      keyInfo.imeChar := False;
+      Browser.SendKeyEvent(KT_CHAR, keyInfo, ShiftStateToInt(Shift))
+    end else
+    begin
+      keyInfo.key := key;
+      keyInfo.sysChar := Key in [18, 121];
+      keyInfo.imeChar := False;
+      Browser.SendKeyEvent(KT_KEYDOWN, keyInfo, ShiftStateToInt(Shift));
+    end;
 end;
 
 procedure TCustomChromiumFMX.KeyUp(var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
+var
+  keyinfo: TCefKeyInfo;
 begin
-   if FBrowser <> nil then
-   if (key <> 0) then
-     FBrowser.SendKeyEvent(KT_KEYUP, Key, ShiftStateToInt(Shift), False, False) else
+   if (FBrowser <> nil) and (key <> 0) then
+   begin
+     keyinfo.key := Key;
+     keyinfo.sysChar := False;
+     keyinfo.imeChar := False;
+     FBrowser.SendKeyEvent(KT_KEYUP, keyinfo, ShiftStateToInt(Shift));
+   end;
 end;
 
 procedure TCustomChromiumFMX.ReCreateBrowser(const url: string);
