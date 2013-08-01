@@ -34,24 +34,79 @@ implementation
 {$R *.dfm}
 
 procedure TMainform.AppEventsMessage(var Msg: tagMSG; var Handled: Boolean);
+var
+  info: TCefKeyInfo;
+  typ: TCefKeyType;
 begin
   case Msg.message of
-    WM_CHAR: chrmosr.Browser.SendKeyEvent(KT_CHAR, Msg.wParam, Msg.lParam, False, False);
-    WM_KEYDOWN: chrmosr.Browser.SendKeyEvent(KT_KEYDOWN, Msg.wParam, Msg.lParam, False, False);
-    WM_KEYUP: chrmosr.Browser.SendKeyEvent(KT_KEYUP, Msg.wParam, Msg.lParam, False, False);
+    WM_CHAR:
+      begin
+        typ := KT_CHAR;
+        info.sysChar := False;
+        info.imeChar := False;
+      end;
+    WM_KEYDOWN:
+      begin
+        typ := KT_KEYDOWN;
+        info.sysChar := False;
+        info.imeChar := False;
+      end;
+    WM_KEYUP:
+      begin
+        typ := KT_KEYUP;
+        info.sysChar := False;
+        info.imeChar := False;
+      end;
 
-    WM_SYSCHAR: chrmosr.Browser.SendKeyEvent(KT_CHAR, Msg.wParam, Msg.lParam, True, False);
-    WM_SYSKEYDOWN: chrmosr.Browser.SendKeyEvent(KT_KEYDOWN, Msg.wParam, Msg.lParam, True, False);
-    WM_SYSKEYUP: chrmosr.Browser.SendKeyEvent(KT_KEYUP, Msg.wParam, Msg.lParam, True, False);
+    WM_SYSCHAR:
+      begin
+        typ := KT_CHAR;
+        info.sysChar := True;
+        info.imeChar := False;
+      end;
+    WM_SYSKEYDOWN:
+      begin
+        typ := KT_KEYDOWN;
+        info.sysChar := True;
+        info.imeChar := False;
+      end;
+    WM_SYSKEYUP:
+      begin
+        typ := KT_KEYUP;
+        info.sysChar := True;
+        info.imeChar := False;
+      end;
 
-    WM_IME_CHAR: chrmosr.Browser.SendKeyEvent(KT_CHAR, Msg.wParam, Msg.lParam, False, True);
-    WM_IME_KEYDOWN: chrmosr.Browser.SendKeyEvent(KT_KEYDOWN, Msg.wParam, Msg.lParam, False, True);
-    WM_IME_KEYUP: chrmosr.Browser.SendKeyEvent(KT_KEYUP, Msg.wParam, Msg.lParam, False, True);
+    WM_IME_CHAR:
+      begin
+        typ := KT_CHAR;
+        info.sysChar := False;
+        info.imeChar := True;
+      end;
+    WM_IME_KEYDOWN:
+      begin
+        typ := KT_KEYDOWN;
+        info.sysChar := False;
+        info.imeChar := True;
+      end;
+    WM_IME_KEYUP:
+      begin
+        typ := KT_KEYUP;
+        info.sysChar := False;
+        info.imeChar := True;
+      end;
 
     WM_MOUSEWHEEL:
-      with TWMMouseWheel(Pointer(@Msg.message)^) do
-        chrmosr.Browser.SendMouseWheelEvent(XPos, YPos, WheelDelta);
+      begin
+        with TWMMouseWheel(Pointer(@Msg.message)^) do
+          chrmosr.Browser.SendMouseWheelEvent(XPos, YPos, WheelDelta, 0);
+        Exit;
+      end
+  else
+    Exit;
   end;
+  info.key := Msg.wParam;
+  chrmosr.Browser.SendKeyEvent(typ, info, Msg.lParam);
 end;
 
 procedure TMainform.chrmosrCursorChange(Sender: TObject;
